@@ -1,0 +1,677 @@
+"""The change workflow (SPEC 6).
+
+  checking -> pending_approval -> approved -> applying -> applied
+      |              |                            \\-> apply_failed (rolled back automatically)
+      \\-> failed     \\-> rejected                 applied -> rolled_back (a later version restored)
+  any state before "applying" -> cancelled
+
+Checks run in a background worker: static (the rule renders and the whole file passes the
+expert-mode checks), evidence (access log / event history), sandbox (a throwaway nginx with the
+production configuration plus the change). Loosening always needs a person's approval; API tokens
+can propose but never approve. Applying is done by the separate root program (apply.py): this
+side only writes a request into the spool directory and reads the result back.
+"""
+import datetime
+import json
+import os
+import threading
+import time
+import traceback
+
+from . import rulegen, util
+from .managed import Managed, sha256
+
+FINAL = ('applied', 'rejected', 'cancelled', 'failed', 'apply_failed', 'rolled_back')
+OPS = ('add', 'modify', 'disable', 'enable', 'delete')
+DEFAULT_SETTINGS = {
+    'approval.single_admin_mode': False,        # proposer may approve own change (audited, OTP for loosening)
+    'apply.auto_tighten': False,                # tightening that passed every check applies without approval
+    'apply.auto_tighten_daily_limit': 10,
+    'sandbox.required': True,
+    'health.urls': [],                          # ["https://app.example.com/", ...] checked before/after apply
+    'apply.wait_old_workers_seconds': 120,
+}
+
+
+class ChangeError(Exception):
+    def __init__(self, code, status=400, **details):
+        super().__init__(code)
+        self.code, self.status, self.details = code, status, details
+
+
+class Workflow:
+    def __init__(self, app):
+        self.app = app
+        self.db = app.db
+        self.cfg = app.cfg
+        self.managed = Managed(app.db, app.cfg, app.site)
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self.sandbox = None     # set by app (sandbox.Sandbox) when available
+        self.evidence = None    # set by app (evidence.Evidence)
+
+    # --- settings -------------------------------------------------------------------------
+    def setting(self, key):
+        return self.managed.setting(key, DEFAULT_SETTINGS.get(key))
+
+    def settings(self):
+        return {k: self.setting(k) for k in DEFAULT_SETTINGS}
+
+    def set_setting(self, key, value, actor):
+        if key not in DEFAULT_SETTINGS:
+            raise ChangeError('unknown_setting')
+        d = DEFAULT_SETTINGS[key]
+        if isinstance(d, bool) and not isinstance(value, bool):
+            raise ChangeError('invalid_value')
+        if isinstance(d, int) and not isinstance(d, bool) and (not isinstance(value, int) or isinstance(value, bool)
+                                                               or not 0 <= value <= 10000):
+            raise ChangeError('invalid_value')
+        if key == 'health.urls':
+            if not isinstance(value, list) or len(value) > 100:
+                raise ChangeError('invalid_value')
+            for u in value:
+                if not isinstance(u, str) or not __import__('re').fullmatch(r'https?://[a-z0-9.-]+(?::\d{1,5})?/\S{0,500}', u):
+                    raise ChangeError('invalid_value', url=str(u)[:100])
+        self.managed.set_setting(key, value, actor)
+
+    # --- reading --------------------------------------------------------------------------
+    def get(self, cid):
+        r = self.db.one('SELECT * FROM changes WHERE id=?', (cid,))
+        if not r:
+            raise ChangeError('not_found', 404)
+        return r
+
+    def public(self, r, full=False):
+        d = {'id': r['id'], 'op': r['op'], 'kind': r['kind'], 'item_id': r['item_id'], 'rule_id': r['rule_id'],
+             'direction': r['direction'], 'state': r['state'], 'reason': r['reason'], 'proposed_by': r['proposed_by'],
+             'proposed_via': r['proposed_via'], 'created_at': util.iso(r['created_at']),
+             'updated_at': util.iso(r['updated_at']), 'spec': json.loads(r['spec']),
+             'summary': summarize(r['kind'], json.loads(r['spec']), r['op']), 'error': r['error'],
+             'applied_version': r['applied_version']}
+        if full:
+            checks = json.loads(r['checks'] or '{}')
+            d.update({'rule_text': r['rule_text'], 'checks': checks, 'tests': json.loads(r['tests'] or '[]'),
+                      'evidence_override': r['evidence_override'], 'base_version': r['base_version'],
+                      'log': [{'ts': util.iso(x['ts']), 'actor': x['actor'], 'action': x['action'], 'note': x['note']}
+                              for x in self.db.q('SELECT * FROM change_log WHERE change_id=? ORDER BY id', (r['id'],))],
+                      'diff': checks.get('diff')})
+        return d
+
+    def list(self, state=None, limit=100, before_id=None):
+        sql, args = 'SELECT * FROM changes WHERE 1=1', []
+        if state == 'open':
+            sql += ' AND state NOT IN (%s)' % ','.join('?' * len(FINAL))
+            args += list(FINAL)
+        elif state:
+            sql += ' AND state=?'
+            args.append(state)
+        if before_id:
+            sql += ' AND id<?'
+            args.append(before_id)
+        rows = self.db.q(sql + ' ORDER BY id DESC LIMIT ?', args + [limit + 1])
+        return [self.public(r) for r in rows[:limit]], (str(rows[limit - 1]['id']) if len(rows) > limit else None)
+
+    def log(self, cid, actor, action, note=''):
+        self.db.x('INSERT INTO change_log(change_id, ts, actor, action, note) VALUES (?,?,?,?,?)',
+                  (cid, util.now(), actor, action, note[:2000]))
+
+    def _state(self, cid, state, error=None, **cols):
+        sets = ['state=?', 'updated_at=?', 'error=?'] + ['%s=?' % k for k in cols]
+        self.db.x('UPDATE changes SET %s WHERE id=?' % ', '.join(sets),
+                  [state, util.now(), error] + list(cols.values()) + [cid])
+
+    # --- proposing ------------------------------------------------------------------------
+    def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None):
+        if op not in OPS:
+            raise ChangeError('invalid_op')
+        reason = (reason or '').strip()
+        if not reason or len(reason) > 2000:
+            raise ChangeError('reason_required')
+        if not self.managed.adopted():
+            raise ChangeError('not_adopted', 409)
+        tests = tests or []
+        _check_tests(tests)
+        item = None
+        if op != 'add':
+            item = self.managed.item(item_id) if item_id else None
+            if not item or item['deleted'] or item['kind'] == 'comment':
+                raise ChangeError('item_not_found', 404)
+            kind = item['kind']
+            if op in ('disable',) and not item['enabled'] or op == 'enable' and item['enabled']:
+                raise ChangeError('no_effect')
+        if kind not in rulegen.KINDS:
+            raise ChangeError('invalid_kind')
+        if kind == 'raw' and (via != 'user' or role != 'admin') and op in ('add', 'modify'):
+            raise ChangeError('raw_admin_only', 403)
+        rule_id = item['rule_id'] if item else None
+        text = item['text'] if item else ''
+        if op in ('add', 'modify'):
+            if op == 'add':
+                if kind == 'raw':
+                    ids = rulegen.check_raw_text(spec.get('text') or '', cfg=self.cfg)
+                    rule_id = ids[0] if ids else None
+                    if rule_id is not None and rule_id in self.managed.occupied_ids():
+                        raise ChangeError('rule_id_in_use', 409, rule_id=rule_id)
+                else:
+                    try:
+                        rule_id = self.managed.next_rule_id(kind)
+                    except ValueError:
+                        raise ChangeError('id_range_full', 409)
+            try:
+                spec, text, _ = rulegen.build(kind, spec, rule_id, self.cfg)
+            except rulegen.SpecError as e:
+                raise ChangeError('invalid_spec', 422, field=e.field, reason=e.code, **e.details)
+        else:
+            spec = json.loads(item['spec'])
+        direction = rulegen.direction(op, kind, text)
+        t = util.now()
+        with self.db.tx() as c:
+            cur = c.execute('INSERT INTO changes(op, kind, item_id, rule_id, spec, direction, state, reason, proposed_by, '
+                            'proposed_via, created_at, updated_at, rule_text, tests) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                            (op, kind, item_id, rule_id, json.dumps(spec), direction, 'checking', reason, actor, via, t, t,
+                             text, json.dumps(tests)))
+            cid = cur.lastrowid
+        self.log(cid, actor, 'proposed', reason)
+        self.app.audit.log('change.proposed', actor, 'token' if via == 'api' else 'user', None, 'ok', change_id=cid,
+                           direction=direction, kind=kind, op=op, rule_id=rule_id)
+        self._wake.set()
+        return cid
+
+    def propose_adoption(self, actor):
+        if self.managed.adopted():
+            raise ChangeError('already_adopted', 409)
+        open_ = self.db.one("SELECT id FROM changes WHERE op='adopt' AND state NOT IN (%s)" % ','.join('?' * len(FINAL)), FINAL)
+        if open_:
+            raise ChangeError('adoption_pending', 409, change_id=open_[0])
+        items, sources = self.managed.import_preview()
+        if not sources:
+            raise ChangeError('nothing_to_import', 409)
+        t = util.now()
+        with self.db.tx() as c:
+            cur = c.execute('INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at) '
+                            "VALUES ('adopt', 'system', ?, 'neutral', 'checking', ?, ?, ?, ?)",
+                            (json.dumps({'sources': sources, 'items': len(items)}),
+                             'Adopt the existing site rule files as jt-waf-mgr managed files', actor, t, t))
+            cid = cur.lastrowid
+        self.log(cid, actor, 'proposed', 'adoption of %s' % ', '.join(s['path'] for s in sources.values()))
+        self.app.audit.log('change.proposed', actor, 'user', None, 'ok', change_id=cid, op='adopt')
+        self._wake.set()
+        return cid
+
+    # --- the item list and files a change produces ----------------------------------------
+    def _target_items(self, r):
+        spec = json.loads(r['spec'])
+        if r['op'] == 'adopt':
+            items, _ = self.managed.import_preview()
+            return items, None
+        new = None
+        if r['op'] in ('add', 'modify'):
+            _, text, placement = rulegen.build(r['kind'], spec, r['rule_id'], self.cfg)
+            new = {'rule_id': r['rule_id'], 'kind': r['kind'], 'placement': placement, 'spec': spec, 'text': text,
+                   'comment': _comment(r), 'origin': 'created'}
+        return self.managed.with_op(r['op'], r['item_id'], new)
+
+    def build_files(self, r, version):
+        items, touched = self._target_items(r)
+        return items, Managed.render(items, version), touched
+
+    # --- checks ---------------------------------------------------------------------------
+    def run_checks(self, cid):
+        r = self.get(cid)
+        if r['state'] != 'checking':
+            return
+        checks = {'started_at': util.iso(util.now())}
+        cur = self.managed.current_version()
+        base = cur['version'] if cur else 0
+        try:
+            items, files, _ = self.build_files(r, base + 1)
+            # static: every rule of the resulting files passes the expert-mode checks
+            for p, text in files.items():
+                body = text.split('\n\n', 1)[1] if '\n\n' in text else text
+                rulegen.check_raw_text(body, cfg=self.cfg) if body.strip() else None
+            ids = [it['rule_id'] for it in items if it.get('rule_id') and not it.get('deleted')]
+            dup = sorted({i for i in ids if ids.count(i) > 1})
+            if dup:
+                raise ChangeError('duplicate_rule_ids', ids=dup)
+            old = Managed.render(self.managed.items(include_deleted=True), base) if r['op'] != 'adopt' else {}
+            checks['diff'] = _diff(old, files)
+            checks['static'] = {'ok': True}
+        except (rulegen.SpecError, ChangeError, ValueError) as e:
+            checks['static'] = {'ok': False, 'error': getattr(e, 'code', str(e)), 'details': getattr(e, 'details', {})}
+            self._finish_checks(cid, checks, 'failed', 'static check failed')
+            return
+        # evidence
+        try:
+            ev = self.evidence.check(r) if self.evidence else {'ok': True, 'skipped': 'not available'}
+        except Exception as e:
+            traceback.print_exc()
+            ev = {'ok': False, 'error': 'evidence_error: %s' % type(e).__name__}
+        checks['evidence'] = ev
+        # sandbox
+        if self.sandbox is not None and self.sandbox.available():
+            try:
+                if r['op'] == 'adopt':
+                    sb = self.sandbox.run_equivalence(files, self.managed, self.equivalence_requests())
+                else:
+                    sb = self.sandbox.run_change(r, files, json.loads(r['tests'] or '[]'), self.managed, self.samples())
+            except Exception as e:
+                traceback.print_exc()
+                sb = {'ok': False, 'error': 'sandbox_error: %s' % type(e).__name__}
+        else:
+            sb = {'ok': not self.setting('sandbox.required'), 'skipped': 'sandbox not available on this host'}
+        checks['sandbox'] = sb
+        checks['finished_at'] = util.iso(util.now())
+        if not sb.get('ok'):
+            self._finish_checks(cid, checks, 'failed', 'sandbox test failed')
+            return
+        if not ev.get('ok') and not r['evidence_override']:
+            self._finish_checks(cid, checks, 'failed', 'evidence check did not pass; resubmit with a justification to override')
+            return
+        self.db.x('UPDATE changes SET base_version=? WHERE id=?', (base, cid))
+        self._finish_checks(cid, checks, 'pending_approval', None)
+        self._maybe_auto_apply(cid)
+
+    def _finish_checks(self, cid, checks, state, error):
+        self.db.x('UPDATE changes SET checks=? WHERE id=?', (json.dumps(checks, ensure_ascii=False), cid))
+        self._state(cid, state, error)
+        self.log(cid, 'system', 'checks_' + ('passed' if state == 'pending_approval' else 'failed'), error or '')
+        self.app.audit.log('change.checked', 'system', 'system', None, 'ok' if state == 'pending_approval' else 'error',
+                           change_id=cid, state=state)
+
+    def _maybe_auto_apply(self, cid):
+        r = self.get(cid)
+        if r['direction'] != 'tighten' or not self.setting('apply.auto_tighten') or r['evidence_override']:
+            return
+        if r['op'] != 'add' or r['kind'] != 'confident_block':
+            return
+        spec = json.loads(r['spec'])
+        if spec.get('target') not in ('path', 'uri', 'ua', 'host', 'header'):
+            return
+        ev = json.loads(r['checks']).get('evidence', {})
+        if not ev.get('ok') or ev.get('external_success', 1) or ev.get('internal_other', 1):
+            return
+        day = datetime.date.today().isoformat()
+        n = self.db.one("SELECT COUNT(*) FROM change_log WHERE action='auto_approved' AND date(ts, 'unixepoch', 'localtime')=?",
+                        (day,))[0]
+        if n >= self.setting('apply.auto_tighten_daily_limit'):
+            self.log(cid, 'system', 'auto_apply_skipped', 'daily limit reached')
+            return
+        self.log(cid, 'system', 'auto_approved', 'tightening, all checks passed')
+        self.app.audit.log('change.approved', 'system', 'system', None, 'ok', change_id=cid, auto=True)
+        self._queue_apply(cid, 'system')
+
+    def samples(self, limit=400):
+        rows = self.db.q('SELECT host, method, path FROM regression_samples ORDER BY pinned DESC, id DESC LIMIT ?', (limit,))
+        return [dict(x) for x in rows]
+
+    def equivalence_requests(self, limit=400):
+        """Recent distinct requests from the event history (bodies are not logged) plus the samples."""
+        rows = self.db.q('SELECT host, method, path, query, origin FROM events WHERE id IN (SELECT MAX(id) FROM events '
+                         'GROUP BY host, method, path, origin) ORDER BY id DESC LIMIT ?', (limit,))
+        out = [{'host': x['host'], 'method': x['method'] if x['method'] in ('GET', 'POST', 'HEAD', 'OPTIONS', 'PUT', 'DELETE',
+                                                                             'PATCH') else 'GET',
+                'path': (x['path'] or '/') + ('?' + x['query'] if x['query'] else ''), 'source': x['origin']}
+               for x in rows if (x['path'] or '/').startswith('/')]
+        out += [dict(s, source='external') for s in self.samples(100)]
+        return out
+
+    # --- decisions ------------------------------------------------------------------------
+    def approve(self, cid, user, totp=None, note=''):
+        r = self.get(cid)
+        if r['state'] != 'pending_approval':
+            raise ChangeError('invalid_state', 409, state=r['state'])
+        if r['op'] == 'adopt' and user['role'] != 'admin':
+            raise ChangeError('forbidden', 403)
+        own = r['proposed_by'] == user['username'] and r['proposed_via'] == 'user'
+        if own:
+            if not self.setting('approval.single_admin_mode'):
+                raise ChangeError('own_change', 403)
+            if r['direction'] != 'tighten':
+                # single admin approving their own loosening: fresh OTP and a written reason
+                from .auth import totp_match
+                step = totp_match(user['totp_secret'], totp or '') if user['totp_enabled'] else None
+                fresh = self.db.one('SELECT totp_last_step FROM users WHERE username=?', (user['username'],))
+                if step is None or (fresh and step <= fresh[0]):
+                    raise ChangeError('totp_required', 403)
+                self.db.x('UPDATE users SET totp_last_step=? WHERE username=?', (step, user['username']))
+                if len((note or '').strip()) < 10:
+                    raise ChangeError('note_required')
+        self.log(cid, user['username'], 'approved', note or '')
+        self.app.audit.log('change.approved', user['username'], 'user', None, 'ok', change_id=cid,
+                           direction=r['direction'], own=own)
+        self._queue_apply(cid, user['username'])
+
+    def reject(self, cid, user, note):
+        r = self.get(cid)
+        if r['state'] not in ('pending_approval',):
+            raise ChangeError('invalid_state', 409, state=r['state'])
+        if not (note or '').strip():
+            raise ChangeError('note_required')
+        self._state(cid, 'rejected')
+        self.log(cid, user['username'], 'rejected', note)
+        self.app.audit.log('change.rejected', user['username'], 'user', None, 'ok', change_id=cid)
+
+    def cancel(self, cid, user):
+        r = self.get(cid)
+        if r['state'] in FINAL or r['state'] in ('applying', 'approved'):
+            raise ChangeError('invalid_state', 409, state=r['state'])
+        if r['proposed_by'] != user['username'] and user['role'] != 'admin':
+            raise ChangeError('forbidden', 403)
+        self._state(cid, 'cancelled')
+        self.log(cid, user['username'], 'cancelled')
+        self.app.audit.log('change.cancelled', user['username'], 'user', None, 'ok', change_id=cid)
+
+    def recheck(self, cid, user, evidence_override=None):
+        r = self.get(cid)
+        if r['state'] not in ('failed', 'pending_approval'):
+            raise ChangeError('invalid_state', 409, state=r['state'])
+        if r['proposed_by'] != user['username'] and user['role'] != 'admin':
+            raise ChangeError('forbidden', 403)
+        ov = (evidence_override or '').strip() or None
+        self.db.x('UPDATE changes SET evidence_override=? WHERE id=?', (ov, cid))
+        self._state(cid, 'checking')
+        self.log(cid, user['username'], 'recheck', ('evidence override: ' + ov) if ov else '')
+        self.app.audit.log('change.recheck', user['username'], 'user', None, 'ok', change_id=cid,
+                           evidence_override=ov)
+        self._wake.set()
+
+    # --- applying -------------------------------------------------------------------------
+    def spool(self):
+        d = self.cfg['managed']['spool']
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        return d
+
+    def _queue_apply(self, cid, actor):
+        r = self.get(cid)
+        cur = self.managed.current_version()
+        base = cur['version'] if cur else 0
+        if r['op'] != 'adopt' and (r['base_version'] or 0) != base:
+            # another change was applied meanwhile: check again against the new base
+            self._state(cid, 'checking')
+            self.log(cid, 'system', 'stale', 'version %s applied since the checks; checking again' % base)
+            self._wake.set()
+            return
+        if self.db.one("SELECT 1 FROM changes WHERE state IN ('approved','applying')"):
+            # one apply at a time; the worker picks this up when the other finishes
+            self._state(cid, 'approved')
+            return
+        self._state(cid, 'approved')
+        self._send(cid)
+
+    def _next_version(self):
+        """Never reuse a number: a failed apply keeps its row in the history."""
+        r = self.db.one('SELECT MAX(version) m FROM versions')
+        return (r['m'] or 0) + 1
+
+    def _expected_disk(self, cur, files):
+        """What the managed files must look like right before an apply: exactly what jt-waf-mgr wrote last
+        (the current version's hashes). An edit made any other way is drift and stops the apply."""
+        hashes = json.loads(cur['hashes']) if cur else {}
+        return {p: hashes.get(p) for p in files}
+
+    def _send(self, cid):
+        r = self.get(cid)
+        cur = self.managed.current_version()
+        version = self._next_version()
+        if r['op'] != 'adopt':
+            disk = self.managed.disk_state()
+            if disk['drift']:
+                bad = [f['path'] for f in disk['files'].values() if f['drift']]
+                self._state(cid, 'apply_failed', 'drift: managed files were changed outside jt-waf-mgr: ' + ', '.join(bad))
+                self.log(cid, 'system', 'apply_blocked', 'drift: ' + ', '.join(bad))
+                self.app.audit.log('change.apply_blocked_drift', 'system', 'system', None, 'failed', severity='crit',
+                                   change_id=cid, files=bad)
+                return
+        items, files, _ = self.build_files(r, version)
+        req = {'request_id': 'v%d-c%d' % (version, cid), 'action': 'apply', 'version': version, 'change_id': cid,
+               'dir': self.managed.dir, 'files': files, 'sha256': {p: sha256(t) for p, t in files.items()},
+               'expected_disk': ({p: None for p in files} if r['op'] == 'adopt' else self._expected_disk(cur, files)),
+               'health_urls': self.setting('health.urls'), 'nginx_bin': self.cfg['paths']['nginx_bin'],
+               'wait_old_workers': self.setting('apply.wait_old_workers_seconds')}
+        if r['op'] == 'adopt':
+            b, a = self.managed.detect_import_files()
+            _, mods = self.app.site.load()
+            req['adopt'] = {'main_conf': mods.main_files[0], 'replace': {k: v for k, v in (
+                (b, self.managed.path('before')), (a, self.managed.path('after'))) if k}}
+        self._write_version(version, cid, 'adopt' if r['op'] == 'adopt' else 'change', files, items, 'pending')
+        self._write_request(req)
+        self._state(cid, 'applying')
+        self.log(cid, 'system', 'apply_requested', 'version %d' % version)
+
+    def _write_version(self, version, cid, kind, files, items, state):
+        self.db.x('INSERT OR REPLACE INTO versions(version, created_at, change_id, kind, files, hashes, state, result) '
+                  'VALUES (?,?,?,?,?,?,?,?)',
+                  (version, util.now(), cid, kind, json.dumps({'files': files, 'items': _plain(items)}),
+                   json.dumps({p: sha256(t) for p, t in files.items()}), state, '{}'))
+
+    def _write_request(self, req):
+        d = self.spool()
+        tmp = os.path.join(d, '.%s.tmp' % req['request_id'])
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(req, fh, ensure_ascii=False)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, os.path.join(d, req['request_id'] + '.req'))
+
+    def rollback(self, version, user, note, overwrite_drift=False):
+        """Back to an earlier version. With overwrite_drift (approver, explicit) also the way to put jt-waf-mgr's
+        files back after an outside edit, including re-writing the current version."""
+        v = self.db.one("SELECT * FROM versions WHERE version=? AND state IN ('applied','superseded')", (version,))
+        if not v:
+            raise ChangeError('not_found', 404)
+        if self.db.one("SELECT 1 FROM changes WHERE state IN ('approved','applying')"):
+            raise ChangeError('apply_in_progress', 409)
+        if not (note or '').strip():
+            raise ChangeError('note_required')
+        cur = self.managed.current_version()
+        disk = self.managed.disk_state()
+        if disk['drift'] and not overwrite_drift:
+            raise ChangeError('drift', 409, files=[f['path'] for f in disk['files'].values() if f['drift']])
+        if cur and cur['version'] == version and not (overwrite_drift and disk['drift']):
+            raise ChangeError('already_current', 409)
+        data = json.loads(v['files'])
+        new_version = self._next_version()
+        t = util.now()
+        with self.db.tx() as c:
+            cid = c.execute("INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at, "
+                            "base_version) VALUES ('rollback', 'system', ?, 'neutral', 'applying', ?, ?, ?, ?, ?)",
+                            (json.dumps({'to_version': version}), note, user['username'], t, t,
+                             cur['version'] if cur else 0)).lastrowid
+        files = Managed.render(data['items'], new_version)
+        self._write_version(new_version, cid, 'rollback', files, data['items'], 'pending')
+        if disk['drift']:
+            # the approver chose to overwrite the outside edit: expect the disk as it is now, and record it
+            expected = {p: disk['files'][p]['sha256'] for p in files}
+            self.app.audit.log('change.drift_overwritten', user['username'], 'user', None, 'ok', severity='crit',
+                               to_version=version, files=[f['path'] for f in disk['files'].values() if f['drift']])
+        else:
+            expected = self._expected_disk(cur, files)
+        self._write_request({'request_id': 'v%d-c%d' % (new_version, cid), 'action': 'apply', 'version': new_version,
+                             'change_id': cid, 'dir': self.managed.dir, 'files': files,
+                             'sha256': {p: sha256(x) for p, x in files.items()},
+                             'expected_disk': expected,
+                             'health_urls': self.setting('health.urls'), 'nginx_bin': self.cfg['paths']['nginx_bin'],
+                             'wait_old_workers': self.setting('apply.wait_old_workers_seconds')})
+        self.log(cid, user['username'], 'rollback_requested', 'to version %d: %s' % (version, note))
+        self.app.audit.log('change.rollback_requested', user['username'], 'user', None, 'ok', to_version=version)
+        return cid
+
+    def collect_results(self):
+        d = self.cfg['managed']['spool']
+        try:
+            names = sorted(n for n in os.listdir(d) if n.endswith('.result'))
+        except OSError:
+            return
+        for n in names:
+            path = os.path.join(d, n)
+            try:
+                with open(path, encoding='utf-8') as fh:
+                    res = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            try:
+                self._handle_result(res)
+            finally:
+                for suffix in ('.result', '.req'):
+                    try:
+                        os.unlink(os.path.join(d, n[:-len('.result')] + suffix))
+                    except OSError:
+                        pass
+
+    def _handle_result(self, res):
+        version, cid = res.get('version'), res.get('change_id')
+        r = self.db.one('SELECT * FROM changes WHERE id=?', (cid,))
+        v = self.db.one('SELECT * FROM versions WHERE version=?', (version,))
+        if not r or not v:
+            return
+        ok = res.get('result') == 'ok'
+        summary = res.get('summary', '')[:1000]
+        if ok:
+            data = json.loads(v['files'])
+            with self.db.tx() as c:
+                c.execute("UPDATE versions SET state='superseded' WHERE state='applied'")
+                c.execute("UPDATE versions SET state='applied', result=? WHERE version=?", (json.dumps(res), version))
+                if r['op'] in ('adopt', 'rollback'):
+                    # the item list becomes the version's; rows missing from it stay as tombstones,
+                    # so that no rule id is ever handed out again
+                    keep = {it['id'] for it in data['items'] if it.get('id')}
+                    for row in c.execute('SELECT id FROM managed_rules').fetchall():
+                        if row[0] not in keep:
+                            c.execute('UPDATE managed_rules SET deleted=1 WHERE id=?', (row[0],))
+                    self.managed.save_items(c, data['items'], r['proposed_by'], cid)
+                else:
+                    touched = [it for it in data['items'] if _touched(it, r)]
+                    self.managed.save_items(c, touched, r['proposed_by'], cid)
+                # the snapshot keeps the database ids, so that a later rollback updates rows instead of duplicating them
+                rows = [dict(x) for x in c.execute("SELECT * FROM managed_rules ORDER BY CASE placement WHEN 'before' THEN 0 ELSE 1 END, position").fetchall()]
+                data['items'] = _plain(rows)
+                c.execute('UPDATE versions SET files=? WHERE version=?', (json.dumps(data), version))
+                c.execute('UPDATE changes SET state=?, updated_at=?, applied_version=?, error=NULL WHERE id=?',
+                          ('applied', util.now(), version, cid))
+                if r['op'] == 'rollback':
+                    to = json.loads(r['spec'])['to_version']
+                    c.execute("UPDATE changes SET state='rolled_back', updated_at=? WHERE state='applied' AND "
+                              'applied_version>? AND applied_version<? AND id<>?', (util.now(), to, version, cid))
+            if r['op'] == 'adopt':
+                self.managed.set_setting('managed.adopted_version', version, r['proposed_by'])
+            self.log(cid, 'apply', 'applied', summary)
+            self.app.audit.log('change.applied', r['proposed_by'], 'user', None, 'ok', change_id=cid, version=version,
+                               direction=r['direction'], kind=r['kind'], op=r['op'], rule_id=r['rule_id'])
+        else:
+            self.db.x("UPDATE versions SET state='failed', result=? WHERE version=?", (json.dumps(res), version))
+            self._state(cid, 'apply_failed', summary or res.get('result'))
+            self.log(cid, 'apply', 'apply_failed', summary)
+            self.app.audit.log('change.apply_failed', r['proposed_by'], 'user', None, 'error', change_id=cid,
+                               version=version, step=res.get('step'))
+        self._wake.set()   # the worker sends the next approved change, if any
+
+    # --- worker ---------------------------------------------------------------------------
+    def run(self):
+        while not self._stop.is_set():
+            try:
+                self.collect_results()
+                for row in self.db.q("SELECT id FROM changes WHERE state='checking' ORDER BY id"):
+                    self.run_checks(row[0])
+                if not self.db.one("SELECT 1 FROM changes WHERE state='applying'"):
+                    nxt = self.db.one("SELECT id FROM changes WHERE state='approved' ORDER BY id LIMIT 1")
+                    if nxt:
+                        r = self.get(nxt[0])
+                        cur = self.managed.current_version()
+                        if r['op'] == 'adopt' or (r['base_version'] or 0) == (cur['version'] if cur else 0):
+                            self._send(nxt[0])
+                        else:
+                            self._state(nxt[0], 'checking')
+                            self.log(nxt[0], 'system', 'stale', 'checking again against the new version')
+            except Exception:
+                traceback.print_exc()
+            self._wake.wait(2)
+            self._wake.clear()
+
+    def stop(self):
+        self._stop.set()
+        self._wake.set()
+
+
+def _touched(it, r):
+    if r['op'] == 'add':
+        return it.get('id') is None and it.get('rule_id') == r['rule_id']
+    return it.get('id') == r['item_id']
+
+
+def _plain(items):
+    keys = ('id', 'rule_id', 'kind', 'placement', 'position', 'spec', 'text', 'comment', 'enabled', 'deleted', 'origin')
+    out = []
+    for it in items:
+        d = {k: it.get(k) for k in keys}
+        if isinstance(d['spec'], str):
+            d['spec'] = json.loads(d['spec'])
+        out.append(d)
+    return out
+
+
+def _comment(r):
+    reason = ' '.join(r['reason'].split())[:300]
+    when = datetime.date.today().isoformat()
+    return '# %s jt-waf-mgr change %d (%s): %s' % (when, r['id'], r['proposed_by'], reason.replace('\n', ' '))
+
+
+def _diff(old, new):
+    import difflib
+    out = {}
+    for p in ('before', 'after'):
+        a = (old.get(p) or '').splitlines()
+        b = (new.get(p) or '').splitlines()
+        # the header (version, time, hash) always differs: compare the rules only
+        a = a[4:] if a[:1] and a[0].startswith('# Generated by jt-waf-mgr') else a
+        b = b[4:] if b[:1] and b[0].startswith('# Generated by jt-waf-mgr') else b
+        d = list(difflib.unified_diff(a, b, 'current/' + p, 'proposed/' + p, n=3, lineterm=''))
+        if d:
+            out[p] = '\n'.join(d[:4000])
+    return out
+
+
+def _check_tests(tests):
+    if not isinstance(tests, list) or len(tests) > 50:
+        raise ChangeError('invalid_tests')
+    for t in tests:
+        if not isinstance(t, dict):
+            raise ChangeError('invalid_tests')
+        if t.get('expect') not in (200, 403) or t.get('source') not in ('external', 'internal'):
+            raise ChangeError('invalid_tests', reason='expect 200|403, source external|internal')
+        if not isinstance(t.get('host'), str) or not isinstance(t.get('path'), str) or not t['path'].startswith('/'):
+            raise ChangeError('invalid_tests', reason='host and path required')
+        if len(t['path']) > 2048 or any(ord(ch) < 32 for ch in t['path'] + t['host']):
+            raise ChangeError('invalid_tests', reason='path')
+        hdr = t.get('headers') or {}
+        if not isinstance(hdr, dict) or len(hdr) > 10 or any(
+                not isinstance(k, str) or not isinstance(v, str) or '\n' in k + v or '\r' in k + v for k, v in hdr.items()):
+            raise ChangeError('invalid_tests', reason='headers')
+        if t.get('method', 'GET') not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'):
+            raise ChangeError('invalid_tests', reason='method')
+        if len(t.get('body') or '') > 65536:
+            raise ChangeError('invalid_tests', reason='body')
+
+
+def summarize(kind, spec, op):
+    def scope():
+        parts = []
+        h, p = spec.get('host') or {}, spec.get('path') or {}
+        if h.get('mode') not in (None, 'any'):
+            parts.append(h.get('value', ''))
+        if p.get('mode') not in (None, 'any'):
+            parts.append(('= ' if p['mode'] == 'exact' else '^ ' if p['mode'] == 'prefix' else '~ ') + p.get('value', ''))
+        return ' '.join(parts)
+    if op == 'adopt':
+        return 'adopt %d existing items' % spec.get('items', 0)
+    if op == 'rollback':
+        return 'restore version %s' % spec.get('to_version')
+    if kind == 'confident_block':
+        return '%s ~ %s' % (spec.get('target'), spec.get('regex', ''))[:200]
+    if kind == 'exclusion':
+        what = ','.join(str(i) for i in spec.get('rule_ids') or []) or spec.get('tag') or spec.get('action')
+        tg = ','.join(spec.get('targets') or [])
+        return ('%s %s %s %s' % (scope(), spec.get('action'), what, tg)).strip()[:200]
+    if kind == 'redaction':
+        return ('%s %s' % (scope(), ','.join(spec.get('fields') or []))).strip()[:200]
+    if kind == 'plugin':
+        return '%s %s' % (spec.get('plugin'), (spec.get('host') or {}).get('value', ''))
+    return (spec.get('text') or '').split('\n', 1)[0][:200]

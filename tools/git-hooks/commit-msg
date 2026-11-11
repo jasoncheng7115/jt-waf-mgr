@@ -1,0 +1,3 @@
+#!/bin/sh
+# Refuse commit messages with private names or a Claude-Session line.
+exec python3 "$(git rev-parse --show-toplevel)/tools/git-hooks/scan_text.py" "$1"

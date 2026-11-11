@@ -1,0 +1,27 @@
+# Paths that may be published (release tarball now, GitHub later). Anything not listed stays private.
+# Patterns are relative to the project root; a directory entry includes everything below it.
+LICENSE
+README.md
+CHANGELOG.md
+SECURITY.md
+PUBLISH.txt
+install.sh
+uninstall.sh
+jtwafmgr/
+deploy/
+frontend/
+tests/
+tools/build_frontend.sh
+tools/check_i18n.py
+tools/check_ui.py
+tools/i18n_add.py
+tools/preflight.py
+tools/make_release.sh
+tools/make_sbom.py
+tools/sync_github.sh
+tools/git-hooks/
+docs/spec/
+docs/dev/
+docs/COMPLIANCE.md
+docs/COMPLIANCE.zh-TW.md
+docs/brand/

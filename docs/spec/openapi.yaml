@@ -1,0 +1,375 @@
+openapi: 3.1.0
+info:
+  title: jt-waf-mgr integration API
+  version: 0.1.0-draft
+  description: |
+    Draft of the jt-waf-mgr API (see API.md for the rules behind it).
+    v1 is additive only. Tokens can read and propose; they can never approve.
+  license:
+    name: AGPL-3.0-or-later
+servers:
+  - url: https://waf.example.com/api/v1
+security:
+  - bearerToken: []
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: "API token jwm_<id>_<secret>, scoped; or an OIDC access token."
+  parameters:
+    limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+    cursor:
+      name: cursor
+      in: query
+      schema: {type: string}
+    since:
+      name: since
+      in: query
+      schema: {type: string, format: date-time}
+    until:
+      name: until
+      in: query
+      schema: {type: string, format: date-time}
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string, examples: [scope_missing, not_found, validation_failed, rate_limited]}
+            message: {type: string}
+            details: {type: object, additionalProperties: true}
+    Status:
+      type: object
+      properties:
+        version: {type: string}
+        engine_mode: {type: string, enum: [DetectionOnly, On, Off]}
+        external_score_blocking: {type: boolean}
+        crs: {type: object, properties: {version: {type: string}, paranoia_level: {type: integer}, inbound_threshold: {type: integer}}}
+        last_apply: {type: object, properties: {at: {type: string, format: date-time}, change_id: {type: string}, result: {type: string, enum: [ok, failed, rolled_back]}}}
+        ingest_lag_seconds: {type: integer}
+        managed_files_drift: {type: boolean}
+        module_version_ok: {type: boolean}
+    Event:
+      type: object
+      properties:
+        event_id: {type: string}
+        seq: {type: integer, description: "monotonic, used by export cursors"}
+        time: {type: string, format: date-time}
+        host: {type: string}
+        method: {type: string}
+        uri: {type: string, description: "truncated, sensitive parameters masked"}
+        src_ip: {type: string}
+        origin: {type: string, enum: [external, internal]}
+        status: {type: integer}
+        outcome: {type: string, enum: [blocked, logged]}
+        decided_by: {type: [string, "null"], enum: [confident, score, fallback, ipblock, null]}
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: integer}
+              msg: {type: string}
+              matched: {type: string, description: "masked and truncated; attacker-controlled text"}
+              tags: {type: array, items: {type: string}}
+        anomaly_score: {type: integer}
+    EventPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Event'}}
+        next_cursor: {type: [string, "null"]}
+    Rule:
+      type: object
+      properties:
+        rule_id: {type: integer}
+        managed: {type: boolean}
+        kind: {type: string, enum: [system, exclusion, confident_block, redaction, plugin, ipblock, raw, unmanaged]}
+        enabled: {type: boolean}
+        scope: {type: object, additionalProperties: true}
+        description: {type: string}
+        evidence: {type: object, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+        created_by: {type: string}
+        hits_7d: {type: integer}
+        hits_30d: {type: integer}
+        last_hit: {type: [string, "null"], format: date-time}
+    Vhost:
+      type: object
+      properties:
+        server_names: {type: array, items: {type: string}}
+        listen: {type: array, items: {type: string}}
+        waf: {type: string, enum: [off, detection, block_confident_external, block]}
+        bypass_locations: {type: array, items: {type: string}}
+        client_max_body_size: {type: string}
+        access_restriction: {type: [string, "null"], description: "e.g. lan-only, country list"}
+    ChangeProposal:
+      type: object
+      required: [kind, spec, reason]
+      properties:
+        kind: {type: string, enum: [exclusion, confident_block, redaction, plugin]}
+        spec: {type: object, additionalProperties: true, description: "fields of the template in SPEC.md 5.3"}
+        reason: {type: string, maxLength: 2000}
+        evidence_ref: {type: object, properties: {event_ids: {type: array, items: {type: string}}}}
+        tests:
+          type: array
+          items:
+            type: object
+            required: [expect, origin, host, path]
+            properties:
+              expect: {type: integer, examples: [403, 200]}
+              origin: {type: string, enum: [external, internal]}
+              host: {type: string}
+              path: {type: string}
+              method: {type: string, default: GET}
+              user_agent: {type: string}
+              headers: {type: object, additionalProperties: {type: string}}
+              body: {type: string}
+    Change:
+      type: object
+      properties:
+        change_id: {type: string}
+        kind: {type: string}
+        direction: {type: string, enum: [tighten, loosen]}
+        state: {type: string, enum: [draft, validating, rejected_by_checks, pending_approval, approved, applying, applied, apply_failed, rolled_back, rejected]}
+        proposed_by: {type: string}
+        approved_by: {type: [string, "null"]}
+        checks: {type: object, additionalProperties: true}
+        diff: {type: string}
+        created_at: {type: string, format: date-time}
+        applied_at: {type: [string, "null"], format: date-time}
+    IpBlockRequest:
+      type: object
+      required: [cidr, ttl_seconds, reason]
+      properties:
+        cidr: {type: string, examples: ["203.0.113.7/32"]}
+        ttl_seconds: {type: integer, minimum: 60, maximum: 604800}
+        reason: {type: string, maxLength: 500}
+        source: {type: object, properties: {system: {type: string}, ref: {type: string}}}
+    IpBlock:
+      type: object
+      properties:
+        block_id: {type: string}
+        cidr: {type: string}
+        state: {type: string, enum: [queued, active, expired, removed, refused]}
+        expires_at: {type: string, format: date-time}
+        created_by: {type: string}
+        reason: {type: string}
+    IpLookup:
+      type: object
+      properties:
+        ip: {type: string}
+        requests_7d: {type: integer}
+        blocked_7d: {type: integer}
+        requests_30d: {type: integer}
+        blocked_30d: {type: integer}
+        first_seen: {type: [string, "null"], format: date-time}
+        last_seen: {type: [string, "null"], format: date-time}
+        top_rules: {type: array, items: {type: object, properties: {rule_id: {type: integer}, count: {type: integer}}}}
+        top_hosts: {type: array, items: {type: object, properties: {host: {type: string}, count: {type: integer}}}}
+        active_block: {type: [string, "null"], description: "block_id if blocked now"}
+    Webhook:
+      type: object
+      properties:
+        webhook_id: {type: string}
+        url: {type: string, format: uri}
+        events: {type: array, items: {type: string, enum: [change.pending_approval, change.applied, change.rolled_back, change.rejected, ipblock.added, ipblock.expired, fp.suspected, block.burst, config.drift, crs.update_available, health.degraded]}}
+        active: {type: boolean}
+paths:
+  /status:
+    get:
+      summary: Engine, CRS and pipeline status (scope status:read)
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Status'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /events:
+    get:
+      summary: List events (scope events:read)
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/since'
+        - $ref: '#/components/parameters/until'
+        - {name: host, in: query, schema: {type: string}}
+        - {name: path_prefix, in: query, schema: {type: string}}
+        - {name: src_ip, in: query, schema: {type: string}, description: "address or CIDR"}
+        - {name: rule_id, in: query, schema: {type: integer}}
+        - {name: outcome, in: query, schema: {type: string, enum: [blocked, logged]}}
+        - {name: decided_by, in: query, schema: {type: string, enum: [confident, score, fallback, ipblock]}}
+        - {name: origin, in: query, schema: {type: string, enum: [external, internal]}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/EventPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /events/{event_id}:
+    get:
+      summary: One event (scope events:read)
+      parameters: [{name: event_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Event'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /events/stats:
+    get:
+      summary: Aggregated counts (scope events:read)
+      parameters:
+        - {name: group_by, in: query, required: true, schema: {type: string, enum: [host, rule, src_ip, family, hour]}}
+        - $ref: '#/components/parameters/since'
+        - $ref: '#/components/parameters/until'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets: {type: array, items: {type: object, properties: {key: {type: string}, blocked: {type: integer}, logged: {type: integer}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /events/export:
+    get:
+      summary: NDJSON export for log archives (scope events:read)
+      description: "Cursor-based, gap-free and duplicate-free. Headers X-Next-Cursor and X-Content-SHA256 (of the uncompressed body)."
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - {name: max_events, in: query, schema: {type: integer, default: 10000, maximum: 100000}}
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Next-Cursor: {schema: {type: string}}
+            X-Content-SHA256: {schema: {type: string}}
+          content:
+            application/x-ndjson: {schema: {type: string}}
+        default: {$ref: '#/components/responses/Error'}
+  /rules:
+    get:
+      summary: Managed and unmanaged rules (scope rules:read)
+      parameters:
+        - {name: kind, in: query, schema: {type: string}}
+        - {name: references_ip, in: query, schema: {type: string}, description: "P3: rules whose scope mentions this address"}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Rule'}}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /rules/{rule_id}:
+    get:
+      summary: One rule (scope rules:read)
+      parameters: [{name: rule_id, in: path, required: true, schema: {type: integer}}]
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Rule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /rules/{rule_id}/hits:
+    get:
+      summary: Daily hit counts (scope rules:read)
+      parameters:
+        - {name: rule_id, in: path, required: true, schema: {type: integer}}
+        - $ref: '#/components/parameters/since'
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {days: {type: array, items: {type: object, properties: {date: {type: string, format: date}, count: {type: integer}}}}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /vhosts:
+    get:
+      summary: Server blocks and their WAF state (scope rules:read)
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Vhost'}}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /changes:
+    get:
+      summary: Changes (scope changes:read)
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+        - {name: state, in: query, schema: {type: string}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Change'}}, next_cursor: {type: [string, "null"]}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      summary: Propose a change (scope changes:propose). Never approves; loosening always waits for a person.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ChangeProposal'}}}
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Change'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /changes/{change_id}:
+    get:
+      summary: One change with checks and diff (scope changes:read)
+      parameters: [{name: change_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Change'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /ip-blocks:
+    get:
+      summary: Temporary IP blocks (scope rules:read)
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/IpBlock'}}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      summary: Add a temporary block (scope ipblocks:write); refused for internal ranges, allowlisted ranges and oversized prefixes
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/IpBlockRequest'}}}
+      responses:
+        '202': {description: Queued, content: {application/json: {schema: {$ref: '#/components/schemas/IpBlock'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /ip-blocks/{block_id}:
+    delete:
+      summary: End a block early (scope ipblocks:write, own blocks only)
+      parameters: [{name: block_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '204': {description: Removed}
+        default: {$ref: '#/components/responses/Error'}
+  /lookups/ip/{ip}:
+    get:
+      summary: What the WAF saw from one address (scope lookups:read)
+      parameters: [{name: ip, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/IpLookup'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /webhooks:
+    get:
+      summary: Own webhook subscriptions (scope webhooks:manage)
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Webhook'}}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      summary: Subscribe (scope webhooks:manage); the signing secret is returned once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: {type: string, format: uri}
+                events: {type: array, items: {type: string}}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Webhook'
+                  - type: object
+                    properties: {secret: {type: string}}
+        default: {$ref: '#/components/responses/Error'}
+  /webhooks/{webhook_id}:
+    delete:
+      summary: Unsubscribe (scope webhooks:manage)
+      parameters: [{name: webhook_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '204': {description: Removed}
+        default: {$ref: '#/components/responses/Error'}

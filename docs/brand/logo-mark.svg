@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="jt-waf-mgr">
+  <defs>
+    <linearGradient id="jtwaf-shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a86e6"/>
+      <stop offset="1" stop-color="#1a4c9c"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 3 L55 11 V29.5 C55 44.5 45.6 55.2 32 61 C18.4 55.2 9 44.5 9 29.5 V11 Z" fill="url(#jtwaf-shield)"/>
+  <g stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M16.5 22 H29.5 M16.5 32 H27 M16.5 42 H29.5"/>
+    <path d="M41.5 22 H48 M41.5 42 H48"/>
+  </g>
+  <rect x="33.5" y="15" width="4.5" height="34" rx="2.25" fill="#ffffff"/>
+  <circle cx="28.6" cy="32" r="3.6" fill="#ff8a5c"/>
+</svg>

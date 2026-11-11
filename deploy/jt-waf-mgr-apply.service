@@ -1,0 +1,21 @@
+[Unit]
+Description=jt-waf-mgr apply program (writes the managed ModSecurity files, tests and reloads nginx)
+# Only started by jt-waf-mgr-apply.path. It validates every request again, writes nothing but the
+# managed files (and, once, the Include lines of the adoption), and restores them on any failure.
+
+[Service]
+Type=oneshot
+User=root
+Environment=PYTHONPATH=/usr/lib/jt-waf-mgr
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -m jtwafmgr.apply --config /etc/jt-waf-mgr/config.toml
+TimeoutStartSec=900
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+RestrictRealtime=yes
+LockPersonality=yes
+UMask=0022

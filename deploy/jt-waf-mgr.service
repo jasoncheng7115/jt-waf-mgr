@@ -1,0 +1,47 @@
+[Unit]
+Description=jt-waf-mgr (web management for nginx + ModSecurity v3 + OWASP CRS)
+After=network.target
+
+[Service]
+Type=simple
+User=jtwaf
+Group=jtwaf
+# install.sh adds the group owning the ModSecurity audit log in a drop-in:
+# /etc/systemd/system/jt-waf-mgr.service.d/10-log-group.conf
+Environment=PYTHONPATH=/usr/lib/jt-waf-mgr
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -m jtwafmgr --config /etc/jt-waf-mgr/config.toml serve
+Restart=on-failure
+RestartSec=5
+
+# The service only reads nginx / ModSecurity files, writes its own database and runs the sandbox
+# (a throwaway nginx on 127.0.0.1). Writing the nginx configuration is the apply program's job.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/jt-waf-mgr
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# No MemoryDenyWriteExecute: the sandbox runs nginx + libmodsecurity, whose PCRE JIT needs it,
+# exactly like the production nginx.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,148 @@
+<!--
+  jt-waf-mgr: web manager for nginx + ModSecurity v3 + OWASP CRS (draft rule pack)
+  Rule range 133560-133589. Copyright Jason Tools Co., Ltd. / AGPL-3.0-or-later
+
+  Fields come from the JSON decoder: jt_waf_mgr.action, .result, .actor, .actor_type, .src_ip,
+  .severity (crit for integrity alerts), .kind (anchors and monitor notices).
+  Integrity alerts (integrity.*) are the reason this pack exists: jt-waf-mgr cannot be trusted to
+  report its own compromise, so a separate system must alert on them.
+-->
+<group name="jt_waf_mgr,">
+
+  <rule id="133560" level="0">
+    <decoded_as>jt-waf-mgr</decoded_as>
+    <description>jt-waf-mgr: audit record</description>
+  </rule>
+
+  <!-- chain anchors: the heartbeat of the audit trail -->
+  <rule id="133561" level="0">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.kind">^audit_anchor$</field>
+    <description>jt-waf-mgr: audit chain anchor $(jt_waf_mgr.id)</description>
+  </rule>
+
+  <!-- integrity: broken audit chain, changed program files, outside config changes, failed DB check -->
+  <rule id="133562" level="12">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^integrity\.\w+_failed$</field>
+    <description>jt-waf-mgr: integrity check failed ($(jt_waf_mgr.action))</description>
+    <mitre><id>T1565.001</id><id>T1070</id></mitre>
+    <group>integrity,</group>
+  </rule>
+
+  <rule id="133563" level="3">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^integrity\.\w+_failed_recovered$</field>
+    <description>jt-waf-mgr: integrity check recovered ($(jt_waf_mgr.action))</description>
+  </rule>
+
+  <rule id="133564" level="8">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.kind">^monitor_error$</field>
+    <description>jt-waf-mgr: integrity monitor task failed ($(jt_waf_mgr.task))</description>
+  </rule>
+
+  <!-- sign-in -->
+  <rule id="133565" level="5">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^login\.failed$</field>
+    <description>jt-waf-mgr: failed login for $(jt_waf_mgr.actor) from $(jt_waf_mgr.src_ip)</description>
+    <group>authentication_failed,jt_auth_failure,</group>
+  </rule>
+
+  <rule id="133566" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>133565</if_matched_sid>
+    <same_field>jt_waf_mgr.src_ip</same_field>
+    <description>jt-waf-mgr: 5 failed logins in 5 minutes from $(jt_waf_mgr.src_ip)</description>
+    <mitre><id>T1110</id></mitre>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <rule id="133567" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^account\.locked$</field>
+    <description>jt-waf-mgr: account $(jt_waf_mgr.actor) locked after failed logins</description>
+    <group>jt_auth_lockout,</group>
+  </rule>
+
+  <rule id="133568" level="2">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^login$</field>
+    <field name="jt_waf_mgr.result">^ok$</field>
+    <description>jt-waf-mgr: login $(jt_waf_mgr.actor) from $(jt_waf_mgr.src_ip)</description>
+    <group>authentication_success,jt_auth_success,</group>
+  </rule>
+
+  <!-- second factor and accounts -->
+  <rule id="133569" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^totp\.disabled$|^user\.reset$|^user\.password_set$</field>
+    <description>jt-waf-mgr: $(jt_waf_mgr.action) by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133570" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^user\.created$|^user\.changed$|^user\.disabled$|^sessions\.revoked$</field>
+    <description>jt-waf-mgr: account change $(jt_waf_mgr.action) by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133571" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^token\.created$</field>
+    <description>jt-waf-mgr: API token created by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133572" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^settings\.changed$</field>
+    <description>jt-waf-mgr: setting changed by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <!-- WAF changes: what actually reaches nginx -->
+  <rule id="133573" level="5">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^change\.applied$|^change\.rollback_requested$</field>
+    <description>jt-waf-mgr: WAF configuration changed ($(jt_waf_mgr.action)) by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133574" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^change\.apply_failed$</field>
+    <description>jt-waf-mgr: applying a WAF change failed, previous files restored</description>
+  </rule>
+
+  <rule id="133575" level="8">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">_denied$</field>
+    <description>jt-waf-mgr: refused $(jt_waf_mgr.action) for $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133576" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^audit\.purged$</field>
+    <description>jt-waf-mgr: $(jt_waf_mgr.action)</description>
+  </rule>
+
+  <rule id="133578" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^backup\.failed$</field>
+    <description>jt-waf-mgr: daily database backup failed</description>
+  </rule>
+
+  <!-- nginx / ModSecurity / CRS files changed outside the change workflow -->
+  <rule id="133579" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^config\.changed$</field>
+    <field name="jt_waf_mgr.cause">^outside$</field>
+    <description>jt-waf-mgr: WAF / nginx configuration changed outside the change workflow</description>
+    <mitre><id>T1562.001</id></mitre>
+  </rule>
+
+  <!-- anything at crit that the rules above do not name -->
+  <rule id="133577" level="12">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.severity">^crit$</field>
+    <description>jt-waf-mgr: critical audit record $(jt_waf_mgr.action)</description>
+  </rule>
+
+</group>

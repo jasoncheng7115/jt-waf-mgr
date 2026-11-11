@@ -1,0 +1,10 @@
+[Unit]
+Description=jt-waf-mgr: daily check whether the GeoIP databases need an update
+
+[Timer]
+OnCalendar=*-*-* 04:20
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

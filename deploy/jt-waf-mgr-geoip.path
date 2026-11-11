@@ -1,0 +1,9 @@
+[Unit]
+Description=jt-waf-mgr: run the GeoIP update when an admin asks for it
+
+[Path]
+PathExists=/var/lib/jt-waf-mgr/geoip/update.request
+Unit=jt-waf-mgr-geoip.service
+
+[Install]
+WantedBy=multi-user.target

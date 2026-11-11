@@ -1,0 +1,145 @@
+# /etc/jt-waf-mgr/config.toml -- every key is optional; the values shown are the defaults.
+# Owned root:jtwaf, mode 0640.
+
+[node]
+# Name of this WAF host (shown in the UI and in audit events).
+id = "waf1"
+
+[server]
+# The service listens on loopback only; nginx proxies the management vhost to it.
+listen = "127.0.0.1:8095"
+# Only these peers may set X-Real-IP (the local nginx).
+trusted_proxies = ["127.0.0.1", "::1"]
+# __Host- cookie prefix + Secure. Keep true behind HTTPS.
+secure_cookies = true
+session_idle_minutes = 30
+session_max_hours = 12
+
+[paths]
+db = "/var/lib/jt-waf-mgr/jt-waf-mgr.db"
+nginx_conf = "/etc/nginx/nginx.conf"
+nginx_bin = "/usr/sbin/nginx"
+audit_log = "/var/log/modsecurity/modsec_audit.log"
+
+[collector]
+enabled = true
+poll_seconds = 2.0
+# On the first start, also import <audit_log>.1 (plain text). Older .gz files:
+#   jt-waf-mgr import /var/log/modsecurity/modsec_audit.log.*.gz
+backfill_rotated = true
+max_record_bytes = 1048576
+# Zone of the audit log's time_stamp (written without a zone). Empty = system local time.
+timezone = ""
+
+[network]
+# Sources in these networks count as "internal".
+internal = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+            "::1/128", "fc00::/7", "fe80::/10", "100.64.0.0/10"]
+known_scanners = []
+
+[waf]
+# Site (local) rule IDs and the sub-ranges new rules are numbered from (ids are never reused).
+local_range = [10000, 19999]
+system_range = [10000, 10099]       # plugin toggles, methods, site understanding
+exclusion_range = [10100, 10199]    # exclusions, redaction
+confident_range = [10200, 10296]    # confident blocks
+# "External over the CRS threshold -> block" rule(s) (nolog), the rule adding a critical score for a
+# confident match (so that CRS's 949110 decides), and the fallback deny rule(s).
+threshold_rule_ids = [10297]
+score_rule_ids = [10298]
+fallback_rule_ids = [10299]
+# Sites watched closely: one card each on the overview, e.g. ["sso.example.com"].
+focus_sites = []
+# Parameter names whose values are masked before anything is stored.
+# sensitive_fields = ["password", "passwd", "pass", "pwd", "secret", "token", "otp", ...]
+
+[managed]
+# The only nginx files jt-waf-mgr writes (through the root apply program), created by the adoption.
+dir = "/etc/nginx/modsec/jt-waf-mgr"
+# Existing site rule files to adopt; empty = the local files included right before / after the CRS rules.
+import_before = ""
+import_after = ""
+spool = "/var/lib/jt-waf-mgr/spool"
+sandbox_dir = "/var/lib/jt-waf-mgr/sandbox"
+snapshots_kept = 200
+
+[evidence]
+# Access logs for evidence and regression samples: one log per request (JSON or combined), not both.
+access_logs = ["/var/log/nginx/*access.log", "/var/log/nginx/*access.log.1", "/var/log/nginx/*access.log.*.gz"]
+# Sites that answer every path with the same page (a 2xx/3xx there proves nothing).
+catch_all_hosts = []
+max_scan_seconds = 900
+
+[retention]
+events_days = 30
+stats_days = 365
+audit_days = 0          # 0 = keep the audit trail forever
+
+[auth]
+password_min_length = 12
+require_totp_roles = ["approver", "admin"]
+lockout_threshold = 5
+lockout_minutes = 15
+ip_attempts_per_10min = 30
+# Character classes (lower, upper, digit, other) a new password needs; 0 = length only.
+password_min_classes = 3
+# A new password may not be the current one or one of the last N.
+password_history = 3
+# Password age limits; 0 = off. Taiwan's Cyber Security Management Act asks for both on medium /
+# high level systems (e.g. max 90 days, min 24 hours).
+password_max_age_days = 0
+password_min_age_hours = 0
+# Disable accounts without a sign-in for this many days (never the last active admin); 0 = off.
+dormant_days = 90
+# Sessions per user; the oldest is signed out first. 0 = unlimited.
+max_sessions_per_user = 5
+
+[syslog]
+# One JSON line per action, program name "jt-waf-mgr", for the SIEM.
+enabled = true
+address = "/dev/log"
+facility = "local0"
+
+[ui]
+# Source code link in the footer (AGPL-3.0 section 13). Empty = the project's GitHub page.
+source_url = ""
+# Text above the sign-in form (authorised use, monitoring notice). Plain text, up to 2000 characters.
+login_notice = ""
+
+[integrity]
+# The audit trail is hash-chained; the newest (id, hash) is appended here every anchor_minutes and sent
+# to syslog. install.sh makes the file append-only (chattr +a).
+anchor_file = "/var/lib/jt-waf-mgr/audit-anchors.jsonl"
+anchor_minutes = 5
+# Installed program files against the signed release manifest (key pinned by install.sh).
+program_check_minutes = 60
+release_key = "/etc/jt-waf-mgr/release-key.pem"
+# nginx / ModSecurity / CRS files, the nginx binary and the module: fingerprinted, every change recorded.
+config_check_minutes = 5
+disk_min_free_mb = 1024
+
+[backup]
+# Daily database copy (SQLite online backup, integrity_check, SHA-256 file). Copy it off the host.
+enabled = true
+dir = "/var/lib/jt-waf-mgr/backups"
+hour = 3
+keep_days = 14
+
+[compliance]
+# Protection level of this system under Taiwan's Cyber Security Management Act: "", "low", "medium",
+# "high". Only decides what the Compliance page checks the settings against.
+level = ""
+
+[geoip]
+# Country / city / network owner (ASN) of external addresses, from MaxMind databases.
+# The free GeoLite2 databases need a MaxMind account: put the account number here and the license key,
+# alone, in license_key_file (the installer creates it: owner root, group jtwaf, mode 0640).
+# The web service only reads the files; the separate jt-waf-mgr-geoip.service downloads them (daily
+# check via jt-waf-mgr-geoip.timer, or "Update now" in Settings) and verifies MaxMind's SHA-256.
+# Internal addresses ([network] internal and private ranges) are never looked up.
+enabled = true
+dir = "/var/lib/jt-waf-mgr/geoip"
+account_id = ""
+license_key_file = "/etc/jt-waf-mgr/maxmind-license.key"
+editions = ["GeoLite2-City", "GeoLite2-ASN"]
+update_days = 3

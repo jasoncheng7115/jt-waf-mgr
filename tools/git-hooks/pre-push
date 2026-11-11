@@ -1,0 +1,16 @@
+#!/bin/sh
+# Before anything leaves this machine: scan every commit message and annotated tag being pushed.
+TOP=$(git rev-parse --show-toplevel)
+Z=0000000000000000000000000000000000000000
+fail=0
+while read -r lref lsha rref rsha; do
+    [ "$lsha" = "$Z" ] && continue
+    if [ "$rsha" = "$Z" ]; then range="$lsha"; else range="$rsha..$lsha"; fi
+    for c in $(git rev-list "$range"); do
+        git log -1 --format=%B "$c" | python3 "$TOP/tools/git-hooks/scan_text.py" || { echo "commit $c" >&2; fail=1; }
+    done
+    if [ "$(git cat-file -t "$lref" 2>/dev/null)" = tag ]; then
+        git cat-file -p "$lref" | sed '1,/^$/d' | python3 "$TOP/tools/git-hooks/scan_text.py" || { echo "tag $lref" >&2; fail=1; }
+    fi
+done
+exit $fail

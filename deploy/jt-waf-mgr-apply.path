@@ -1,0 +1,9 @@
+[Unit]
+Description=jt-waf-mgr: start the apply program when a request is queued
+
+[Path]
+PathExistsGlob=/var/lib/jt-waf-mgr/spool/*.req
+Unit=jt-waf-mgr-apply.service
+
+[Install]
+WantedBy=multi-user.target

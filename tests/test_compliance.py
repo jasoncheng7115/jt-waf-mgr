@@ -1,0 +1,466 @@
+"""Compliance and integrity: audit hash chain, anchors, signed manifest, password policy, accounts,
+backups, configuration change tracking, audit export, and the audit coverage of every write route."""
+import inspect
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import tempfile
+import time
+import unittest
+
+from jtwafmgr import auth, integrity
+from jtwafmgr.app import App
+from jtwafmgr.auth import AuthError
+from jtwafmgr.compliance import audit_export, controls, system_check, verify_export
+from jtwafmgr.db import SCHEMA, Database
+from jtwafmgr.web.server import start_background
+from tests.helpers import TempEnv
+from tests.test_api import Client, PW
+
+HAVE_OPENSSL = shutil.which('openssl') is not None
+
+
+class TestAuditChain(unittest.TestCase):
+    def setUp(self):
+        self.env = TempEnv()
+        self.app = App(self.env.cfg)
+        self.a = self.app.audit
+
+    def tearDown(self):
+        self.env.cleanup()
+
+    def test_chain_verifies_and_is_append_only(self):
+        for i in range(5):
+            self.a.log('test.action', 'alice', details_n=i)
+        res = self.a.chain.verify()
+        self.assertTrue(res['ok'], res)
+        self.assertEqual(res['checked'], 5)
+        rows = self.app.db.q('SELECT * FROM audit ORDER BY id')
+        self.assertEqual(rows[1]['prev_hash'], rows[0]['this_hash'])
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.app.db.x("UPDATE audit SET actor='mallory' WHERE id=2")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.app.db.x('DELETE FROM audit WHERE id=5')
+
+    def _tamper(self, sql):
+        c = self.app.db.conn()
+        c.execute('DROP TRIGGER audit_no_update')
+        c.execute('DROP TRIGGER audit_no_delete')
+        c.execute(sql)
+
+    def test_modified_row_detected(self):
+        for i in range(4):
+            self.a.log('test.action', 'alice', n=i)
+        self._tamper("UPDATE audit SET actor='mallory' WHERE id=2")
+        self.assertEqual(self.a.chain.verify()['reason'], 'triggers_missing')
+        c = self.app.db.conn()
+        c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        c.execute("CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        res = self.a.chain.verify()
+        self.assertFalse(res['ok'])
+        self.assertEqual((res['bad_id'], res['reason']), (2, 'hash_mismatch'))
+
+    def test_removed_row_detected(self):
+        for i in range(4):
+            self.a.log('test.action', 'alice', n=i)
+        self._tamper('DELETE FROM audit WHERE id=2')
+        self.app.db.conn().execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        self.app.db.conn().execute("CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        res = self.a.chain.verify()
+        self.assertEqual((res['bad_id'], res['reason']), (3, 'prev_mismatch'))
+
+    def test_anchor_detects_rewritten_chain(self):
+        mon = self.app.monitor
+        for i in range(3):
+            self.a.log('test.action', 'alice', n=i)
+        st = mon.check_chain()
+        self.assertTrue(st['ok'], st)
+        anchored = mon.anchors.read(1)[0]
+        # an attacker with the database rewrites a row AND recomputes the whole chain
+        c = self.app.db.conn()
+        c.execute('DROP TRIGGER audit_no_update')
+        c.execute("UPDATE audit SET actor='mallory' WHERE id=1")
+        prev = self.app.db.get_meta('audit_genesis')
+        for r in c.execute('SELECT * FROM audit ORDER BY id').fetchall():
+            h = integrity.audit_row_hash(prev, r)
+            c.execute('UPDATE audit SET prev_hash=?, this_hash=? WHERE id=?', (prev, h, r['id']))
+            prev = h
+        c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        self.assertTrue(self.a.chain.verify()['ok'])            # the chain alone cannot tell
+        st = mon.check_chain(full=True)
+        self.assertFalse(st['ok'])                               # the anchor can
+        self.assertIn(anchored['id'], [p.get('id') for p in st['anchor_problems']])
+        alerts = self.app.db.q("SELECT * FROM audit WHERE action='integrity.audit_chain_failed'")
+        self.assertEqual(len(alerts), 1)
+
+    def test_simultaneous_checks_anchor_once(self):
+        mon = self.app.monitor
+        self.a.log('test.action', 'alice')
+        mon.check_chain()
+        mon.check_chain(full=True)          # the daily full check falling due in the same minute
+        self.assertEqual(len(mon.anchors.read()), 1)
+        self.a.log('test.action', 'alice')
+        mon.check_chain()                   # a new row is always anchored
+        self.assertEqual(len(mon.anchors.read()), 2)
+
+    def test_purge_keeps_chain_valid(self):
+        for i in range(6):
+            self.a.log('test.action', 'alice', n=i)
+        self.app.monitor.check_chain()
+        cutoff = self.app.db.one('SELECT ts FROM audit WHERE id=4')[0]
+        n = self.a.chain.purge_before(cutoff)
+        self.assertEqual(n, 3)
+        self.assertTrue(self.a.chain.verify()['ok'])
+        self.a.log('test.after', 'alice')
+        self.assertTrue(self.app.monitor.check_chain()['ok'])
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.app.db.x('DELETE FROM audit')
+
+    def test_migration_chains_existing_rows(self):
+        path = os.path.join(self.env.dir, 'old.db')
+        c = sqlite3.connect(path)
+        for script in SCHEMA[:2]:
+            for stmt in script.split(';'):
+                if stmt.strip():
+                    c.execute(stmt)
+        c.execute("INSERT INTO meta(key, value) VALUES ('schema_version', '2')")
+        c.execute('INSERT INTO users(username, role, pw_hash, created_at) VALUES (?,?,?,?)', ('old', 'admin', 'x', 1.0))
+        for i in range(3):
+            c.execute("INSERT INTO audit(ts, action, actor, actor_type, result, details) VALUES (?,?,?,?,?,?)",
+                      (1000.0 + i, 'old.action', 'old', 'user', 'ok', '{}'))
+        c.commit()
+        c.close()
+        db = Database(path)
+        self.assertEqual(db.get_meta('schema_version'), str(len(SCHEMA)))
+        self.assertTrue(integrity.AuditChain(db).verify()['ok'])
+        self.assertEqual(db.one("SELECT pw_changed_at FROM users WHERE username='old'")[0], 1.0)
+
+    def test_export_and_offline_verify(self):
+        for i in range(3):
+            self.a.log('test.action', 'alice', note='第 %d 筆' % i)
+        body, summary = audit_export(self.app)
+        self.assertEqual(summary['rows'], 3)
+        self.assertTrue(summary['chain_verified'])
+        p = os.path.join(self.env.dir, 'export.ndjson')
+        with open(p, 'w', encoding='utf-8') as fh:
+            fh.write(body)
+        self.assertTrue(verify_export(p)['ok'])
+        with open(p, 'w', encoding='utf-8') as fh:
+            fh.write(body.replace('alice', 'mallo', 1))
+        self.assertFalse(verify_export(p)['ok'])
+
+
+@unittest.skipUnless(HAVE_OPENSSL, 'openssl needed to create a test signing key')
+class TestReleaseSignature(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.mkdtemp(prefix='jtwaf-sig-')
+        cls.key = os.path.join(cls.dir, 'key.pem')
+        subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:3072', '-out', cls.key],
+                       check=True, capture_output=True)
+        cls.pub = subprocess.run(['openssl', 'pkey', '-in', cls.key, '-pubout'], check=True, capture_output=True,
+                                 text=True).stdout
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def _release(self):
+        rel = tempfile.mkdtemp(dir=self.dir)
+        os.makedirs(os.path.join(rel, 'jtwafmgr', 'web'))
+        os.makedirs(os.path.join(rel, 'release'))
+        for p, t in (('jtwafmgr/__init__.py', 'x = 1\n'), ('jtwafmgr/web/api.py', 'y = 2\n'), ('LICENSE', 'AGPL\n')):
+            with open(os.path.join(rel, p), 'w') as fh:
+                fh.write(t)
+        m = integrity.make_manifest(rel, ['jtwafmgr/__init__.py', 'jtwafmgr/web/api.py', 'LICENSE'])
+        mp = os.path.join(rel, 'release', integrity.MANIFEST)
+        with open(mp, 'w') as fh:
+            fh.write(m)
+        subprocess.run(['openssl', 'dgst', '-sha256', '-sign', self.key, '-out', mp + '.sig', mp], check=True)
+        return rel
+
+    def test_fingerprint_matches_openssl(self):
+        der = subprocess.run(['openssl', 'pkey', '-pubin', '-outform', 'DER'], input=self.pub.encode(),
+                             capture_output=True, check=True).stdout
+        import hashlib
+        self.assertEqual(integrity.key_fingerprint(self.pub), hashlib.sha256(der).hexdigest())
+
+    def test_release_ok_and_tampering(self):
+        rel = self._release()
+        self.assertTrue(integrity.verify_release(rel, self.pub)['ok'])
+        with open(os.path.join(rel, 'jtwafmgr', 'web', 'api.py'), 'a') as fh:
+            fh.write('import os\n')
+        r = integrity.verify_release(rel, self.pub)
+        self.assertEqual(r['changed'], ['jtwafmgr/web/api.py'])
+        rel = self._release()
+        with open(os.path.join(rel, 'jtwafmgr', 'evil.py'), 'w') as fh:
+            fh.write('import os\n')
+        self.assertEqual(integrity.verify_release(rel, self.pub)['extra'], ['jtwafmgr/evil.py'])
+        rel = self._release()
+        with open(os.path.join(rel, 'release', integrity.MANIFEST), 'a') as fh:
+            fh.write('%s  jtwafmgr/x.py\n' % ('0' * 64))
+        self.assertEqual(integrity.verify_release(rel, self.pub)['reason'], 'signature_invalid')
+
+    def test_installed_program_check(self):
+        rel = self._release()
+        keyf = os.path.join(rel, 'pub.pem')
+        with open(keyf, 'w') as fh:
+            fh.write(self.pub)
+        r = integrity.verify_program(rel, keyf)
+        self.assertEqual(r['status'], 'ok', r)
+        os.unlink(os.path.join(rel, 'LICENSE'))
+        r = integrity.verify_program(rel, keyf)
+        self.assertEqual((r['status'], r['missing']), ('failed', ['LICENSE']))
+        self.assertEqual(integrity.verify_program(tempfile.mkdtemp(dir=self.dir), keyf)['status'], 'not_installed')
+
+    def test_apply_refuses_modified_program(self):
+        from jtwafmgr.apply import Applier
+        env = TempEnv(managed={'spool': os.path.join(self.dir, 'spool'), 'dir': os.path.join(self.dir, 'managed')})
+        try:
+            ap = Applier(env.cfg)
+            ap.program_check = lambda: {'status': 'failed', 'reason': 'files_differ', 'changed': ['jtwafmgr/apply.py'],
+                                        'dir': '/usr/lib/jt-waf-mgr'}
+            os.makedirs(ap.spool, exist_ok=True)
+            with open(os.path.join(ap.spool, 'v1-c1.req'), 'w') as fh:
+                fh.write('{}')
+            ap.process()
+            with open(os.path.join(ap.spool, 'v1-c1.result')) as fh:
+                res = json.load(fh)
+            self.assertEqual((res['result'], res['step']), ('failed', 'integrity'))
+        finally:
+            env.cleanup()
+
+
+class TestAccountPolicy(unittest.TestCase):
+    def setUp(self):
+        self.env = TempEnv(auth={'password_min_classes': 3, 'password_history': 3, 'password_min_age_hours': 24,
+                                 'password_max_age_days': 90, 'dormant_days': 30, 'max_sessions_per_user': 2})
+        self.app = App(self.env.cfg)
+        self.a = self.app.auth
+
+    def tearDown(self):
+        self.env.cleanup()
+
+    def test_complexity_history_and_min_age(self):
+        self.a.create_user('alice', 'viewer', password='Initial-Passw0rd')
+        with self.assertRaises(AuthError) as e:
+            self.a.set_password('alice', 'alllowercaseletters')
+        self.assertEqual(e.exception.code, 'password_too_simple')
+        with self.assertRaises(AuthError) as e:
+            self.a.set_password('alice', 'Second-Passw0rd')
+        self.assertEqual(e.exception.code, 'password_too_recent')
+        self.a.set_password('alice', 'Second-Passw0rd', by_user=False)
+        self.a.set_password('alice', 'Third-Passw0rd', by_user=False)
+        with self.assertRaises(AuthError) as e:
+            self.a.set_password('alice', 'Initial-Passw0rd', by_user=False)
+        self.assertEqual(e.exception.code, 'password_reused')
+        with self.assertRaises(AuthError) as e:
+            self.a.set_password('alice', 'Third-Passw0rd', by_user=False)
+        self.assertEqual(e.exception.code, 'password_same')
+
+    def test_max_age_forces_change(self):
+        self.a.create_user('bob', 'viewer', password='Bobs-Passw0rd-1')
+        self.app.db.x("UPDATE users SET pw_changed_at=? WHERE username='bob'", (time.time() - 91 * 86400,))
+        _, _, row, _ = self.a.login('bob', 'Bobs-Passw0rd-1', None, '192.0.2.5')
+        self.assertTrue(row['must_change'])
+
+    def test_previous_login_and_failures_reported(self):
+        self.a.create_user('carl', 'viewer', password='Carls-Passw0rd-1')
+        self.a.login('carl', 'Carls-Passw0rd-1', None, '192.0.2.5')
+        for _ in range(2):
+            with self.assertRaises(AuthError):
+                self.a.login('carl', 'wrong', None, '198.51.100.9')
+        _, _, _, prev = self.a.login('carl', 'Carls-Passw0rd-1', None, '192.0.2.6')
+        self.assertEqual((prev['ip'], prev['failed_since']), ('192.0.2.5', 2))
+
+    def test_lockout_is_a_critical_audit_event(self):
+        self.a.create_user('dora', 'viewer', password='Doras-Passw0rd-1')
+        for _ in range(5):
+            with self.assertRaises(AuthError):
+                self.a.login('dora', 'wrong', None, '198.51.100.9')
+        self.assertTrue(self.app.db.one("SELECT 1 FROM audit WHERE action='account.locked' AND actor='dora'"))
+
+    def test_dormant_and_expired_accounts(self):
+        self.a.create_user('root1', 'admin', password='Admin-Passw0rd-1')
+        self.a.create_user('eve', 'viewer', password='Eves-Passw0rd-1')
+        self.a.create_user('tmp', 'viewer', password='Tmps-Passw0rd-1', expires_at=time.time() + 60)
+        old = time.time() - 31 * 86400
+        self.app.db.x("UPDATE users SET activity_at=?", (old,))
+        self.app.db.x("UPDATE users SET expires_at=?, activity_at=? WHERE username='tmp'", (time.time() - 1, time.time()))
+        out = dict(self.a.expire_accounts())
+        self.assertEqual(out, {'eve': 'dormant', 'tmp': 'expired'})   # never the last active admin
+        self.assertTrue(self.a.user_row('root1')['disabled'] == 0)
+        self.a.set_disabled('eve', False)                             # re-enabling restarts the clock
+        self.assertEqual(self.a.expire_accounts(), [])
+
+    def test_session_limit(self):
+        self.a.create_user('fred', 'viewer', password='Freds-Passw0rd-1')
+        for _ in range(3):
+            self.a.login('fred', 'Freds-Passw0rd-1', None, '192.0.2.5')
+        self.assertEqual(len(self.a.sessions_of('fred')), 2)
+
+
+class TestMonitor(unittest.TestCase):
+    def setUp(self):
+        self.env = TempEnv()
+        self.app = App(self.env.cfg)
+
+    def tearDown(self):
+        self.env.cleanup()
+
+    def test_backup_and_verify(self):
+        mon = self.app.monitor
+        self.app.audit.log('test.action', 'alice')
+        r = mon.backup()
+        self.assertTrue(r['ok'], r)
+        self.assertEqual(oct(os.stat(os.path.join(self.env.cfg['backup']['dir'], r['file'])).st_mode & 0o777), '0o600')
+        self.assertTrue(mon.verify_backup(r['file'])['ok'])
+        with open(os.path.join(self.env.cfg['backup']['dir'], r['file']), 'r+b') as fh:
+            fh.seek(200)
+            fh.write(b'\x00\x01')
+        self.assertFalse(mon.verify_backup(r['file'])['sha256_ok'])
+        self.assertIsNone(mon.verify_backup('../../etc/passwd'))
+
+    def test_config_change_tracking(self):
+        mon = self.app.monitor
+        f = os.path.join(self.env.dir, 'site.conf')
+        with open(f, 'w') as fh:
+            fh.write('SecRuleEngine On\n')
+        mon.config_files = lambda: [f]
+        self.assertEqual(mon.check_config()['cause'], 'baseline')
+        self.assertFalse(mon.check_config()['changed'])
+        with open(f, 'a') as fh:
+            fh.write('SecRuleRemoveById 942100\n')
+        st = mon.check_config()
+        self.assertEqual(st['cause'], 'outside')
+        items, _ = mon.config_changes()
+        self.assertEqual(items[0]['changes']['changed'], [f])
+        row = self.app.db.one("SELECT * FROM audit WHERE action='config.changed'")
+        self.assertEqual(row['result'], 'outside')
+
+    def test_system_check_and_controls(self):
+        keys = {i['key'] for i in system_check(self.app)}
+        for k in ('program_integrity', 'audit_chain', 'time_sync', 'backup', 'database', 'accounts', 'apply'):
+            self.assertIn(k, keys)
+        rep = controls(self.app)
+        ids = {c['id'] for c in rep['controls']}
+        self.assertIn('log_protection', ids)
+        for c in rep['controls']:
+            self.assertIn(c['status'], ('met', 'partial', 'gap', 'organisational'))
+
+    def test_level_medium_shows_password_gaps(self):
+        env = TempEnv(compliance={'level': 'medium'})
+        try:
+            app = App(env.cfg)
+            auth_ctl = next(c for c in controls(app)['controls'] if c['id'] == 'authentication')
+            self.assertEqual(auth_ctl['status'], 'gap')
+            self.assertIn('auth.password_max_age_days', auth_ctl['needs'])
+        finally:
+            env.cleanup()
+
+
+class TestComplianceApi(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.env = TempEnv()
+        cls.app = App(cls.env.cfg)
+        a = cls.app.auth
+        a.create_user('viewer1', 'viewer', password=PW)
+        a.create_user('admin1', 'admin', password=PW)
+        cls.secret, _ = a.totp_setup('admin1')
+        a.totp_enable('admin1', auth.totp_code(cls.secret, int(time.time() // 30)))
+        cls.srv, _ = start_background(cls.app)
+        cls.port = cls.srv.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+        cls.env.cleanup()
+
+    def admin(self):
+        self.app.db.x("UPDATE users SET totp_last_step=0 WHERE username='admin1'")
+        c = Client(self.port)
+        st, obj = c.login('admin1', totp=auth.totp_code(self.secret, int(time.time() // 30)))
+        self.assertEqual(st, 200, obj)
+        self.assertIn('previous_login', obj)
+        return c
+
+    def test_admin_only(self):
+        c = Client(self.port)
+        c.login('viewer1')
+        for path in ('/api/v1/system/check', '/api/v1/compliance', '/api/v1/audit/export', '/api/v1/users/review',
+                     '/api/v1/backups', '/api/v1/config-changes'):
+            self.assertEqual(c.req('GET', path)[0], 403, path)
+
+    def test_endpoints(self):
+        c = self.admin()
+        st, obj, _ = c.req('GET', '/api/v1/system/check')
+        self.assertEqual(st, 200)
+        self.assertTrue(any(i['key'] == 'audit_chain' for i in obj['items']))
+        st, obj, _ = c.req('POST', '/api/v1/audit/verify')
+        self.assertEqual((st, obj['ok']), (200, True))
+        r, body = c.req('GET', '/api/v1/audit/export', raw=True)
+        self.assertEqual(r.status, 200)
+        last = json.loads(body.decode().strip().splitlines()[-1])['_summary']
+        self.assertEqual(r.getheader('X-Content-SHA256'), last['sha256_of_lines'])
+        st, obj, _ = c.req('GET', '/api/v1/users/review')
+        self.assertEqual(st, 200)
+        self.assertIn('days_since_activity', obj['users'][0])
+        st, obj, _ = c.req('GET', '/api/v1/compliance')
+        self.assertEqual(st, 200)
+        st, obj, _ = c.req('POST', '/api/v1/backups')
+        self.assertEqual(st, 201, obj)
+        st, obj, _ = c.req('POST', '/api/v1/backups/%s/verify' % obj['file'])
+        self.assertTrue(obj['ok'])
+        st, obj, _ = c.req('GET', '/api/v1/auth/sessions')
+        self.assertTrue(any(s['current'] for s in obj['items']))
+        st, obj, _ = c.req('GET', '/api/v1/meta')
+        self.assertIn('password_policy', obj)
+
+
+# Write routes that deliberately do not add an audit row, with the reason.
+AUDIT_EXEMPT = {
+    'patch_me': 'own language / display name only',
+    'totp_setup': 'creates an unconfirmed secret; enabling it is audited',
+    'change_preview': 'read-only preview, nothing stored',
+    'login': 'audited inside Auth.login (success, failure, lockout)',
+    'logout': 'audited inline when a session exists',
+    'system_check_run': 'audited',
+    'backup_now': 'audited by Monitor.backup',
+}
+
+
+class TestAuditCoverage(unittest.TestCase):
+    """Every route that changes something must write an audit row (directly or through the module it
+    calls). A new write route fails this test until it audits or is listed in AUDIT_EXEMPT with a reason."""
+
+    # a route may also delegate to a Workflow method checked by test_workflow_actions_audited
+    AUDITING_CALLS = ('audit.log', 'app.monitor.backup', '_wf(app).propose', '_wf(app).approve',
+                      '_wf(app).reject', '_wf(app).cancel', '_wf(app).recheck', '_wf(app).rollback')
+
+    def test_write_routes_audited(self):
+        from jtwafmgr.web import api
+        from jtwafmgr.web.server import Router
+        r = Router()
+        api.register(r)
+        missing = []
+        for method, _, fn, _ in r.routes:
+            if method == 'GET' or fn.__name__ in AUDIT_EXEMPT:
+                continue
+            src = inspect.getsource(fn)
+            if not any(c in src for c in self.AUDITING_CALLS):
+                missing.append(fn.__name__)
+        self.assertEqual(missing, [])
+
+    def test_workflow_actions_audited(self):
+        from jtwafmgr.changes import Workflow
+        for name in ('propose', 'propose_adoption', 'approve', 'reject', 'cancel', 'recheck', 'rollback'):
+            src = inspect.getsource(getattr(Workflow, name))
+            self.assertIn('audit.log', src, name)
+
+
+if __name__ == '__main__':
+    unittest.main()

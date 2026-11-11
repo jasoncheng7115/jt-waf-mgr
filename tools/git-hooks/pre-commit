@@ -1,0 +1,5 @@
+#!/bin/sh
+# Every commit passes the publication checks (privacy denylist, whitelist, generic patterns).
+set -e
+TOP=$(git rev-parse --show-toplevel)
+python3 "$TOP/tools/preflight.py" --no-tests
