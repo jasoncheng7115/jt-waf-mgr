@@ -57,8 +57,7 @@
     <section v-if="st && st.enabled && latest" class="card summarycard">
       <h2><Icon name="report" /> {{ t('analysis.summary') }}</h2>
       <p class="sumlead">
-        <RouterLink :to="'/analysis/' + latest.id">{{ t('analysis.sum.run', { id: latest.id, at: fmtMinute(latest.started_at) }) }}</RouterLink>
-        {{ t('analysis.sum.lead', { e: latest.events_scanned == null ? '—' : fmtNum(latest.events_scanned), h: latest.window_hours, d: durText(latest.seconds) }) }}
+        <RouterLink :to="'/analysis/' + latest.id">{{ t('analysis.sum.run', { id: latest.id, at: fmtMinute(latest.started_at) }) }}</RouterLink><span>{{ t('analysis.sum.lead', { e: latest.events_scanned == null ? '—' : fmtNum(latest.events_scanned), h: latest.window_hours, d: durText(latest.seconds) }) }}</span>
         <span v-if="latest.error" class="badge b-blocked">{{ t('analysis.failed') }}</span></p>
       <div class="sumtiles">
         <div class="sumtile"><b>{{ fmtNum(latestProbe.length) }}</b><span>{{ t('analysis.sum.probe_cands') }}</span></div>
@@ -99,6 +98,7 @@
       <template #cell-trigger="{ row }">{{ tOr('analysis.trigger.' + row.trigger, row.trigger) }}</template>
       <template #cell-model="{ row }"><span class="mono">{{ safeText(row.model, 60) }}</span></template>
       <template #cell-verdicts="{ row }"><span class="small">{{ verdictText(row.verdicts) }}</span></template>
+      <template #cell-seconds="{ row }"><span class="nowrap">{{ durText(row.seconds) }}</span></template>
       <template #cell-result="{ row }"><span class="badge" :class="row.error ? 'b-blocked' : row.finished_at ? 'b-ok' : 'b-int'">{{ row.error ? t('analysis.failed') : row.finished_at ? t('analysis.ok') : t('analysis.running') }}</span>
         <div v-if="row.error" class="sub"><TruncText :text="row.error" :max="120" /></div></template>
     </DataTable>
@@ -300,7 +300,7 @@ function verdictParts(counts) {
   return VERDICTS.map((k) => ({ key: k, label: t('analysis.verdict.' + k), value: (counts && counts[k]) || 0, tone: VTONE[k] }))
 }
 function verdictText(v) {
-  return VERDICTS.filter((k) => v && v[k]).map((k) => t('analysis.verdict.' + k) + ' ' + v[k]).join(', ') || '—'
+  return VERDICTS.filter((k) => v && v[k]).map((k) => t('analysis.verdict.' + k) + ' ' + v[k]).join(t('common.list_sep')) || '—'
 }
 const candSeries = computed(() => [{ key: 'n', label: t('chart.analysis.candidates'), tone: 's1' }])
 function familyItems(counts) {
@@ -526,7 +526,8 @@ onMounted(reload)
 
 <style scoped>
 .chartgrid .wide { grid-column: 1 / -1; }
-.sumlead { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.sumlead { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 0; align-items: center; }
+.sumlead > .badge { margin-left: 8px; }
 .sumtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; }
 .sumtile { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--panel-2); display: flex; flex-direction: column; }
 .sumtile b { font-size: 1.5em; font-variant-numeric: tabular-nums; }

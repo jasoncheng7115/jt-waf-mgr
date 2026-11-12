@@ -36,7 +36,7 @@
         <div><h3 class="charthead">{{ t('chart.audit.top_actors') }}</h3><HBars :items="topActors" :series="okSeries" mono /></div>
       </div>
     </section>
-    <RowTimeline v-model:window="win" :rows="items" ts-key="ts" :series="tlSeries" />
+    <RowTimeline v-model:window="win" :title="t('timeline.audit')" :rows="items" ts-key="ts" :series="tlSeries" />
     <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="admin-audit" :columns="cols" :rows="shownItems" :row-class="(a) => ({ crit: isCrit(a), hl: open === a.id })" :default-sort="{ key: 'id', dir: -1 }" :page-size="50">
       <template #cell-ts="{ row }">{{ fmtTime(row.ts) }}</template>
       <template #cell-action="{ row }"><span class="mono">{{ safeText(row.action, 64) }}</span></template>

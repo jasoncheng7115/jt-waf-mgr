@@ -36,7 +36,7 @@
       </div>
       <p class="muted small">{{ t('chart.change.loaded', { n: fmtNum(items.length) }) }}</p>
     </section>
-    <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+    <RowTimeline v-model:window="win" :title="t('timeline.changes')" :rows="items" ts-key="created_at" :series="tlSeries" />
     <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(true)" id="changes" :columns="cols" :rows="shownItems" row-key="id" :default-sort="{ key: 'id', dir: -1 }"
                clickable @row-click="(c) => router.push('/changes/' + c.id)">
       <template #cell-id="{ row }"><RouterLink class="mono" :to="'/changes/' + row.id" @click.stop>{{ row.id }}</RouterLink></template>

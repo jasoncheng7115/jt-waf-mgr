@@ -30,7 +30,7 @@
     </section>
     <ErrorBox :error="actionError" />
 
-    <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+    <RowTimeline v-model:window="win" :title="t('timeline.versions')" :rows="items" ts-key="created_at" :series="tlSeries" />
     <DataTable id="versions" :columns="cols" :rows="shownItems" row-key="version" :default-sort="{ key: 'version', dir: -1 }">
       <template #cell-created_at="{ row }">{{ fmtShortTime(row.created_at) }}</template>
       <template #cell-kind="{ row }">{{ t('versions.kind_' + row.kind) }}<div v-if="row.change_id" class="sub"><RouterLink :to="'/changes/' + row.change_id">#{{ row.change_id }}</RouterLink></div></template>

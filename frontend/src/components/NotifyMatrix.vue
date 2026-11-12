@@ -85,7 +85,7 @@ async function save() {
 <style scoped>
 .mcheck { display: inline-flex; justify-content: center; width: 100%; margin: 0; cursor: pointer; padding: 2px 0; }
 .mcheck input { width: 18px; height: 18px; }
-.mcheck.off { opacity: .45; }
+.mcheck.off { opacity: .3; filter: grayscale(1); }
 .sub { color: var(--muted); font-size: .8em; }
 .sfoot { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 14px; }
 .sfoot .pending { color: var(--warn); font-size: .9em; }

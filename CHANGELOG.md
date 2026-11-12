@@ -2,6 +2,15 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.7 (2026-11-13)
+
+- Timelines on list pages are titled for what they count (alerts, changes, audit records, versions, deliveries,
+  configuration changes); alerts use the status colours (critical red, warning amber).
+- Chinese interface: "封鎖" throughout instead of the colloquial "擋".
+- Event analysis: duration column shown as minutes and seconds; guidance boxes no longer drawn inside a second frame.
+- Notification settings: channels that are off are clearly dimmed in the event matrix.
+- Tests: every page is also checked in Japanese.
+
 ## 0.4.6 (2026-11-13)
 
 - Alerts can be acted on: "Draft an exclusion" (false positive) or "Draft a block" (attack) opens the change form

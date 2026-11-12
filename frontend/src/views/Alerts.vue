@@ -34,7 +34,7 @@
 
     <section class="card">
       <h2><Icon name="bell" /> {{ t('alerts.f.' + filter) }} <span class="count">{{ items.length }}</span></h2>
-      <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+      <RowTimeline v-model:window="win" :title="t('timeline.alerts')" :rows="items" ts-key="created_at" :series="tlSeries" />
       <DataTable id="alerts" :columns="cols" :rows="shownItems" row-key="id" :has-more="!!cursor" :loading-more="loading"
                  :default-sort="{ key: 'id', dir: -1 }" :empty="filter === 'open' ? t('alerts.none_open') : t('common.no_data')"
                  :row-class="(r) => (r.state === 'open' && r.severity === 'critical' ? 'row-crit' : null)" @more="more">
@@ -78,7 +78,7 @@ const filter = ref('open')
 const items = ref([])
 const win = ref(null)
 const shownItems = computed(() => inWindow(items.value, 'created_at', win.value))
-const tlSeries = computed(() => [{ key: 'critical', label: t('alerts.sev.critical'), tone: 'blocked', test: (r) => r.severity === 'critical' }, { key: 'warning', label: t('alerts.sev.warning'), tone: 's3', test: () => true }])
+const tlSeries = computed(() => [{ key: 'critical', label: t('alerts.sev.critical'), tone: 'critical', test: (r) => r.severity === 'critical' }, { key: 'warning', label: t('alerts.sev.warning'), tone: 'warning', test: () => true }])
 const counts = ref({ open: 0, critical: 0 })
 const cursor = ref(null)
 const loading = ref(false)

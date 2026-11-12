@@ -504,7 +504,7 @@ table.grid td.nowrap { white-space: nowrap; }
 .tone-logged { background: var(--logged); fill: var(--logged); }
 .fill-s1 { fill: var(--series-1); } .fill-s2 { fill: var(--series-2); } .fill-s3 { fill: var(--series-3); }
 .fill-blocked { fill: var(--blocked); } .fill-logged { fill: var(--logged); } .fill-muted { fill: var(--border-strong); }
-.fill-good { fill: var(--st-good); } .fill-warning { fill: var(--st-warning); } .fill-critical { fill: var(--st-critical); }
+.fill-good { fill: var(--st-good); } .fill-warning { fill: var(--st-warning); } .fill-serious { fill: var(--st-serious); } .fill-critical { fill: var(--st-critical); }
 .chartsvg .gridline { stroke: var(--grid); stroke-width: 1; }
 .chartsvg .crosshair { stroke: var(--muted); stroke-width: 1; }
 .chartsvg g.hot path { filter: brightness(1.15); }
@@ -553,6 +553,9 @@ table.grid td.nowrap { white-space: nowrap; }
 
 /* ---- guidance: flow steps --------------------------------------------------------------------- */
 .flowsteps { margin: 0 0 14px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+/* a card that only holds guidance: the guidance box is the frame (no box in a box) */
+.card:has(> .flowsteps):not(:has(> :not(.flowsteps))) { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.card:has(> .flowsteps):not(:has(> :not(.flowsteps))) > .flowsteps:last-child { margin-bottom: 0; }
 .fs-title { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 10px; color: var(--muted); font-size: 14px; }
 .fs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .fs-step { display: flex; align-items: center; gap: 6px; }

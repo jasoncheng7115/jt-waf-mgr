@@ -42,7 +42,7 @@
           <div><h3 class="charthead">{{ t('chart.cfgchg.per_day') }}</h3><HBars :items="perDay" :series="causeSeries" /></div>
         </div>
       </section>
-      <RowTimeline v-model:window="win" :rows="items" ts-key="ts" :series="tlSeries" />
+      <RowTimeline v-model:window="win" :title="t('timeline.cfgchg')" :rows="items" ts-key="ts" :series="tlSeries" />
       <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="cfgchg-list" :columns="cols" :rows="shownItems" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
                  :row-class="(c) => ({ hl: open === c.id })">
         <template #cell-id="{ row }"><RouterLink class="mono" :to="'/config-changes/' + row.id">{{ row.id }}</RouterLink></template>

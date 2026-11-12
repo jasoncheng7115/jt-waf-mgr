@@ -35,7 +35,7 @@
     <section class="card">
       <h2><Icon name="history" /> {{ t('notify.deliveries') }}</h2>
       <p class="muted small">{{ t('notify.deliveries_hint') }}</p>
-      <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+      <RowTimeline v-model:window="win" :title="t('timeline.deliveries')" :rows="items" ts-key="created_at" :series="tlSeries" />
       <DataTable id="notify-deliveries" :columns="cols" :rows="shownItems" row-key="id" :has-more="!!cursor" :loading-more="loading"
                  :default-sort="{ key: 'id', dir: -1 }" :empty="t('notify.no_deliveries')" @more="more">
         <template #cell-created_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.created_at) }}</span></template>
@@ -69,7 +69,7 @@ const st = ref(null)
 const items = ref([])
 const win = ref(null)
 const shownItems = computed(() => inWindow(items.value, 'created_at', win.value))
-const tlSeries = computed(() => [{ key: 'sent', label: t('notify.st.sent'), tone: 's1', test: (r) => r.status === 'sent' }, { key: 'failed', label: t('notify.st.failed'), tone: 'blocked', test: (r) => r.status === 'failed' }, { key: 'other', label: t('timeline.other'), tone: 's3', test: () => true }])
+const tlSeries = computed(() => [{ key: 'sent', label: t('notify.st.sent'), tone: 's1', test: (r) => r.status === 'sent' }, { key: 'failed', label: t('notify.st.failed'), tone: 'critical', test: (r) => r.status === 'failed' }, { key: 'other', label: t('timeline.other'), tone: 'muted', test: () => true }])
 const cursor = ref(null)
 const loading = ref(false)
 const error = ref(null)

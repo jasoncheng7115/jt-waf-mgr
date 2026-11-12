@@ -98,13 +98,14 @@ async function audit(page, where) {
       if (lang === 'en' && README_PAGES.includes(p)) await page.screenshot({ path: SHOTS + '/en' + p.replace(/\//g, '_') + '.png', fullPage: true });
     }
   }
-  // Japanese: the pages shown in the READMEs (no raw keys there either), screenshots for README_ja
+  // Japanese: every page (no raw keys, same layout checks), screenshots of the README pages for README_ja
   await setLang(page, 'ja');
-  for (const p of README_PAGES) {
+  for (const p of ROUTES) {
     await page.goto(base + p, { waitUntil: 'networkidle' });
     await page.waitForTimeout(250);
     await rawKeys(page, 'ja ' + p);
-    await page.screenshot({ path: SHOTS + '/ja' + p.replace(/\//g, '_') + '.png', fullPage: true });
+    await audit(page, 'ja ' + p);
+    if (README_PAGES.includes(p)) await page.screenshot({ path: SHOTS + '/ja' + p.replace(/\//g, '_') + '.png', fullPage: true });
   }
   await setLang(page, 'zh-TW');
   // theme switch to dark via the UI

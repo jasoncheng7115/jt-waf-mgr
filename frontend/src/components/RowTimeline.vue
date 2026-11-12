@@ -2,12 +2,12 @@
      time range in the list (v-model:window = { since, until } in ms, or null); a chip clears it. -->
 <template>
   <div v-if="buckets.length" class="rowtimeline">
-    <h3 class="charthead">{{ title || t('chart.timeline') }}
+    <h3 class="charthead">{{ title || t('timeline.rows') }}
       <span v-if="window" class="fchip"><span class="fchip-k">{{ t('overview.range') }}</span>
         <span class="fchip-v">{{ fmtShortTime(new Date(window.since).toISOString()) }} – {{ fmtShortTime(new Date(window.until).toISOString()) }}</span>
         <button type="button" class="fchip-x" :aria-label="t('timeline.clear')" :title="t('timeline.clear')" @click="emit('update:window', null)"><Icon name="close" /></button></span>
     </h3>
-    <TimeBars :data="buckets" :series="series.map(({ key, label, tone }) => ({ key, label, tone }))" :label="title || t('chart.timeline')"
+    <TimeBars :data="buckets" :series="series.map(({ key, label, tone }) => ({ key, label, tone }))" :label="title || t('timeline.rows')"
               selectable :bucket-seconds="size / 1000" @select="pick" />
     <p class="muted small brushhint"><Icon name="info" /> {{ t('timeline.loaded_hint') }}</p>
   </div>
