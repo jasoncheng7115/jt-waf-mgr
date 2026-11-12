@@ -319,7 +319,15 @@ def overview(app, req):
                    for r in src],
         'by_rule': _by_rule(app, since, until, fw=fw, fa=fa), 'score_only': score_only, 'focus': focus,
         'by_country': _by_geo(app, since, until, 'cc', top=300, fw=fw, fa=fa), 'by_asn': _by_geo(app, since, until, 'asn', fw=fw, fa=fa),
+        'geoip': _geo_available(app),
     })
+
+
+def _geo_available(app):
+    try:
+        return bool(app.geoip.available())
+    except Exception:
+        return False
 
 
 def _timeline(app, since, until, fw='', fa=(), rolling=False):

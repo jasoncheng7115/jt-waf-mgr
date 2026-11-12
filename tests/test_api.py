@@ -195,6 +195,7 @@ class TestApi(unittest.TestCase):
         st, o, _ = c.req('GET', '/api/v1/overview?range=custom&since=%s&until=%s' % (iso(now - 2 * 3600), iso(now + 30)))
         self.assertEqual((st, o['range'], o['bucket_seconds'], o['totals']['events']), (200, 'custom', 3600, 3))
         self.assertEqual(sum(b['blocked'] + b['logged'] for b in o['timeline']), 3)
+        self.assertIs(o['geoip'], False)                    # no GeoIP database here: the overview says so
         st, o, _ = c.req('GET', '/api/v1/overview?range=custom&since=%s' % iso(now - 20 * 86400))
         self.assertEqual((st, o['bucket_seconds']), (200, 86400))           # days beyond a week
         for bad in ('range=custom', 'range=custom&since=%s' % iso(now - 40 * 86400), 'range=custom&since=%s' % iso(now - 60),

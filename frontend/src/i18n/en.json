@@ -1614,6 +1614,8 @@
  "overview.focus_title": "Focus sites",
  "overview.geo_sources": "{n} source addresses",
  "overview.geo_unknown": "Unknown",
+ "overview.geoip_off": "GeoIP is not set up: countries, networks and the world map appear once it is.",
+ "overview.geoip_setup": "Set up GeoIP",
  "overview.integrity_problem": "Integrity problem:",
  "overview.open_alerts": "{n} alerts to follow up",
  "overview.open_alerts_critical": "{n} of them critical",

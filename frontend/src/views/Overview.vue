@@ -133,6 +133,8 @@
         </section>
         <section class="card">
           <h2><Icon name="network" /> {{ t('overview.by_src') }}</h2>
+          <p v-if="data.geoip === false" class="muted small geohint"><Icon name="globe" /> {{ t('overview.geoip_off') }}
+            <RouterLink v-if="hasRole('admin')" :to="{ path: '/admin/settings', hash: '#uiset-geoip' }">{{ t('overview.geoip_setup') }}</RouterLink></p>
           <CountList :items="data.by_src" mono pickable :active-key="filters.src_ip" :open-label="t('filter.open_lookup')" :link-for="(it) => ({ path: '/lookup/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('src_ip', it.key)" />
         </section>
         <section v-if="(data.by_asn || []).length" class="card">
@@ -398,4 +400,5 @@ onUnmounted(() => clearInterval(timer))
 .fhint { display: inline-flex; align-items: center; gap: 4px; }
 .ovbody { display: flex; flex-direction: column; gap: 14px; transition: opacity .15s; }
 .ovbody.stale { opacity: .5; pointer-events: none; }
+.geohint { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin: 0 0 8px; }
 </style>

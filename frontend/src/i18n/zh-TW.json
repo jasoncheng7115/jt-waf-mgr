@@ -1614,6 +1614,8 @@
  "overview.focus_title": "重點站台",
  "overview.geo_sources": "{n} 個來源位址",
  "overview.geo_unknown": "未知",
+ "overview.geoip_off": "尚未設定 GeoIP：設定後會顯示國家、網路業者與世界地圖。",
+ "overview.geoip_setup": "設定 GeoIP",
  "overview.integrity_problem": "完整性問題：",
  "overview.open_alerts": "有 {n} 個待處理的警示",
  "overview.open_alerts_critical": "其中 {n} 個嚴重",

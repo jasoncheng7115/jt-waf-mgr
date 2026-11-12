@@ -2,6 +2,12 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.11 (2026-11-13)
+
+- Overview: without a GeoIP database, the source list says that countries, networks and the world map appear once
+  GeoIP is set up (with a link to the setting for administrators). `/overview` reports `geoip`.
+- Tests close every file and test server.
+
 ## 0.4.10 (2026-11-13)
 
 - Notification settings: "Preview" on every event of the event matrix shows the message it sends (title, text,

@@ -106,6 +106,7 @@ class TestService(unittest.TestCase):
         self.assertEqual(body['items'][0]['src_geo']['cc'], 'JP')
         st, body, _ = c.req('GET', '/api/v1/overview?range=7d')
         self.assertEqual(body['by_country'][0]['key'], 'JP')
+        self.assertIs(body['geoip'], True)
         self.assertEqual(body['by_asn'][0]['label'], 'Example Net')
         st, body, _ = c.req('GET', '/api/v1/lookups/ip/203.0.113.9')
         self.assertEqual(body['geo']['org'], 'Example Net')

@@ -1614,6 +1614,8 @@
  "overview.focus_title": "重点サイト",
  "overview.geo_sources": "送信元 {n} 件",
  "overview.geo_unknown": "不明",
+ "overview.geoip_off": "GeoIP が未設定です：設定すると国、ネットワーク事業者、世界地図が表示されます。",
+ "overview.geoip_setup": "GeoIP を設定",
  "overview.integrity_problem": "完全性の問題：",
  "overview.open_alerts": "対応待ちのアラートが {n} 件あります",
  "overview.open_alerts_critical": "うち重大 {n} 件",
