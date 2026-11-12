@@ -194,7 +194,24 @@ class Anchors:
             return None
         return 'a' in r.stdout.split()[0]
 
-    def check(self, db, anchors, retention_days=0):
+    @staticmethod
+    def read_rewinds(path):
+        """Rewinds of the audit chain recorded by root (an upgrade rollback restored an older database).
+        The file sits in /etc/jt-waf-mgr, which the service user cannot write, so it cannot fake one."""
+        out = []
+        try:
+            with open(path, encoding='utf-8') as fh:
+                for ln in fh:
+                    try:
+                        r = json.loads(ln)
+                        out.append({'at': util.parse_iso(r['at']), 'id': int(r['id'])})
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except OSError:
+            pass
+        return out
+
+    def check(self, db, anchors, retention_days=0, rewinds=()):
         """Compares anchors with the database. Returns a list of problems (empty = fine).
         Rows below the chain's base were removed by the retention purge — but only rows older than the
         retention period may be gone: an anchor written within it must still find its row (with
@@ -210,6 +227,13 @@ class Anchors:
                 continue
             if a['id'] is None:
                 continue
+            if rewinds:
+                try:
+                    at = util.parse_iso(a.get('at') or '')
+                except ValueError:
+                    at = None
+                if at is not None and any(a['id'] > rw['id'] and at <= rw['at'] for rw in rewinds):
+                    continue  # written before a recorded rewind, for a row that rewind took back
             if a['id'] <= base_id:
                 try:
                     at = util.parse_iso(a.get('at') or '')

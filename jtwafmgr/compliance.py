@@ -102,7 +102,9 @@ class Monitor:
             if res['ok']:
                 self._verified = (res['last_id'] or 0, res['last_hash'])
                 anchors = self.anchors.read(None if full else 1)
-                problems = self.anchors.check(self.db, anchors, self.cfg['retention']['audit_days'])
+                rewinds = integrity.Anchors.read_rewinds(os.path.join(os.path.dirname(self.cfg.path or '/etc/jt-waf-mgr/x'),
+                                                                     'audit-rewinds.jsonl'))
+                problems = self.anchors.check(self.db, anchors, self.cfg['retention']['audit_days'], rewinds)
             count = self.db.one('SELECT COUNT(*) FROM audit')[0]
             anchor = None
             tip = (res.get('last_id'), res.get('last_hash'))

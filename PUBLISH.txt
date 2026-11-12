@@ -4,8 +4,10 @@ LICENSE
 README.md
 CHANGELOG.md
 SECURITY.md
+TEST_CHECKLIST.md
 PUBLISH.txt
 install.sh
+upgrade.sh
 uninstall.sh
 jtwafmgr/
 deploy/
@@ -19,6 +21,9 @@ tools/preflight.py
 tools/make_release.sh
 tools/make_sbom.py
 tools/sync_github.sh
+tools/test_upgrade.sh
+tools/e2e/
+tools/upgrade-test/
 tools/git-hooks/
 docs/spec/
 docs/dev/

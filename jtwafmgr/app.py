@@ -33,8 +33,25 @@ class App:
         self.workflow.sandbox = Sandbox(cfg, self.site)
         from .compliance import Monitor
         self.monitor = Monitor(self)
+        self._note_version()
         if start_collector:
             self.start_collector()
+
+    def _note_version(self):
+        """One audit row whenever the program version differs from the last run (upgrade or rollback)."""
+        from . import __version__
+        try:
+            prev = self.db.get_meta('program_version')
+            if prev != __version__:
+                self.db.set_meta('program_version', __version__)
+                if not prev and self.db.one('SELECT 1 FROM audit LIMIT 1'):
+                    prev = 'before 0.3.1'          # a database from a version that did not note its version
+                if prev:
+                    self.audit.log('system.version_changed', 'system', 'system', None, 'ok',
+                                   severity='crit' if prev[0].isdigit() and _vkey(__version__) < _vkey(prev) else None,
+                                   previous=prev, current=__version__)
+        except Exception:      # never keep the service from starting over a note
+            pass
 
     def start_collector(self):
         wf = threading.Thread(target=self.workflow.run, name='workflow', daemon=True)
@@ -75,3 +92,11 @@ class App:
         self.workflow.stop()
         if self.tailer:
             self.tailer.stop()
+
+
+def _vkey(v):
+    out = []
+    for p in str(v).split('.'):
+        n = ''.join(ch for ch in p if ch.isdigit())
+        out.append(int(n) if n else 0)
+    return out

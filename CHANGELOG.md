@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1 (2026-11-12)
+
+Install and upgrade
+- `upgrade.sh`: checks first (installed version, no apply in progress, disk space, the release verified by the
+  installed code with the pinned key, the configuration accepted by the new code), then a backup (program,
+  units, configuration, database), then the switch with an explicit database migration and checks after the
+  start (the service answers with the new version, program integrity, audit chain). Any failure after the
+  service was stopped rolls back automatically and starts the previous version again. `--check` runs the checks
+  only; `--rollback` puts back what an upgrade saved.
+- New commands: `jt-waf-mgr config-check`, `migrate`, `doctor`.
+- The audit trail records every change of the program version (a downgrade at priority crit).
+- `tools/test_upgrade.sh`: release gate that installs the previous release in a staging root with data,
+  upgrades, rolls back on an injected failure, rolls back by hand and upgrades again.
+
 ## 0.3.0 (2026-11-12)
 
 Interface

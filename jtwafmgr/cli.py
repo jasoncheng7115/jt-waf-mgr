@@ -174,6 +174,53 @@ def cmd_geoip(args):
     return 0
 
 
+def cmd_config_check(args):
+    """Loads and validates the configuration (the upgrade runs this with the NEW code before it stops anything)."""
+    cfg = config_mod.load(args.config if os.path.exists(args.config) or args.config != config_mod.DEFAULT_PATH else None)
+    print(json.dumps({'ok': True, 'config': cfg.path, 'db': cfg['paths']['db'], 'listen': cfg['server']['listen']}))
+    return 0
+
+
+def cmd_migrate(args):
+    """Brings the database schema up to date (normally done on start; the upgrade runs it explicitly first)."""
+    import sqlite3
+    from .db import Database, SCHEMA
+    cfg = config_mod.load(args.config if os.path.exists(args.config) or args.config != config_mod.DEFAULT_PATH else None)
+    before = None
+    if os.path.exists(cfg['paths']['db']):
+        c = sqlite3.connect('file:%s?mode=ro' % cfg['paths']['db'], uri=True)
+        try:
+            r = c.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+            before = int(r[0]) if r else None
+        except sqlite3.Error:
+            before = None
+        finally:
+            c.close()
+    db = Database(cfg['paths']['db'])
+    after = int(db.get_meta('schema_version'))
+    ok = db.one('PRAGMA quick_check')[0] == 'ok'
+    print(json.dumps({'ok': ok and after == len(SCHEMA), 'schema_before': before, 'schema_after': after,
+                      'schema_expected': len(SCHEMA), 'quick_check': ok}))
+    return 0 if ok and after == len(SCHEMA) else 1
+
+
+def cmd_doctor(args):
+    """One-screen health summary: configuration, database, program integrity, audit chain, system check."""
+    from .compliance import system_check
+    app = _app(args)
+    app.monitor.check_program()
+    app.monitor.check_chain(full=False)
+    items = system_check(app)
+    worst = 'ok'
+    for it in items:
+        mark = {'ok': 'ok  ', 'warn': 'WARN', 'fail': 'FAIL', 'info': 'info'}.get(it['status'], it['status'])
+        if it['status'] == 'fail' or (it['status'] == 'warn' and worst == 'ok'):
+            worst = it['status']
+        print('%s  %s' % (mark, it['key']))
+    print('version %s, overall: %s' % (__version__, worst))
+    return 1 if worst == 'fail' else 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog='jt-waf-mgr')
     p.add_argument('--config', default=config_mod.default_path())
@@ -200,11 +247,15 @@ def main(argv=None):
     gu.add_argument('--force', action='store_true', help='even when the files are recent')
     gl = sub.add_parser('geoip', help='look up one address and show the GeoIP status')
     gl.add_argument('ip')
+    sub.add_parser('config-check', help='validate the configuration file')
+    sub.add_parser('migrate', help='bring the database schema up to date')
+    sub.add_parser('doctor', help='health summary (configuration, database, integrity, system check)')
     args = p.parse_args(argv)
     try:
         return {'serve': cmd_serve, 'user': cmd_user, 'import': cmd_import, 'check': cmd_check,
                 'integrity': cmd_integrity, 'verify-release': cmd_verify_release, 'audit-verify': cmd_audit_verify,
-                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'geoip': cmd_geoip}[args.cmd](args)
+                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'geoip': cmd_geoip,
+                'config-check': cmd_config_check, 'migrate': cmd_migrate, 'doctor': cmd_doctor}[args.cmd](args)
     except config_mod.ConfigError as e:
         print('configuration error: %s' % e, file=sys.stderr)
         return 2

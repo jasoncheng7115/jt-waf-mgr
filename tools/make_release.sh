@@ -18,10 +18,10 @@ trap 'rm -rf "$STAGE"' EXIT
 D="$STAGE/$NAME"
 mkdir -p "$D/docs" "$D/release" dist
 cp -R jtwafmgr deploy "$D/"
-cp install.sh uninstall.sh LICENSE README.md CHANGELOG.md SECURITY.md "$D/"
+cp install.sh upgrade.sh uninstall.sh LICENSE README.md CHANGELOG.md SECURITY.md "$D/"
 cp docs/COMPLIANCE.md docs/COMPLIANCE.zh-TW.md "$D/docs/"
 find "$D" \( -name '__pycache__' -o -name '*.pyc' \) -prune -exec rm -rf {} +
-chmod 755 "$D/install.sh" "$D/uninstall.sh" "$D/deploy/jt-waf-mgr.sh"
+chmod 755 "$D/install.sh" "$D/upgrade.sh" "$D/uninstall.sh" "$D/deploy/jt-waf-mgr.sh"
 python3 tools/make_sbom.py "$V" > "$D/sbom.cdx.json"
 # manifest: every file except release/ itself, sha256sum format (sha256sum -c works on it)
 ( cd "$D" && find . -type f ! -path './release/*' | sed 's|^\./||' | LC_ALL=C sort | xargs -d '\n' sha256sum ) \

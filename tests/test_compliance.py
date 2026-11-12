@@ -121,6 +121,27 @@ class TestAuditChain(unittest.TestCase):
         self.assertFalse(st['ok'], st)
         self.assertIn('purged_without_retention', [p['reason'] for p in st['anchor_problems']])
 
+    def test_recorded_rewind_supersedes_later_anchors(self):
+        """An upgrade rollback restores an older database; root records the rewind, so anchors written in
+        between for rows that no longer exist are not reported. Without the record they are."""
+        for i in range(3):
+            self.a.log('test.action', 'alice', n=i)
+        mon = self.app.monitor
+        self.assertTrue(mon.check_chain()['ok'])
+        keep = self.app.db.one('SELECT id FROM audit ORDER BY id DESC LIMIT 1')[0]
+        snap = os.path.join(self.env.dir, 'snap.db')
+        import sqlite3 as _s
+        src = _s.connect(self.env.cfg['paths']['db']); dst = _s.connect(snap); src.backup(dst); dst.close(); src.close()
+        for i in range(3):
+            self.a.log('test.later', 'alice', n=i)
+        time.sleep(1.1)
+        self.assertTrue(mon.check_chain()['ok'])          # anchors now point past the snapshot
+        anchors = mon.anchors.read()
+        restored = Database(snap)
+        self.assertTrue(integrity.Anchors(mon.anchors.path).check(restored, anchors))       # mismatch without a record
+        rw = [{'at': time.time(), 'id': keep}]
+        self.assertEqual(integrity.Anchors(mon.anchors.path).check(restored, anchors, rewinds=rw), [])
+
     def test_trigger_with_empty_body_is_detected(self):
         c = self.app.db.conn()
         c.execute('DROP TRIGGER audit_no_update')

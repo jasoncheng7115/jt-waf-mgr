@@ -63,8 +63,18 @@ Then add the management vhost (`/etc/jt-waf-mgr/nginx-vhost.conf.example`: inter
 only, proxies to `127.0.0.1:8095`), `nginx -t`, reload, sign in, change the password and set up
 TOTP. Older rotated audit logs can be imported: `sudo jt-waf-mgr import /var/log/modsecurity/modsec_audit.log.*.gz`.
 
-Upgrades: check the new release with the installed (already verified) program first:
-`sudo jt-waf-mgr verify-release ./jt-waf-mgr-X.Y.Z`, then run its `install.sh`.
+Upgrades: verify the tarball (`openssl dgst -sha256 -verify /etc/jt-waf-mgr/release-key.pem -signature
+jt-waf-mgr-X.Y.Z.tar.gz.sig jt-waf-mgr-X.Y.Z.tar.gz`), unpack it, then:
+
+```sh
+sudo ./upgrade.sh --check     # every check, nothing changed
+sudo ./upgrade.sh             # backup, switch, checks; rolls back by itself on any failure
+sudo ./upgrade.sh --rollback  # if needed later: back to the version (and database) before the upgrade
+```
+
+The upgrade verifies the new release with the installed program and the pinned key, refuses while a
+change is being applied, keeps a backup in `/var/backups/jt-waf-mgr/` (the newest five) and records
+every upgrade in the audit trail. `sudo jt-waf-mgr doctor` prints a health summary at any time.
 
 The installer creates the `jtwaf` system user, `/usr/lib/jt-waf-mgr`, `/etc/jt-waf-mgr/config.toml`,
 `/var/lib/jt-waf-mgr` and a hardened systemd unit. It does not change nginx. `./uninstall.sh`
