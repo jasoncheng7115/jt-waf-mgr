@@ -35,8 +35,8 @@ async function rawKeys(page, where) {
   return txt;
 }
 
-async function login(browser, user, scheme) {
-  const ctx = await browser.newContext({ viewport: { width: 1360, height: 950 }, colorScheme: scheme || 'light', acceptDownloads: true });
+async function login(browser, user, scheme, viewport) {
+  const ctx = await browser.newContext({ viewport: viewport || { width: 1360, height: 950 }, colorScheme: scheme || 'light', acceptDownloads: true });
   const page = await ctx.newPage();
   watch(page, user);
   await page.goto(base + '/login', { waitUntil: 'networkidle' });
@@ -197,6 +197,28 @@ async function audit(page, where) {
   const fav = await lp.request.get(base + '/favicon.svg');
   ok(fav.status() === 200, 'favicon served');
   await lp.screenshot({ path: SHOTS + '/login.png' });
+  // phone and tablet widths: no page scrolls sideways, the menu reaches every page group
+  for (const [name, vp] of [['phone', { width: 375, height: 812 }], ['tablet', { width: 768, height: 1024 }]]) {
+    const m = await login(browser, 'admin', 'light', vp);
+    await setLang(m.page, 'zh-TW');
+    for (const p of ['/', '/events', '/rules', '/changes', '/analysis', '/alerts', '/admin/notify', '/admin/system', '/admin/audit', '/waf', '/lookup/203.0.113.9', '/admin/settings']) {
+      await m.page.goto(base + p, { waitUntil: 'networkidle' });
+      await m.page.waitForTimeout(250);
+      const over = await m.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (over > 1) problems.push(name + ' ' + p + ': page scrolls sideways by ' + over + 'px');
+      await m.page.screenshot({ path: SHOTS + '/' + name + p.replace(/\//g, '_') + '.png', fullPage: false });
+    }
+    if (name === 'phone') {
+      await m.page.goto(base + '/', { waitUntil: 'networkidle' });
+      ok(await m.page.locator('.navtoggle').isVisible(), 'phone: menu button');
+      await m.page.click('.navtoggle');
+      const groups = await m.page.locator('#navpanel .np-group').count();
+      ok(groups >= 5, 'phone: menu shows the page groups (' + groups + ')');
+      await m.page.screenshot({ path: SHOTS + '/phone_menu.png' });
+    }
+    await m.ctx.close();
+  }
+  await freshStep('admin');      // the security scan signs in next: never with a one-time code already used
   await browser.close();
   console.log(notes.filter((n) => n.startsWith('warn')).join('\n'));
   console.log(problems.length ? problems.join('\n') : 'NO PROBLEMS');

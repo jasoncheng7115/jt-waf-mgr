@@ -1,5 +1,16 @@
 # Changelog
 
+**English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
+
+## 0.4.4 (2026-11-13)
+
+- The guide's architecture diagram shows the event analysis, the notifications, the LLM server and the channels.
+- Five overview tiles fit one row on a tablet.
+- The browser test checks phone (375 px) and tablet (768 px) widths: no page scrolls sideways, the menu reaches every
+  page group; screenshots for a visual check.
+- Test plan, test checklist and changelog also in Traditional Chinese and Japanese (preflight checks every changelog
+  has the release).
+
 ## 0.4.3 (2026-11-13)
 
 - READMEs and the project site show the interface in the reader's language (English, Traditional Chinese and

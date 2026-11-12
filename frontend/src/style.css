@@ -217,7 +217,7 @@ a.navitem:hover, button.navitem:hover { background: var(--panel-2); text-decorat
 }
 
 /* Tiles */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(138px, 100%), 1fr)); gap: 10px; }
 .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow); }
 .card .tile { background: var(--panel-2); box-shadow: none; }
 .tl { font-size: 13px; color: var(--muted); }

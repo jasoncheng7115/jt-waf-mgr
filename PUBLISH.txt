@@ -5,11 +5,17 @@ README.md
 README_zh-TW.md
 README_ja.md
 CHANGELOG.md
+CHANGELOG_zh-TW.md
+CHANGELOG_ja.md
 SECURITY.md
 SECURITY_zh-TW.md
 SECURITY_ja.md
 TEST_CHECKLIST.md
+TEST_CHECKLIST_zh-TW.md
+TEST_CHECKLIST_ja.md
 TEST_PLAN.md
+TEST_PLAN_zh-TW.md
+TEST_PLAN_ja.md
 PUBLISH.txt
 install.sh
 upgrade.sh

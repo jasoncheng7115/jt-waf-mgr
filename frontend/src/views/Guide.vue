@@ -14,14 +14,14 @@
       <h2><Icon name="map" /> {{ t('guide.arch.title') }}</h2>
       <p class="muted small">{{ t('guide.arch.hint') }}</p>
       <div class="archwrap">
-        <svg class="archsvg" viewBox="0 0 1000 520" role="group" :aria-label="t('guide.arch.title')">
+        <svg class="archsvg" viewBox="0 0 1000 625" role="group" :aria-label="t('guide.arch.title')">
           <defs>
             <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" class="arch-arrowhead" />
             </marker>
           </defs>
-          <rect class="arch-group" x="190" y="282" width="640" height="218" rx="12" />
-          <text class="arch-grouplabel" x="816" y="490" text-anchor="end">jt-waf-mgr · {{ t('guide.arch.service') }}</text>
+          <rect class="arch-group" x="190" y="282" width="640" height="330" rx="12" />
+          <text class="arch-grouplabel" x="816" y="600" text-anchor="end">jt-waf-mgr · {{ t('guide.arch.service') }}</text>
           <path v-for="e in edges" :key="e.key" class="arch-edge" :class="{ hot: e.from === sel || e.to === sel, main: e.main }" :d="e.d" marker-end="url(#arch-arrow)" />
           <g v-for="e in edges" :key="'l' + e.key">
             <text v-if="e.label" class="arch-edgelabel" :x="e.lx" :y="e.ly" :text-anchor="e.anchor || 'middle'">{{ t(e.label) }}</text>
@@ -95,6 +95,10 @@ const nodes = [
   { key: 'monitor', x: 205, y: 410, w: 175, h: 60, kind: 'svc', sub: true, icon: 'verify', to: '/admin/system', role: 'admin' },
   { key: 'users', x: 848, y: 320, w: 146, h: 60, kind: 'ext', icon: 'users', to: '/admin/users', role: 'admin' },
   { key: 'siem', x: 20, y: 410, w: 150, h: 60, kind: 'ext', sub: true, icon: 'bell' },
+  { key: 'analyst', x: 370, y: 500, w: 150, h: 60, kind: 'svc', sub: true, icon: 'timer', to: '/analysis', role: 'approver' },
+  { key: 'notify', x: 640, y: 500, w: 160, h: 60, kind: 'svc', sub: true, icon: 'notify', to: '/admin/notify', role: 'admin' },
+  { key: 'llm', x: 20, y: 500, w: 150, h: 60, kind: 'ext', sub: true, icon: 'server' },
+  { key: 'channels', x: 848, y: 500, w: 146, h: 60, kind: 'ext', sub: true, icon: 'chat' },
 ]
 const N = Object.fromEntries(nodes.map((n) => [n.key, n]))
 function mid(k, side) {
@@ -123,6 +127,10 @@ const edges = [
   edge('us-u', 'users', 'l', 'webui', 'r', { main: true }),
   edge('mo-si', 'monitor', 'l', 'siem', 'r'),
   edge('d-mo', 'database', 'b', 'monitor', 'r', { d: 'M440,380 L440,440 L380,440', label: 'guide.edge.verifies', lx: 446, ly: 410, anchor: 'start' }),
+  edge('an-d', 'analyst', 't', 'database', 'b', { d: 'M470,500 L470,380', label: 'guide.edge.proposes', lx: 464, ly: 472, anchor: 'end' }),
+  edge('an-llm', 'analyst', 'l', 'llm', 'r', { label: 'guide.edge.asks' }),
+  edge('d-no', 'database', 'b', 'notify', 't', { d: 'M500,380 L500,485 L720,485 L720,500', label: 'guide.edge.queue', lx: 590, ly: 498 }),
+  edge('no-ch', 'notify', 'r', 'channels', 'l', { label: 'guide.edge.sends' }),
 ]
 const sel = ref('nginx')
 const current = computed(() => N[sel.value])

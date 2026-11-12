@@ -1,5 +1,7 @@
 # Release checklist
 
+**English** · [繁體中文](TEST_CHECKLIST_zh-TW.md) · [日本語](TEST_CHECKLIST_ja.md)
+
 Every release passes all of these before it is published or installed anywhere (a site, a test machine,
 a customer). A failed item stops the release; "it is only a small change" is not an exception.
 What each gate covers and how it passes: `TEST_PLAN.md`.

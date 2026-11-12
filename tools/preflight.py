@@ -156,7 +156,7 @@ def check_version():
     v = jtwafmgr.__version__
     if not re.fullmatch(r'\d+\.\d+\.\d+', v):
         fail('version', 'bad version %r' % v)
-    for f in ('CHANGELOG.md',):
+    for f in ('CHANGELOG.md', 'CHANGELOG_zh-TW.md', 'CHANGELOG_ja.md'):
         p = os.path.join(ROOT, f)
         if os.path.exists(p):
             with open(p) as fh:
