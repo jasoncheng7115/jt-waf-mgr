@@ -23,6 +23,15 @@ LANGUAGES = ('en', 'zh-TW', 'ja')
 _N, _R, _P = 2 ** 15, 8, 1
 
 
+def _rate_key(ip):
+    """Per-address login limits; IPv6 by /64, since one host usually has a whole /64 to rotate through."""
+    try:
+        a = ipaddress.ip_address(ip or '')
+    except ValueError:
+        return '?'
+    return str(ipaddress.ip_network('%s/64' % a, strict=False)) if a.version == 6 else str(a)
+
+
 class AuthError(Exception):
     def __init__(self, code, status=401, **details):
         super().__init__(code)
@@ -31,9 +40,23 @@ class AuthError(Exception):
         self.details = details
 
 
+# Each scrypt check takes 32 MiB: never run more than a few at once (a burst of logins must not exhaust
+# the service's memory); callers that cannot get a slot quickly are told to retry.
+_SCRYPT_SLOTS = threading.BoundedSemaphore(4)
+
+
+def _scrypt(pw, salt, n, r, p, dklen):
+    if not _SCRYPT_SLOTS.acquire(timeout=5):
+        raise AuthError('too_many_attempts', 429, retry_after=5)
+    try:
+        return hashlib.scrypt(pw, salt=salt, n=n, r=r, p=p, maxmem=64 * 1024 * 1024, dklen=dklen)
+    finally:
+        _SCRYPT_SLOTS.release()
+
+
 def hash_password(pw):
     salt = secrets.token_bytes(16)
-    dk = hashlib.scrypt(pw.encode('utf-8'), salt=salt, n=_N, r=_R, p=_P, maxmem=64 * 1024 * 1024, dklen=32)
+    dk = _scrypt(pw.encode('utf-8'), salt, _N, _R, _P, 32)
     return 'scrypt$%d$%d$%d$%s$%s' % (_N, _R, _P, base64.b64encode(salt).decode(), base64.b64encode(dk).decode())
 
 
@@ -42,8 +65,7 @@ def verify_password(pw, stored):
         alg, n, r, p, salt, dk = stored.split('$')
         if alg != 'scrypt':
             return False
-        got = hashlib.scrypt(pw.encode('utf-8'), salt=base64.b64decode(salt), n=int(n), r=int(r), p=int(p),
-                             maxmem=64 * 1024 * 1024, dklen=len(base64.b64decode(dk)))
+        got = _scrypt(pw.encode('utf-8'), base64.b64decode(salt), int(n), int(r), int(p), len(base64.b64decode(dk)))
         return hmac.compare_digest(got, base64.b64decode(dk))
     except (ValueError, TypeError):
         return False
@@ -263,7 +285,7 @@ class Auth:
 
     def login(self, username, password, totp, src_ip, user_agent=None):
         username = (username or '').strip().lower()[:64]
-        wait = self._ip_limited(src_ip or '?')
+        wait = self._ip_limited(_rate_key(src_ip))
         if wait:
             self.audit.log('login.failed', username, src_ip=src_ip, result='denied', reason='ip_rate_limit')
             raise AuthError('too_many_attempts', 429, retry_after=wait)
@@ -309,11 +331,15 @@ class Auth:
         return sid, csrf, self.user_row(username), previous
 
     def _failed(self, r, src_ip, t):
+        """One failure, counted atomically: concurrent wrong guesses each count (no lost update)."""
         a = self.cfg['auth']
-        n = r['failed_count'] + 1
-        lock = t + 60 * a['lockout_minutes'] if n >= a['lockout_threshold'] else 0
-        self.db.x('UPDATE users SET failed_count=?, locked_until=?, failed_since_login=failed_since_login+1 '
-                  'WHERE username=?', (0 if lock else n, lock, r['username']))
+        with self.db.tx() as c:
+            row = c.execute('UPDATE users SET failed_count=failed_count+1, failed_since_login=failed_since_login+1 '
+                            'WHERE username=? RETURNING failed_count', (r['username'],)).fetchone()
+            n = row[0] if row else 0
+            lock = t + 60 * a['lockout_minutes'] if n >= a['lockout_threshold'] else 0
+            if lock:
+                c.execute('UPDATE users SET failed_count=0, locked_until=? WHERE username=?', (lock, r['username']))
         if lock:
             self.audit.log('account.locked', r['username'], src_ip=src_ip, result='denied', severity='crit',
                            minutes=a['lockout_minutes'], failures=n)

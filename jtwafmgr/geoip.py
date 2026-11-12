@@ -133,12 +133,18 @@ class MMDB:
         off = self.data_start + (node - self.node_count) - 16
         if off < self.data_start or off >= self.size:
             raise MMDBError('bad pointer')
+        self._budget = 5000          # decoded nodes per lookup: pointer graphs cannot blow up
         return self._decode(off, self.data_start, depth=0)[0]
 
     # --- data section -------------------------------------------------------------------------
+    _budget = 100000
+
     def _decode(self, off, base, depth):
         if depth > 32:
             raise MMDBError('too deep')
+        self._budget -= 1
+        if self._budget < 0:
+            raise MMDBError('record too large')
         b = self.buf
         ctrl = b[off]
         off += 1
@@ -177,6 +183,8 @@ class MMDB:
             out = {}
             for _ in range(size):
                 k, off = self._decode(off, base, depth + 1)
+                if not isinstance(k, str):
+                    raise MMDBError('map key is not a string')
                 v, off = self._decode(off, base, depth + 1)
                 out[k] = v
             return out, off
@@ -196,8 +204,9 @@ class MMDB:
 
 
 def _names(d, lang='en'):
-    n = (d or {}).get('names') or {}
-    return n.get(lang) or n.get('en')
+    n = d.get('names') if isinstance(d, dict) else None
+    v = (n.get(lang) or n.get('en')) if isinstance(n, dict) else None
+    return v if isinstance(v, str) else None
 
 
 class GeoIP:
@@ -278,7 +287,7 @@ class GeoIP:
         for ed, (_, db) in list(self._dbs.items()):
             try:
                 r = db.lookup(ip)
-            except (MMDBError, ValueError, IndexError, struct.error):
+            except Exception:              # an untrusted file must never break a page
                 continue
             if not isinstance(r, dict):
                 continue
@@ -288,11 +297,18 @@ class GeoIP:
             if 'isp' in r and not out['org']:
                 out['org'] = r.get('isp')
             c = r.get('country') or r.get('registered_country')
-            if c and not out['cc']:
-                out['cc'] = c.get('iso_code')
+            if isinstance(c, dict) and not out['cc'] and isinstance(c.get('iso_code'), str):
+                out['cc'] = c['iso_code'][:2].upper()
                 out['country'] = _names(c)
-            if r.get('city') and not out['city']:
+            if isinstance(r.get('city'), dict) and not out['city']:
                 out['city'] = _names(r['city'])
+        for k in ('org', 'country', 'city'):
+            if out[k] is not None and not isinstance(out[k], str):
+                out[k] = None
+            elif out[k]:
+                out[k] = out[k][:200]
+        if out['asn'] is not None and not isinstance(out['asn'], int):
+            out['asn'] = None
         return out
 
     def status(self):

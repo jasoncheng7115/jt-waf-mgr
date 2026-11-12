@@ -128,7 +128,7 @@ class TestTailer(unittest.TestCase):
         big = record(uri='/' + 'A' * (self.env.cfg['collector']['max_record_bytes'] + 10))
         self.env.write_log(['not json', '', big, record()])
         self.t.poll()
-        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.count(), 2)          # the oversized record is kept as a truncated event
         self.assertEqual(self.t.stats['parse_errors'], 1)
         self.assertEqual(self.t.stats['oversized'], 1)
 

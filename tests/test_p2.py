@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -264,6 +265,35 @@ class TestWorkflow(unittest.TestCase):
         self.fake_apply()
         self.assertFalse(self.wf.managed.disk_state()['drift'])
 
+    def test_rules_file_upload_becomes_proposals(self):
+        self.adopt()
+        items = [it for it in self.wf.managed.items() if it['placement'] == 'before' and it['rule_id']]
+        raw = [it for it in items if it['kind'] == 'raw']
+        self.assertTrue(raw)
+        keep, change = raw[0], raw[-1] if len(raw) > 1 else None
+        free = self.wf.managed.next_rule_id('exclusion')
+        lines = [keep['text']]
+        if change:
+            lines.append(change['text'].replace('nolog', 'log', 1) if 'nolog' in change['text'] else change['text'] + ' ')
+        lines.append('SecRule REQUEST_URI "@beginsWith /x-upload-test" "id:%d,phase:1,deny,status:403,log,msg:\'upload\'"' % free)
+        lines.append('SecRuleEngine Off')
+        text = '\n\n'.join(lines) + '\n'
+        rows = self.wf.import_diff('before', text)
+        st = {}
+        for r in rows:
+            st.setdefault(r['status'], []).append(r['rule_id'])
+        self.assertIn(free, st.get('new', []))
+        self.assertIn(keep['rule_id'], st.get('same', []))
+        self.assertTrue(st.get('invalid'), rows)                 # SecRuleEngine Off is refused, never proposed
+        out = self.wf.import_propose('before', text, 'from a file', self.app.auth.user_row('boss'))
+        made = {m['rule_id']: m['change_id'] for m in out['changes']}
+        self.assertIn(free, made)
+        c = self.wf.get(made[free])
+        self.assertEqual((c['op'], c['kind'], c['state']), ('add', 'raw', 'checking'))
+        self.assertTrue(self.app.db.q("SELECT 1 FROM audit WHERE action='managed.import_proposed'"))
+        # nothing reached the files: they change only through the normal approve -> apply path
+        self.assertFalse(self.wf.managed.disk_state()['drift'])
+
     def test_expected_disk_is_last_applied_version(self):
         self.adopt()
         c = self.wf.propose('add', 'redaction', {'fields': ['pin']}, 'r', 'op')
@@ -335,7 +365,8 @@ class TestApplier(unittest.TestCase):
         shutil.copytree(FIXTURE_SITE, site, symlinks=True)
         from jtwafmgr import config
         self.cfg = config.load(None, {'paths': {'nginx_conf': os.path.join(site, 'nginx.conf'), 'nginx_bin': '/bin/true'},
-                                      'managed': {'dir': os.path.join(self.d, 'managed'), 'spool': os.path.join(self.d, 'spool')}})
+                                      'managed': {'dir': os.path.join(self.d, 'managed'), 'spool': os.path.join(self.d, 'spool'),
+                                                  'apply_state': os.path.join(self.d, 'apply-state')}})
         self.site = site
         self.ap = Applier(self.cfg)
         self.ap.check_binary = lambda: None
@@ -366,6 +397,52 @@ class TestApplier(unittest.TestCase):
         self.ap.process()
         with open(os.path.join(self.cfg['managed']['spool'], 'v1-c1.result')) as fh:
             return json.load(fh)
+
+    def test_spool_links_cannot_redirect_root_writes(self):
+        """A compromised service user owns the spool: links planted there must not make root write elsewhere."""
+        victim = os.path.join(self.d, 'victim')
+        with open(victim, 'w') as fh:
+            fh.write('keep')
+        spool = self.cfg['managed']['spool']
+        os.makedirs(spool, exist_ok=True)
+        os.symlink(victim, os.path.join(spool, '.v1-c1.result.jtwaf-tmp'))
+        os.symlink(victim, os.path.join(spool, 'v9-c9.req'))          # a request that is a link is refused
+        self.request(self.files())
+        res = self.result()
+        self.assertEqual(res['result'], 'ok', res)
+        self.assertFalse(os.path.islink(os.path.join(spool, 'v1-c1.result')))
+        with open(os.path.join(spool, 'v9-c9.result')) as fh:
+            self.assertEqual(json.load(fh)['step'], 'request')
+        with open(victim) as fh:
+            self.assertEqual(fh.read(), 'keep')
+        self.assertFalse(os.path.exists(os.path.join(spool, 'backups')))     # snapshots live in root's own dir
+        self.assertTrue(os.path.isdir(os.path.join(self.cfg['managed']['apply_state'], 'snapshots', 'v1-before')))
+
+    def test_restore_uses_memory_not_the_snapshot_files(self):
+        self.request(self.files())
+        self.assertEqual(self.result()['result'], 'ok')
+        before = open(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf')).read()
+        snap = os.path.join(self.cfg['managed']['apply_state'], 'snapshots')
+        real_snapshot = self.ap.snapshot
+
+        def tampering_snapshot(version, extra):
+            saved = real_snapshot(version, extra)
+            for f in os.listdir(os.path.join(snap, 'v2-before')):       # someone swaps the copies on disk
+                with open(os.path.join(snap, 'v2-before', f), 'w') as fh:
+                    fh.write('SecRuleEngine Off\n')
+            return saved
+        self.ap.snapshot = tampering_snapshot
+        answers = iter([{'https://a.example.com/': 200}, {'https://a.example.com/': 500}])
+        self.ap.health = lambda urls: next(answers)                                  # health changes -> restore
+        req = self.request(self.files('SecAction "id:10151,phase:1,pass,nolog"\n'), version=2,
+                           expected_disk={'before': hashlib.sha256(before.encode()).hexdigest(),
+                                          'after': hashlib.sha256(open(os.path.join(self.cfg['managed']['dir'], 'after-crs.conf')).read().encode()).hexdigest()},
+                           health_urls=['https://a.example.com/'])
+        os.replace(req, os.path.join(self.cfg['managed']['spool'], 'v2-c2.req'))
+        self.ap.process()
+        res = json.load(open(os.path.join(self.cfg['managed']['spool'], 'v2-c2.result')))
+        self.assertEqual((res['result'], res['step']), ('failed', 'health'), res)
+        self.assertEqual(open(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf')).read(), before)
 
     def test_adopt_rewrites_main_include(self):
         main = os.path.join(self.site, 'modsec', 'main.conf')

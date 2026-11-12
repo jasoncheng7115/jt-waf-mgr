@@ -3,6 +3,8 @@ import gzip
 import hashlib
 import ipaddress
 import json
+import re
+import os
 import time
 
 from .. import __version__, util
@@ -134,6 +136,8 @@ def change_password(app, req):
     b = req.body()
     from ..auth import verify_password
     if not verify_password(str(b.get('current_password') or ''), req.user['pw_hash']):
+        # a stolen session must not be a free password oracle: wrong guesses count toward the lockout
+        app.auth._failed(req.user, req.client_ip, util.now())
         app.audit.log('password.change', req.user['username'], src_ip=req.client_ip, result='denied')
         raise ApiError(401, 'invalid_credentials')
     app.auth.set_password(req.user['username'], str(b.get('new_password') or ''))
@@ -210,6 +214,7 @@ def status(app, req):
                       'error': st.get('error'), 'last_event_at': util.iso(last),
                       'lag_seconds': int(util.now() - st['last_read']) if st.get('last_read') else None,
                       'parse_errors': st.get('parse_errors', 0), 'oversized': st.get('oversized', 0),
+                      'insert_errors': st.get('insert_errors', 0),
                       'events_total': total},
         'nginx': {'version': app.site.nginx_version(), 'module_mismatch': None},
         'managed_files_drift': None, 'last_apply': None,
@@ -224,11 +229,13 @@ def _group(app, col, since, until, limit=15, extra_where='', args=()):
     return [{'key': r['k'], 'blocked': r['b'] or 0, 'logged': r['l'] or 0} for r in rows]
 
 
-def _by_rule(app, since, until, limit=15):
+def _by_rule(app, since, until, limit=15, fw='', fa=()):
+    sub = (' AND event_id IN (SELECT id FROM events WHERE ts>=? AND ts<?%s)' % fw) if fw else ''
     rows = app.db.q(
         'SELECT rule_id, SUM(outcome=\'blocked\') AS b, SUM(outcome=\'logged\') AS l FROM event_rules '
-        'WHERE ts>=? AND ts<? AND rule_id NOT IN (%s) GROUP BY rule_id ORDER BY COUNT(*) DESC LIMIT ?'
-        % ','.join(str(x) for x in sorted(util.SCORING_RULES)), (since, until, limit))
+        'WHERE ts>=? AND ts<? AND rule_id NOT IN (%s)%s GROUP BY rule_id ORDER BY COUNT(*) DESC LIMIT ?'
+        % (','.join(str(x) for x in sorted(util.SCORING_RULES)), sub),
+        (since, until) + ((since, until) + tuple(fa) if fw else ()) + (limit,))
     out = []
     for r in rows:
         rule = app.site.rule(r['rule_id'])
@@ -237,9 +244,9 @@ def _by_rule(app, since, until, limit=15):
     return out
 
 
-def _by_family(app, since, until):
+def _by_family(app, since, until, fw='', fa=()):
     counts = {}
-    for r in app.db.q('SELECT families, outcome FROM events WHERE ts>=? AND ts<?', (since, until)):
+    for r in app.db.q('SELECT families, outcome FROM events WHERE ts>=? AND ts<?' + fw, (since, until) + tuple(fa)):
         fams = [x for x in r['families'].strip(',').split(',') if x] or ['other']
         for f in fams:
             c = counts.setdefault(f, {'key': f, 'blocked': 0, 'logged': 0})
@@ -249,53 +256,60 @@ def _by_family(app, since, until):
 
 def overview(app, req):
     rng, since, until = _range(req)
+    # the same filters as the event list (origin, outcome, host, src_ip, rule_id, family, decided_by…);
+    # the time window comes from range only
+    fwl, fa = _event_filters(req, with_time=False)
+    fw = ''.join(' AND ' + w for w in fwl)
+    fa = tuple(fa)
     t = app.db.one(
         "SELECT COUNT(*) n, SUM(outcome='blocked') b, SUM(outcome='logged') l, SUM(origin='external') ext, "
         "SUM(origin='internal') int, SUM(decided_by IN ('confident','fallback')) bc, SUM(decided_by='score') bs "
-        'FROM events WHERE ts>=? AND ts<?', (since, until))
+        'FROM events WHERE ts>=? AND ts<?' + fw, (since, until) + fa)
     buckets = {}
     for r in app.db.q("SELECT CAST(ts/3600 AS INTEGER) h, SUM(outcome='blocked') b, SUM(outcome='logged') l "
-                      'FROM events WHERE ts>=? AND ts<? GROUP BY h', (since, until)):
+                      'FROM events WHERE ts>=? AND ts<?' + fw + ' GROUP BY h', (since, until) + fa):
         buckets[r['h']] = (r['b'] or 0, r['l'] or 0)
     first, last = int(since // 3600) + 1, int(until // 3600)
     timeline = [{'t': util.iso(h * 3600), 'blocked': buckets.get(h, (0, 0))[0], 'logged': buckets.get(h, (0, 0))[1]}
                 for h in range(first, last + 1)]
     src = app.db.q(
-        "SELECT src_ip k, origin, SUM(outcome='blocked') b, SUM(outcome='logged') l FROM events WHERE ts>=? AND ts<? "
-        'GROUP BY src_ip ORDER BY COUNT(*) DESC LIMIT 15', (since, until))
+        "SELECT src_ip k, origin, SUM(outcome='blocked') b, SUM(outcome='logged') l FROM events WHERE ts>=? AND ts<?" + fw +
+        ' GROUP BY src_ip ORDER BY COUNT(*) DESC LIMIT 15', (since, until) + fa)
     score_only = [event_summary(r) for r in app.db.q(
-        "SELECT * FROM events WHERE ts>=? AND ts<? AND outcome='blocked' AND decided_by='score' AND origin='external' "
-        'ORDER BY ts DESC LIMIT 50', (since, until))]
+        "SELECT * FROM events WHERE ts>=? AND ts<? AND outcome='blocked' AND decided_by='score' AND origin='external'" + fw +
+        ' ORDER BY ts DESC LIMIT 50', (since, until) + fa)]
     focus = []
     for host in app.cfg['waf']['focus_sites']:
         h = host.lower()
         f = app.db.one("SELECT COUNT(*) n, SUM(outcome='blocked') b, SUM(origin='external') e, "
-                       "SUM(origin='external' AND outcome='logged') enb FROM events WHERE host=? AND ts>=? AND ts<?",
-                       (h, since, until))
+                       "SUM(origin='external' AND outcome='logged') enb FROM events WHERE host=? AND ts>=? AND ts<?" + fw,
+                       (h, since, until) + fa)
         recent = [event_summary(r) for r in app.db.q(
-            'SELECT * FROM events WHERE host=? AND ts>=? AND ts<? ORDER BY ts DESC LIMIT 10', (h, since, until))]
+            'SELECT * FROM events WHERE host=? AND ts>=? AND ts<?' + fw + ' ORDER BY ts DESC LIMIT 10', (h, since, until) + fa)]
         focus.append({'host': h, 'events': f['n'] or 0, 'blocked': f['b'] or 0, 'external': f['e'] or 0,
                       'external_not_blocked': f['enb'] or 0, 'recent': recent})
     return json_response(200, {
         'range': rng, 'since': util.iso(since), 'until': util.iso(until),
         'totals': {'events': t['n'] or 0, 'blocked': t['b'] or 0, 'logged': t['l'] or 0, 'external': t['ext'] or 0,
                    'internal': t['int'] or 0, 'blocked_confident': t['bc'] or 0, 'blocked_score': t['bs'] or 0},
-        'timeline': timeline, 'by_host': _group(app, 'host', since, until),
-        'by_family': _by_family(app, since, until),
+        'filters': {k: req.query[k] for k in FILTER_KEYS if req.query.get(k)},
+        'timeline': timeline, 'by_host': _group(app, 'host', since, until, extra_where=fw, args=fa),
+        'by_family': _by_family(app, since, until, fw, fa),
         'by_src': [{'key': r['k'], 'origin': r['origin'], 'blocked': r['b'] or 0, 'logged': r['l'] or 0, 'geo': geo(r['k'])}
                    for r in src],
-        'by_rule': _by_rule(app, since, until), 'score_only': score_only, 'focus': focus,
-        'by_country': _by_geo(app, since, until, 'cc'), 'by_asn': _by_geo(app, since, until, 'asn'),
+        'by_rule': _by_rule(app, since, until, fw=fw, fa=fa), 'score_only': score_only, 'focus': focus,
+        'by_country': _by_geo(app, since, until, 'cc', fw=fw, fa=fa), 'by_asn': _by_geo(app, since, until, 'asn', fw=fw, fa=fa),
     })
 
 
-def _by_geo(app, since, until, field, top=15):
+def _by_geo(app, since, until, field, top=15, fw='', fa=()):
     """External sources grouped by country or network owner (GeoIP); [] without a GeoIP database."""
     if not GEO:
         return []
     acc = {}
     for r in app.db.q("SELECT src_ip, SUM(outcome='blocked') b, SUM(outcome='logged') l FROM events "
-                      "WHERE ts>=? AND ts<? AND origin='external' GROUP BY src_ip LIMIT 20000", (since, until)):
+                      "WHERE ts>=? AND ts<? AND origin='external'" + fw + " GROUP BY src_ip LIMIT 20000",
+                      (since, until) + tuple(fa)):
         g = geo(r['src_ip'])
         if not g or g.get('scope') != 'external':
             continue
@@ -314,9 +328,12 @@ def _by_geo(app, since, until, field, top=15):
 
 # --- events --------------------------------------------------------------------------------
 
-def _event_filters(req):
+FILTER_KEYS = ('host', 'src_ip', 'rule_id', 'outcome', 'decided_by', 'origin', 'family', 'path_prefix', 'q')
+
+
+def _event_filters(req, with_time=True):
     where, args = [], []
-    since, until = _time_param(req, 'since'), _time_param(req, 'until')
+    since, until = (_time_param(req, 'since'), _time_param(req, 'until')) if with_time else (None, None)
     if since is not None:
         where.append('ts>=?')
         args.append(since)
@@ -511,6 +528,11 @@ def crs(app, req):
     return json_response(200, m.crs_status())
 
 
+def waf_model(app, req):
+    from .. import decision
+    return json_response(200, decision.model(app))
+
+
 def lookup_ip(app, req):
     ip = req.params['ip']
     try:
@@ -684,7 +706,25 @@ def settings(app, req):
                                                      'disk_min_free_mb')},
         'geoip': {k: c['geoip'][k] for k in ('enabled', 'editions', 'update_days')},
         'compliance_level': c['compliance']['level'],
+        'paths': _paths(app),
     })
+
+
+def _paths(app):
+    """Where everything is (admin only): program, configuration, data, records."""
+    from ..integrity import program_dir
+    c = app.cfg
+    data = os.path.dirname(c['paths']['db'])
+    return {
+        'program': program_dir(), 'command': '/usr/bin/jt-waf-mgr', 'config': c.path,
+        'data_dir': data, 'database': c['paths']['db'], 'backups': c['backup']['dir'],
+        'audit_anchors': c['integrity']['anchor_file'], 'geoip': c['geoip']['dir'],
+        'spool': c['managed']['spool'], 'apply_state': c['managed']['apply_state'],
+        'managed_rules': c['managed']['dir'], 'sandbox': c['managed']['sandbox_dir'],
+        'modsecurity_audit_log': c['paths']['audit_log'], 'nginx_conf': c['paths']['nginx_conf'],
+        'syslog': ('%s (facility %s)' % (c['syslog']['address'], c['syslog']['facility'])) if c['syslog']['enabled'] else None,
+        'service_log': 'journalctl -u jt-waf-mgr -u jt-waf-mgr-apply -u jt-waf-mgr-geoip',
+    }
 
 
 def register(router):
@@ -714,6 +754,7 @@ def register(router):
     R('GET', V + '/rules/{id}/hits', rule_hits, viewer('rules:read'))
     R('GET', V + '/vhosts', vhosts, viewer('rules:read'))
     R('GET', V + '/crs', crs, viewer('rules:read'))
+    R('GET', V + '/waf/model', waf_model, viewer('rules:read'))
     R('GET', V + '/lookups/ip/{ip}', lookup_ip, viewer('lookups:read'))
     R('GET', V + '/users', users, admin)
     R('POST', V + '/users', user_create, admin)
@@ -818,7 +859,8 @@ def change_create(app, req):
     try:
         cid = _wf(app).propose(str(b.get('op') or 'add'), str(b.get('kind') or ''), spec, b.get('reason'), actor, via,
                                item_id=b.get('item_id') if isinstance(b.get('item_id'), int) else None,
-                               tests=b.get('tests') if isinstance(b.get('tests'), list) else [], role=role)
+                               tests=b.get('tests') if isinstance(b.get('tests'), list) else [], role=role,
+                               owner=req.token['created_by'] if via == 'api' else None)
     except ChangeError as e:
         raise _change_error(e)
     r = _wf(app).get(cid)
@@ -985,11 +1027,75 @@ def regression_collect(app, req):
     return json_response(202, {'started': True})
 
 
+def managed_file(app, req):
+    """Download one managed rules file: a stored version (?version=N), the current file on disk, or —
+    before adoption — the site's own rules file that adoption would import."""
+    placement = req.params['placement']
+    if placement not in ('before', 'after'):
+        raise ApiError(404, 'not_found')
+    mg = _wf(app).managed
+    v = _int_param(req, 'version')
+    name = 'jt-waf-mgr-%s-crs' % placement
+    if v is not None:
+        row = app.db.one('SELECT files FROM versions WHERE version=?', (v,))
+        if not row:
+            raise ApiError(404, 'not_found')
+        text = (json.loads(row['files']).get('files') or {}).get(placement)
+        name += '-v%d' % v
+    elif mg.adopted():
+        try:
+            with open(mg.path(placement), encoding='utf-8', errors='replace') as fh:
+                text = fh.read(4 * 1024 * 1024)
+        except OSError:
+            raise ApiError(404, 'not_found')
+        cur = mg.current_version()
+        name += '-v%d' % cur['version'] if cur else ''
+    else:
+        src = dict(zip(('before', 'after'), mg.detect_import_files())).get(placement)
+        if not src:
+            raise ApiError(404, 'not_found')
+        try:
+            with open(src, encoding='utf-8', errors='replace') as fh:
+                text = fh.read(4 * 1024 * 1024)
+        except OSError:
+            raise ApiError(404, 'not_found')
+        name = 'site-' + re.sub(r'[^\w.-]', '_', os.path.basename(src))[:80].removesuffix('.conf')
+    if text is None:
+        raise ApiError(404, 'not_found')
+    return Response(200, text.encode('utf-8'), 'text/plain; charset=utf-8',
+                    [('Content-Disposition', 'attachment; filename="%s.conf"' % name)])
+
+
+def managed_import_preview(app, req):
+    b = req.body()
+    try:
+        rows = _wf(app).import_diff(str(b.get('placement') or ''), b.get('text'))
+    except ChangeError as e:
+        raise _change_error(e)
+    counts = {}
+    for r in rows:
+        counts[r['status']] = counts.get(r['status'], 0) + 1
+    return json_response(200, {'rows': rows, 'counts': counts})
+
+
+def managed_import(app, req):
+    b = req.body()
+    try:
+        out = _wf(app).import_propose(str(b.get('placement') or ''), b.get('text'), b.get('reason'), req.user,
+                                      delete_missing=b.get('delete_missing') is True)
+    except ChangeError as e:
+        raise _change_error(e)
+    return json_response(201, out)
+
+
 def register_p2(router):
     R = router.add
     viewer = lambda scope: ('role', 'viewer', scope)
     R('GET', V + '/managed', managed, viewer('rules:read'))
     R('POST', V + '/managed/adopt', managed_adopt, ('admin',))
+    R('GET', V + '/managed/files/{placement}', managed_file, viewer('rules:read'))
+    R('POST', V + '/managed/import/preview', managed_import_preview, ('admin',))
+    R('POST', V + '/managed/import', managed_import, ('admin',))
     R('GET', V + '/managed/items/{id}', managed_item, viewer('rules:read'))
     R('GET', V + '/changes', changes_list, viewer('changes:read'))
     R('POST', V + '/changes', change_create, ('role', 'viewer', 'changes:propose'))

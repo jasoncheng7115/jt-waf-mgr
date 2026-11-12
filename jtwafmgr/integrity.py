@@ -64,6 +64,21 @@ def audit_row_hash(prev, row):
     return sha256_hex(prev + '\n' + canonical(rec))
 
 
+# The append-only triggers, exactly. verify() compares the stored SQL with these (a trigger with the same
+# name but an empty body must not pass).
+AUDIT_TRIGGERS = {
+    'audit_no_update': "CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit "
+                       "BEGIN SELECT RAISE(ABORT, 'audit trail is append-only'); END",
+    'audit_no_delete': "CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit "
+                       "WHEN (SELECT value FROM meta WHERE key='audit_purge_open') IS NOT '1' "
+                       "BEGIN SELECT RAISE(ABORT, 'audit trail is append-only'); END",
+}
+
+
+def _norm_sql(s):
+    return ' '.join((s or '').split()).lower()
+
+
 class AuditChain:
     def __init__(self, db):
         self.db = db
@@ -94,8 +109,8 @@ class AuditChain:
         """Walks the chain. Returns a dict: ok, checked, last_id, last_hash, and on failure
         bad_id + reason (prev_mismatch | hash_mismatch | triggers_missing)."""
         out = {'ok': True, 'checked': 0, 'last_id': None, 'last_hash': None, 'bad_id': None, 'reason': None}
-        trig = {r[0] for r in self.db.q("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='audit'")}
-        if not {'audit_no_update', 'audit_no_delete'} <= trig:
+        trig = {r[0]: r[1] for r in self.db.q("SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='audit'")}
+        if any(_norm_sql(trig.get(k)) != _norm_sql(v) for k, v in AUDIT_TRIGGERS.items()):
             out.update(ok=False, reason='triggers_missing')
             return out
         if after_id is None:
@@ -143,8 +158,8 @@ class Anchors:
     def __init__(self, path):
         self.path = path
 
-    def append(self, audit_id, h, count):
-        rec = {'at': util.iso(time.time()), 'id': audit_id, 'hash': h, 'count': count}
+    def append(self, audit_id, h, count, base_id=0):
+        rec = {'at': util.iso(time.time()), 'id': audit_id, 'hash': h, 'count': count, 'base_id': base_id}
         line = json.dumps(rec, separators=(',', ':')) + '\n'
         fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         try:
@@ -179,16 +194,31 @@ class Anchors:
             return None
         return 'a' in r.stdout.split()[0]
 
-    def check(self, db, anchors):
-        """Compares anchors with the database. Returns a list of problems (empty = fine)."""
+    def check(self, db, anchors, retention_days=0):
+        """Compares anchors with the database. Returns a list of problems (empty = fine).
+        Rows below the chain's base were removed by the retention purge — but only rows older than the
+        retention period may be gone: an anchor written within it must still find its row (with
+        retention 0 = keep forever, nothing may ever be purged)."""
         problems = []
         base_id = int(db.get_meta('audit_base_id', 0) or 0)
+        if base_id and not retention_days:
+            problems.append({'reason': 'purged_without_retention', 'id': base_id})
+        limit = time.time() - (retention_days + 1) * 86400 if retention_days else None
         for a in anchors:
             if 'invalid' in a:
                 problems.append({'reason': 'anchor_unreadable'})
                 continue
-            if a['id'] is None or a['id'] <= base_id:
-                continue  # purged by retention
+            if a['id'] is None:
+                continue
+            if a['id'] <= base_id:
+                try:
+                    at = util.parse_iso(a.get('at') or '')
+                except ValueError:
+                    at = None
+                if limit is not None and at is not None and at < limit:
+                    continue  # purged by retention
+                problems.append({'reason': 'anchored_row_purged_early', 'id': a['id'], 'at': a.get('at')})
+                continue
             r = db.one('SELECT this_hash FROM audit WHERE id=?', (a['id'],))
             if not r:
                 problems.append({'reason': 'anchored_row_missing', 'id': a['id'], 'at': a['at']})
@@ -280,29 +310,55 @@ def make_manifest(root, paths):
     return ''.join('%s  %s\n' % (file_sha256(os.path.join(root, p)), p) for p in sorted(paths))
 
 
-def verify_tree(root, manifest, prefixes, ignore_dirs=('__pycache__',)):
-    """Checks every manifest entry under the given prefixes, and that no file outside the manifest
-    exists below them (a planted module would be imported). Returns a result dict."""
+def verify_tree(root, manifest, prefixes, ignore_dirs=('__pycache__',), whole=False, allowed_dirs=()):
+    """Checks every manifest entry under the given prefixes, and that nothing else exists that Python could
+    import. Symbolic links are never accepted (a linked directory would be importable, yet invisible to a
+    plain file walk). With whole=True the entire root is walked (an installed program: PYTHONPATH points
+    at it, so a planted re.py next to the package would shadow the standard library), only allowed_dirs
+    (e.g. release/) may hold other files, and __pycache__ is not ignored (bytecode is never written there;
+    a planted .pyc would run instead of the verified source). Returns a result dict."""
     changed, missing, extra = [], [], []
     wanted = {p: h for p, h in manifest.items() if any(p == x or p.startswith(x.rstrip('/') + '/') for x in prefixes)}
     for p, h in sorted(wanted.items()):
         fp = os.path.join(root, p)
         try:
-            if not hmac.compare_digest(file_sha256(fp), h):
+            if os.path.islink(fp):
+                changed.append(p + ' (link)')
+            elif not hmac.compare_digest(file_sha256(fp), h):
                 changed.append(p)
         except FileNotFoundError:
             missing.append(p)
         except OSError:
             missing.append(p)
-    for x in prefixes:
-        base = os.path.join(root, x)
-        if os.path.isdir(base):
-            for d, dirs, files in os.walk(base):
-                dirs[:] = [z for z in dirs if z not in ignore_dirs]
-                for f in files:
-                    rel = os.path.relpath(os.path.join(d, f), root)
-                    if rel not in manifest:
-                        extra.append(rel)
+    bases = [root] if whole else [os.path.join(root, x) for x in prefixes]
+    ignore = () if whole else ignore_dirs
+    for base in bases:
+        if os.path.islink(base):
+            extra.append(os.path.relpath(base, root) + ' (link)')
+            continue
+        if not os.path.isdir(base):
+            continue
+        for d, dirs, files in os.walk(base):
+            keep = []
+            for z in dirs:
+                rel = os.path.relpath(os.path.join(d, z), root)
+                if os.path.islink(os.path.join(d, z)):
+                    extra.append(rel + ' (link)')
+                elif z in ignore:
+                    continue
+                elif whole and d == root and z in allowed_dirs:
+                    for f2 in os.listdir(os.path.join(d, z)):          # release/: data files only, no links
+                        if os.path.islink(os.path.join(d, z, f2)) or not os.path.isfile(os.path.join(d, z, f2)):
+                            extra.append(os.path.join(z, f2) + ' (not a plain file)')
+                else:
+                    keep.append(z)
+            dirs[:] = keep
+            for f in files:
+                rel = os.path.relpath(os.path.join(d, f), root)
+                if os.path.islink(os.path.join(d, f)):
+                    extra.append(rel + ' (link)')
+                elif rel not in manifest:
+                    extra.append(rel)
     return {'ok': not (changed or missing or extra), 'checked': len(wanted), 'changed': changed,
             'missing': missing, 'extra': sorted(extra)}
 
@@ -379,7 +435,7 @@ def verify_program(lib=None, key_path='/etc/jt-waf-mgr/release-key.pem'):
         res['signature'] = 'missing'
     except (OSError, SignatureError, ValueError):
         res['signature'] = 'invalid'
-    tree = verify_tree(lib, manifest, INSTALLED_PREFIXES)
+    tree = verify_tree(lib, manifest, INSTALLED_PREFIXES, whole=True, allowed_dirs=('release',))
     if lib == INSTALL_DIR:
         for rel, installed in SYSTEM_FILES.items():
             if rel not in manifest:

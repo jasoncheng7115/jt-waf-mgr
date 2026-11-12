@@ -98,6 +98,7 @@
         <p class="muted small">{{ t('backup.restore') }}</p>
       </template>
     </section>
+    <PathsInfo :paths="paths" />
   </div>
 </template>
 
@@ -113,6 +114,7 @@ import ChainResult from '../components/ChainResult.vue'
 import Icon from '../components/Icon.vue'
 import DataTable from '../components/DataTable.vue'
 import FlowSteps from '../components/FlowSteps.vue'
+import PathsInfo from '../components/PathsInfo.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
 
@@ -122,6 +124,7 @@ const TIME_KEYS = ['checked_at', 'last_at', 'last_read', 'last_error', 'last_out
 const HIDE = { audit_chain: ['ok', 'reason', 'bad_id', 'anchor_problems', 'last_anchor', 'checked_at'] }
 
 const data = ref(null)
+const paths = ref(null)
 const error = ref(null)
 const loading = ref(false)
 const running = ref(false)
@@ -237,5 +240,8 @@ async function verifyBackup(b) {
   try { results[b.file] = await post('/backups/' + encodeURIComponent(b.file) + '/verify') } catch (e) { verifyErrors[b.file] = e } finally { verifying[b.file] = false }
 }
 
-onMounted(() => { load(); loadBackups() })
+onMounted(() => {
+  load(); loadBackups()
+  get('/settings').then((r) => { paths.value = r.paths || null }).catch(() => {})
+})
 </script>

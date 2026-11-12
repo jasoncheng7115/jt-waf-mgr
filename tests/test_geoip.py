@@ -110,6 +110,18 @@ class TestService(unittest.TestCase):
         st, body, _ = c.req('GET', '/api/v1/lookups/ip/203.0.113.9')
         self.assertEqual(body['geo']['org'], 'Example Net')
 
+    def test_overview_filters(self):
+        c = self.client('viewer1')
+        st, all_, _ = c.req('GET', '/api/v1/overview?range=7d')
+        st, ext, _ = c.req('GET', '/api/v1/overview?range=7d&origin=external&src_ip=203.0.113.9')
+        self.assertEqual(st, 200)
+        self.assertEqual(ext['filters'], {'origin': 'external', 'src_ip': '203.0.113.9'})
+        self.assertEqual(ext['totals']['events'], all_['totals']['events'])
+        st, none, _ = c.req('GET', '/api/v1/overview?range=7d&origin=internal')
+        self.assertEqual((none['totals']['events'], none['by_rule'], none['by_country']), (0, [], []))
+        st, _, _ = c.req('GET', '/api/v1/overview?range=7d&origin=sideways')
+        self.assertEqual(st, 400)
+
     def test_status_and_request(self):
         c = self.client('admin1', self.secret)
         st, body, _ = c.req('GET', '/api/v1/geoip')

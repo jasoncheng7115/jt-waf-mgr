@@ -14,6 +14,7 @@ import Rules from './views/Rules.vue'
 import RuleDetail from './views/RuleDetail.vue'
 import Vhosts from './views/Vhosts.vue'
 import Crs from './views/Crs.vue'
+import WafModel from './views/WafModel.vue'
 import AdminUsers from './views/AdminUsers.vue'
 import AdminTokens from './views/AdminTokens.vue'
 import AdminAudit from './views/AdminAudit.vue'
@@ -47,6 +48,7 @@ const routes = [
   { path: '/versions', name: 'versions', component: Versions },
   { path: '/vhosts', name: 'vhosts', component: Vhosts },
   { path: '/crs', name: 'crs', component: Crs },
+  { path: '/waf', name: 'waf', component: WafModel },
   { path: '/account', name: 'account', component: Account },
   { path: '/guide', name: 'guide', component: Guide },
   { path: '/admin/users', name: 'admin-users', component: AdminUsers, meta: { role: 'admin' } },

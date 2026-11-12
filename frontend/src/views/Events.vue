@@ -41,7 +41,7 @@
       <HBars :items="familyBars" :series="outcomeSeries" />
       <p class="muted small">{{ t('chart.loaded_rows', { n: fmtNum(items.length) }) }}</p>
     </section>
-    <EventTable table-id="events" :items="items" :page-size="50" />
+    <EventTable table-id="events" :items="items" :page-size="50" filterable @filter="toggleFilter" />
     <LoadMore :cursor="cursor" :busy="loading" @more="load(false)" />
   </div>
 </template>
@@ -212,6 +212,14 @@ function apply() {
   router.push({ query: q })
 }
 function reset() { router.push({ query: {} }) }
+// a value clicked in the list becomes (or, when it already is, stops being) that filter
+function toggleFilter(key, value) {
+  const v = String(value ?? '')
+  const q = { ...route.query }
+  if (q[key] === v) delete q[key]
+  else q[key] = v
+  router.push({ query: q })
+}
 
 watch(() => route.query, () => { fromQuery(); load(true) }, { immediate: true })
 </script>

@@ -121,8 +121,8 @@ class Managed:
         for p in PLACEMENTS:
             path = self.path(p)
             try:
-                with open(path, encoding='utf-8') as fh:
-                    h = sha256(fh.read())
+                with open(path, 'rb') as fh:          # bytes: a newline-only or non-UTF-8 edit is drift too
+                    h = hashlib.sha256(fh.read()).hexdigest()
                 exists = True
             except OSError:
                 h, exists = None, False

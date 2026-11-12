@@ -19,3 +19,19 @@ ProtectClock=yes
 RestrictRealtime=yes
 LockPersonality=yes
 UMask=0022
+# root, but boxed in: it may write only the nginx configuration, its own state directory and the spool;
+# no devices, no new privileges, and the only network it needs is the loopback health check.
+StateDirectory=jt-waf-mgr-apply
+StateDirectoryMode=0700
+ProtectSystem=full
+ReadWritePaths=/etc/nginx /var/lib/jt-waf-mgr/spool
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+IPAddressDeny=any
+IPAddressAllow=localhost

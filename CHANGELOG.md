@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+Interface
+- Every button has an icon; the site's own dropdowns and date picker replace the browser's; every list table
+  can be sorted, filtered, paged and its columns chosen; light / dark / system theme; slightly larger text.
+- Charts wherever there are numbers; guidance flow diagrams on the pages that are part of a process; a new
+  Guide page with an interactive architecture diagram, first steps, the change workflow and the roles.
+- A logo, used for the favicon, the top bar and the login page.
+- The overview can be filtered (origin, outcome, site, source, rule…) by clicking values; it names the focus
+  sites section.
+- GeoIP: country, city and network owner (ASN) next to every external address, by-country and by-ASN charts.
+- Rules files can be downloaded (current, any version, or the site's original before adoption) and uploaded:
+  an upload is compared rule by rule and turned into ordinary proposals, each checked, sandboxed and approved.
+- WAF decision diagram (/waf), generated from the configuration: which mechanisms block, which only score or
+  log, which loosen, for external and internal sources, with the anomaly-score scale and every rule involved.
+  The CRS page states the effective behaviour next to the global engine mode.
+- Tablet and phone layouts: the top bar folds into a menu when the links do not fit.
+- System check lists where the program, configuration, data and records are.
+
+Security
+- The root apply program no longer follows links in the service user's spool, keeps its lock and snapshots in
+  its own root-only directory and restores from memory (a compromised service could otherwise have reached
+  root or written unchecked directives into nginx).
+- An apply is refused when a managed file was edited outside jt-waf-mgr, instead of silently overwriting the
+  edit; an approver can explicitly restore the files. A failed apply keeps its version number in the history.
+- Login: at most four scrypt checks at once, atomic failure counting, IPv6 limits per /64, wrong current
+  passwords on "change password" count toward the lockout; invalid Content-Length is refused.
+- The creator of an API token cannot approve changes proposed through it.
+- systemd: the web service and the apply program may only talk to the loopback; the apply program can write only
+  /etc/nginx, its state directory and the spool.
+- Syslog audit lines carry `"severity": "crit"` for integrity alerts (files drop the syslog priority).
+- Draft Wazuh rules for the audit lines (deploy/wazuh).
+- Collector: redaction runs in linear time on clipped input (one long parameter used to stall the collector for
+  seconds to hours); oversized records are kept as truncated events instead of being dropped; long transaction
+  ids no longer collide; every cookie and the Authorization / Cookie headers are always masked; copytruncate
+  rotation no longer loses lines; one bad record no longer blocks the rest.
+- Evidence checks use ModSecurity's own decoding (`+`, %u, path normalisation) and no longer skip DAV paths,
+  so a block that would hit real traffic cannot pass (or be auto-applied); regression samples need several
+  distinct sources and skip catch-all hosts and paths with WAF events.
+- Integrity: the append-only triggers are compared word for word; a purge beyond the retention period (or any
+  purge when keeping forever) is reported; the whole program directory is checked (a module shadowing the
+  standard library, bytecode caches and links are found); upgrades are verified with the installed code.
+- GeoIP reader: bounded decoding work per lookup and type checks on every value.
+
 ## 0.2.1 (2026-11-12)
 
 - The interface uses a plain "/" instead of the full-width slash in Chinese and Japanese texts; the

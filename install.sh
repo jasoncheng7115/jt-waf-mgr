@@ -40,7 +40,9 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 [ -f "$SRC/jtwafmgr/static/index.html" ] || die "jtwafmgr/static/index.html missing (frontend not built)"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
     || die "Python 3.11 or newer is required (found $(python3 -V 2>&1))"
-VERSION=$(PYTHONPATH="$SRC" python3 -c 'import jtwafmgr; print(jtwafmgr.__version__)')
+# read without importing anything from the release (it is not verified yet)
+VERSION=$(sed -n "s/^__version__ = '\([0-9A-Za-z.+-]*\)'.*/\1/p" "$SRC/jtwafmgr/__init__.py" | head -1)
+[ -n "$VERSION" ] || die "cannot read the version"
 
 if [ -z "$ROOT" ]; then
     [ "$(id -u)" = 0 ] || die "run as root (or use --root DIR to stage)"
@@ -54,16 +56,20 @@ say "jt-waf-mgr $VERSION"
 
 # --- release integrity -------------------------------------------------------------------
 PIN="$ETC/release-key.pem"
+# The check runs with the ALREADY INSTALLED (and itself verified) code when there is one, so a tampered
+# release cannot vouch for itself; only a first install has to use the code it ships.
+CHECKER="$SRC"
+[ -f "$LIB/jtwafmgr/integrity.py" ] && [ -f "$LIB/release/MANIFEST.sha256" ] && CHECKER="$LIB"
 verify() {  # $1 key file; prints the result, returns 0 when the whole release verifies
     python3 -I -B -c '
 import sys
-sys.path.insert(0, sys.argv[1])
+sys.path.insert(0, sys.argv[3])
 from jtwafmgr import integrity
 r = integrity.verify_release(sys.argv[1], open(sys.argv[2]).read())
 print("  key %s: %s" % (r.get("key_fingerprint", "?"), "ok, %d files" % r["checked"] if r["ok"] else
       "%s %s" % (r.get("reason"), {k: r.get(k) for k in ("changed", "missing", "extra") if r.get(k)})))
 sys.exit(0 if r["ok"] else 1)
-' "$SRC" "$1"
+' "$SRC" "$1" "$CHECKER"
 }
 if [ -f "$PIN" ]; then
     say "verifying the release with the pinned key"

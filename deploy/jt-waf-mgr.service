@@ -41,6 +41,11 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 UMask=0077
+# The web service needs no network beyond the loopback (the reverse proxy in front, the sandbox nginx,
+# syslog over /dev/log). If it is ever taken over it cannot reach out. GeoIP downloads run in their own
+# unit. Enabling an external OpenID Connect provider needs a drop-in that allows its address.
+IPAddressDeny=any
+IPAddressAllow=localhost
 MemoryMax=512M
 
 [Install]

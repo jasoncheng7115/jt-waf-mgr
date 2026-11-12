@@ -229,6 +229,10 @@ SCHEMA = [
     """,
     # version 4
     lambda c: _chain_existing_audit(c),
+    # 5: the account responsible for an API token's proposal (the token's creator may not approve it)
+    """
+    ALTER TABLE changes ADD COLUMN proposed_owner TEXT;
+    """,
 ]
 
 
@@ -244,11 +248,9 @@ def _chain_existing_audit(c):
         c.execute('UPDATE audit SET prev_hash=?, this_hash=? WHERE id=?', (prev, h, r['id']))
         prev = h
     c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('audit_purge_open', '0')")
-    c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit "
-              "BEGIN SELECT RAISE(ABORT, 'audit trail is append-only'); END")
-    c.execute("CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit "
-              "WHEN (SELECT value FROM meta WHERE key='audit_purge_open') IS NOT '1' "
-              "BEGIN SELECT RAISE(ABORT, 'audit trail is append-only'); END")
+    from .integrity import AUDIT_TRIGGERS
+    for sql in AUDIT_TRIGGERS.values():
+        c.execute(sql)
 
 
 class Database:

@@ -121,7 +121,7 @@ class Workflow:
                   [state, util.now(), error] + list(cols.values()) + [cid])
 
     # --- proposing ------------------------------------------------------------------------
-    def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None):
+    def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None, owner=None):
         if op not in OPS:
             raise ChangeError('invalid_op')
         reason = (reason or '').strip()
@@ -167,15 +167,97 @@ class Workflow:
         t = util.now()
         with self.db.tx() as c:
             cur = c.execute('INSERT INTO changes(op, kind, item_id, rule_id, spec, direction, state, reason, proposed_by, '
-                            'proposed_via, created_at, updated_at, rule_text, tests) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                            'proposed_via, created_at, updated_at, rule_text, tests, proposed_owner) '
+                            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (op, kind, item_id, rule_id, json.dumps(spec), direction, 'checking', reason, actor, via, t, t,
-                             text, json.dumps(tests)))
+                             text, json.dumps(tests), owner or (actor if via == 'user' else None)))
             cid = cur.lastrowid
         self.log(cid, actor, 'proposed', reason)
         self.app.audit.log('change.proposed', actor, 'token' if via == 'api' else 'user', None, 'ok', change_id=cid,
                            direction=direction, kind=kind, op=op, rule_id=rule_id)
         self._wake.set()
         return cid
+
+    # --- rules file upload: a batch of ordinary proposals, never a direct write ---------------
+    MAX_UPLOAD_ITEMS = 500
+
+    def import_diff(self, placement, text):
+        """Compare an uploaded rules file with the managed rules of one placement, rule by rule (by id).
+        Nothing is saved. Rows: new | changed | same | missing | invalid | conflict."""
+        if placement not in ('before', 'after'):
+            raise ChangeError('invalid_placement')
+        if not isinstance(text, str) or not text.strip() or len(text) > 1024 * 1024 or '\x00' in text:
+            raise ChangeError('invalid_file')
+        if not self.managed.adopted():
+            raise ChangeError('not_adopted', 409)
+        from .managed import split_items
+        parts = [it for it in split_items(text) if it['text']]
+        if len(parts) > self.MAX_UPLOAD_ITEMS:
+            raise ChangeError('too_many_rules', 422, limit=self.MAX_UPLOAD_ITEMS)
+        current = {it['rule_id']: it for it in self.managed.items() if it['placement'] == placement and it['rule_id']}
+        rows, seen = [], set()
+        norm = lambda t: '\n'.join(l.rstrip() for l in (t or '').strip().splitlines())   # noqa: E731
+        for it in parts:
+            row = {'rule_id': it['rule_id'], 'text': it['text'], 'current_text': None, 'item_id': None, 'kind': None,
+                   'status': None, 'error': None}
+            try:
+                rulegen.check_raw_text(it['text'], cfg=self.cfg)
+            except rulegen.SpecError as e:
+                row.update(status='invalid', error='%s%s' % (e.code, (': ' + str(e.details.get('what'))) if e.details.get('what') else ''))
+                rows.append(row)
+                continue
+            if it['rule_id'] is None:
+                row.update(status='invalid', error='no_rule_id')
+            elif it['rule_id'] in seen:
+                row.update(status='invalid', error='duplicate_rule_id')
+            elif it['rule_id'] in current:
+                cur = current[it['rule_id']]
+                row.update(current_text=cur['text'], item_id=cur['id'], kind=cur['kind'])
+                if norm(cur['text']) == norm(it['text']):
+                    row['status'] = 'same'
+                elif cur['kind'] != 'raw':
+                    row.update(status='conflict', error='template_rule')   # edit template rules with the form
+                else:
+                    row['status'] = 'changed'
+            elif it['rule_id'] in self.managed.occupied_ids():
+                row.update(status='conflict', error='rule_id_in_other_file')
+            else:
+                row['status'] = 'new'
+            if it['rule_id'] is not None:
+                seen.add(it['rule_id'])
+            rows.append(row)
+        for rid, cur in current.items():
+            if rid not in seen and cur['kind'] != 'comment':
+                rows.append({'rule_id': rid, 'text': None, 'current_text': cur['text'], 'item_id': cur['id'],
+                             'kind': cur['kind'], 'status': 'missing', 'error': None})
+        return rows
+
+    def import_propose(self, placement, text, reason, user, delete_missing=False):
+        """One ordinary change per difference; each is checked, sandboxed and approved on its own."""
+        rows = self.import_diff(placement, text)
+        reason = (reason or '').strip()
+        if not reason:
+            raise ChangeError('reason_required')
+        made, skipped = [], []
+        for r in rows:
+            try:
+                if r['status'] == 'new':
+                    cid = self.propose('add', 'raw', {'text': r['text'], 'placement': placement}, reason, user['username'],
+                                       role=user['role'])
+                elif r['status'] == 'changed':
+                    cid = self.propose('modify', 'raw', {'text': r['text'], 'placement': placement}, reason,
+                                       user['username'], item_id=r['item_id'], role=user['role'])
+                elif r['status'] == 'missing' and delete_missing:
+                    cid = self.propose('delete', r['kind'], {}, reason, user['username'], item_id=r['item_id'],
+                                       role=user['role'])
+                else:
+                    continue
+                made.append({'rule_id': r['rule_id'], 'status': r['status'], 'change_id': cid})
+            except ChangeError as e:
+                skipped.append({'rule_id': r['rule_id'], 'status': r['status'], 'error': e.code})
+        self.app.audit.log('managed.import_proposed', user['username'], 'user', None, 'ok', placement=placement,
+                           changes=[m['change_id'] for m in made], skipped=len(skipped))
+        return {'changes': made, 'skipped': skipped}
 
     def propose_adoption(self, actor):
         if self.managed.adopted():
@@ -322,7 +404,9 @@ class Workflow:
             raise ChangeError('invalid_state', 409, state=r['state'])
         if r['op'] == 'adopt' and user['role'] != 'admin':
             raise ChangeError('forbidden', 403)
-        own = r['proposed_by'] == user['username'] and r['proposed_via'] == 'user'
+        # a change proposed through an API token belongs to the person who created that token
+        own = (r['proposed_by'] == user['username'] and r['proposed_via'] == 'user') or \
+            (r['proposed_via'] == 'api' and r['proposed_owner'] == user['username'])
         if own:
             if not self.setting('approval.single_admin_mode'):
                 raise ChangeError('own_change', 403)

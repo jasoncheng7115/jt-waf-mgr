@@ -73,6 +73,9 @@ DEFAULTS = {
         'spool': '/var/lib/jt-waf-mgr/spool',
         'sandbox_dir': '/var/lib/jt-waf-mgr/sandbox',
         'snapshots_kept': 200,
+        # root-only working directory of the apply program (lock, snapshots); never inside the service
+        # user's directories, so a compromised service cannot plant links there
+        'apply_state': '/var/lib/jt-waf-mgr-apply',
     },
     'evidence': {
         # nginx access logs scanned for evidence and regression samples (JSON lines or combined).

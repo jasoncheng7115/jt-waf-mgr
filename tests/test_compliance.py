@@ -56,8 +56,8 @@ class TestAuditChain(unittest.TestCase):
         self._tamper("UPDATE audit SET actor='mallory' WHERE id=2")
         self.assertEqual(self.a.chain.verify()['reason'], 'triggers_missing')
         c = self.app.db.conn()
-        c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
-        c.execute("CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        for sql in integrity.AUDIT_TRIGGERS.values():
+            c.execute(sql)
         res = self.a.chain.verify()
         self.assertFalse(res['ok'])
         self.assertEqual((res['bad_id'], res['reason']), (2, 'hash_mismatch'))
@@ -66,8 +66,8 @@ class TestAuditChain(unittest.TestCase):
         for i in range(4):
             self.a.log('test.action', 'alice', n=i)
         self._tamper('DELETE FROM audit WHERE id=2')
-        self.app.db.conn().execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
-        self.app.db.conn().execute("CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        for sql in integrity.AUDIT_TRIGGERS.values():
+            self.app.db.conn().execute(sql)
         res = self.a.chain.verify()
         self.assertEqual((res['bad_id'], res['reason']), (3, 'prev_mismatch'))
 
@@ -87,7 +87,7 @@ class TestAuditChain(unittest.TestCase):
             h = integrity.audit_row_hash(prev, r)
             c.execute('UPDATE audit SET prev_hash=?, this_hash=? WHERE id=?', (prev, h, r['id']))
             prev = h
-        c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'x'); END")
+        c.execute(integrity.AUDIT_TRIGGERS['audit_no_update'])
         self.assertTrue(self.a.chain.verify()['ok'])            # the chain alone cannot tell
         st = mon.check_chain(full=True)
         self.assertFalse(st['ok'])                               # the anchor can
@@ -105,7 +105,30 @@ class TestAuditChain(unittest.TestCase):
         mon.check_chain()                   # a new row is always anchored
         self.assertEqual(len(mon.anchors.read()), 2)
 
+    def test_wiping_the_trail_is_detected(self):
+        """Someone with the database opens the purge guard, deletes every row and moves the base past them."""
+        for i in range(4):
+            self.a.log('test.action', 'alice', n=i)
+        self.assertTrue(self.app.monitor.check_chain()['ok'])
+        c = self.app.db.conn()
+        last = c.execute('SELECT MAX(id), (SELECT this_hash FROM audit ORDER BY id DESC LIMIT 1) FROM audit').fetchone()
+        c.execute("UPDATE meta SET value='1' WHERE key='audit_purge_open'")
+        c.execute('DELETE FROM audit')
+        c.execute("UPDATE meta SET value='0' WHERE key='audit_purge_open'")
+        c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('audit_base_id', ?)", (str(last[0]),))
+        c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('audit_base_hash', ?)", (last[1],))
+        st = self.app.monitor.check_chain(full=True)
+        self.assertFalse(st['ok'], st)
+        self.assertIn('purged_without_retention', [p['reason'] for p in st['anchor_problems']])
+
+    def test_trigger_with_empty_body_is_detected(self):
+        c = self.app.db.conn()
+        c.execute('DROP TRIGGER audit_no_update')
+        c.execute("CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT 1; END")
+        self.assertEqual(self.a.chain.verify()['reason'], 'triggers_missing')
+
     def test_purge_keeps_chain_valid(self):
+        self.app.cfg['retention']['audit_days'] = 1
         for i in range(6):
             self.a.log('test.action', 'alice', n=i)
         self.app.monitor.check_chain()
@@ -205,11 +228,29 @@ class TestReleaseSignature(unittest.TestCase):
 
     def test_installed_program_check(self):
         rel = self._release()
-        keyf = os.path.join(rel, 'pub.pem')
+        keyf = os.path.join(self.dir, 'pub-%s.pem' % os.path.basename(rel))
         with open(keyf, 'w') as fh:
             fh.write(self.pub)
         r = integrity.verify_program(rel, keyf)
         self.assertEqual(r['status'], 'ok', r)
+        # planted code Python would import: a module shadowing the standard library next to the package,
+        # bytecode in __pycache__, and a linked directory
+        with open(os.path.join(rel, 're.py'), 'w') as fh:
+            fh.write('raise SystemExit')
+        os.makedirs(os.path.join(rel, 'jtwafmgr', '__pycache__'))
+        with open(os.path.join(rel, 'jtwafmgr', '__pycache__', 'util.cpython-311.pyc'), 'wb') as fh:
+            fh.write(b'x')
+        os.symlink(self.dir, os.path.join(rel, 'jtwafmgr', 'evil'))
+        r = integrity.verify_program(rel, keyf)
+        self.assertEqual(r['status'], 'failed')
+        self.assertIn('re.py', r['extra'])
+        self.assertIn('jtwafmgr/__pycache__/util.cpython-311.pyc', r['extra'])
+        self.assertIn('jtwafmgr/evil (link)', r['extra'])
+        for p in ('re.py',):
+            os.unlink(os.path.join(rel, p))
+        shutil.rmtree(os.path.join(rel, 'jtwafmgr', '__pycache__'))
+        os.unlink(os.path.join(rel, 'jtwafmgr', 'evil'))
+        self.assertEqual(integrity.verify_program(rel, keyf)['status'], 'ok')
         os.unlink(os.path.join(rel, 'LICENSE'))
         r = integrity.verify_program(rel, keyf)
         self.assertEqual((r['status'], r['missing']), ('failed', ['LICENSE']))
@@ -426,6 +467,7 @@ AUDIT_EXEMPT = {
     'patch_me': 'own language / display name only',
     'totp_setup': 'creates an unconfirmed secret; enabling it is audited',
     'change_preview': 'read-only preview, nothing stored',
+    'managed_import_preview': 'read-only comparison of an uploaded file, nothing stored',
     'login': 'audited inside Auth.login (success, failure, lockout)',
     'logout': 'audited inline when a session exists',
     'system_check_run': 'audited',
@@ -438,7 +480,7 @@ class TestAuditCoverage(unittest.TestCase):
     calls). A new write route fails this test until it audits or is listed in AUDIT_EXEMPT with a reason."""
 
     # a route may also delegate to a Workflow method checked by test_workflow_actions_audited
-    AUDITING_CALLS = ('audit.log', 'app.monitor.backup', '_wf(app).propose', '_wf(app).approve',
+    AUDITING_CALLS = ('audit.log', 'app.monitor.backup', '_wf(app).propose', '_wf(app).approve', '_wf(app).import_propose',
                       '_wf(app).reject', '_wf(app).cancel', '_wf(app).recheck', '_wf(app).rollback')
 
     def test_write_routes_audited(self):

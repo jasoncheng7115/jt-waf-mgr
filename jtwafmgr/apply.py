@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import socket
 import ssl
 import subprocess
@@ -58,15 +59,25 @@ class Applier:
         self.dir = cfg['managed']['dir']
         self.spool = cfg['managed']['spool']
         self.nginx = cfg['paths']['nginx_bin']
-        self.backups = os.path.join(self.spool, 'backups')
+        self.state = cfg['managed']['apply_state']
+        self.backups = os.path.join(self.state, 'snapshots')
+        self._spool_fd = None
 
     # --- request validation ----------------------------------------------------------------
     def load_request(self, path):
-        st = os.lstat(path)
-        if not os.path.isfile(path) or os.path.islink(path) or st.st_size > MAX_REQUEST:
-            raise Fail('request', 'not a regular file or too large')
-        with open(path, encoding='utf-8') as fh:
-            req = json.load(fh)
+        # the spool belongs to the service user: open without following links and check what was opened
+        name = os.path.basename(path)
+        dfd = self._spool_fd
+        try:
+            fd = os.open(name if dfd is not None else path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=dfd)
+        except OSError as e:
+            raise Fail('request', 'cannot open the request: %s' % e.strerror)
+        with os.fdopen(fd, 'rb') as fh:
+            st = os.fstat(fh.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_REQUEST or st.st_nlink != 1:
+                raise Fail('request', 'not a regular file or too large')
+            req = json.loads(fh.read(MAX_REQUEST + 1).decode('utf-8'))
         if not isinstance(req, dict) or req.get('action') != 'apply':
             raise Fail('request', 'unknown action')
         if not isinstance(req.get('version'), int) or not isinstance(req.get('change_id'), int):
@@ -232,30 +243,34 @@ class Applier:
 
     # --- apply --------------------------------------------------------------------------------
     def snapshot(self, version, extra):
+        """The previous contents, kept in memory for the restore (never re-read from disk), plus a copy in
+        the root-only state directory for people."""
+        os.makedirs(self.backups, mode=0o700, exist_ok=True)
         d = os.path.join(self.backups, 'v%d-before' % version)
-        os.makedirs(d, mode=0o700, exist_ok=True)
+        if os.path.lexists(d):
+            shutil.rmtree(d) if os.path.isdir(d) and not os.path.islink(d) else os.unlink(d)
+        os.mkdir(d, 0o700)
         saved = {}
         for p, f in FILES.items():
             src = os.path.join(self.dir, f)
-            saved[src] = None
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(d, f))
-                saved[src] = os.path.join(d, f)
+            saved[src] = _read_plain(src)
+            if saved[src] is not None:
+                write_atomic(os.path.join(d, f), saved[src], 0o600)
         for src in extra:
-            dst = os.path.join(d, 'main-' + os.path.basename(src))
-            shutil.copy2(src, dst)
-            saved[src] = dst
+            saved[src] = _read_plain(src)
+            if saved[src] is None:
+                raise Fail('snapshot', 'cannot read %s' % src)
+            write_atomic(os.path.join(d, 'main-' + os.path.basename(src)), saved[src], 0o600)
         return saved
 
     @staticmethod
     def restore(saved):
-        for dst, src in saved.items():
-            if src is None:
-                if os.path.exists(dst):
+        for dst, data in saved.items():
+            if data is None:
+                if os.path.lexists(dst):
                     os.unlink(dst)
             else:
-                with open(src, 'rb') as fh:
-                    write_atomic(dst, fh.read())
+                write_atomic(dst, data)
 
     def apply(self, req):
         log = []
@@ -321,34 +336,57 @@ class Applier:
                 pass
             raise Fail('internal', '%s: %s -- restored the previous files' % (type(e).__name__, clean(str(e), 300)))
 
+    def _open_spool(self):
+        """The spool is the service user's directory: open it once, refusing a link, and work relative to
+        that descriptor so nothing in it can redirect a root write elsewhere."""
+        try:
+            fd = os.open(self.spool, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return None
+        st = os.fstat(fd)
+        if not stat.S_ISDIR(st.st_mode) or st.st_mode & 0o022:
+            os.close(fd)
+            raise Fail('request', 'the spool directory must not be group or world writable')
+        return fd
+
     def process(self):
-        os.makedirs(self.spool, mode=0o700, exist_ok=True)
-        with open(os.path.join(self.spool, '.apply.lock'), 'w') as lockf:
+        os.makedirs(self.state, mode=0o700, exist_ok=True)
+        os.chmod(self.state, 0o700)
+        with open(os.path.join(self.state, 'apply.lock'), 'w') as lockf:
             fcntl.flock(lockf, fcntl.LOCK_EX)
-            names = sorted(n for n in os.listdir(self.spool) if n.endswith('.req'))
-            refused = self.program_refusal() if names else None
-            for n in names:
-                path = os.path.join(self.spool, n)
-                base = n[:-4]
-                res = {'request_id': base}
-                try:
-                    if refused:
-                        raise Fail('integrity', refused)
-                    req = self.load_request(path)
-                    res.update(version=req['version'], change_id=req['change_id'])
-                    res.update(self.apply(req))
-                except Fail as e:
-                    res.update(result='failed', step=e.step, summary=e.summary, **e.extra)
-                except Exception as e:
-                    res.update(result='failed', step='request', summary='%s: %s' % (type(e).__name__, clean(str(e), 300)))
-                m = re.match(r'v(\d+)-c(\d+)$', base)
-                if m and 'version' not in res:
-                    res.update(version=int(m.group(1)), change_id=int(m.group(2)))
-                out = os.path.join(self.spool, base + '.result')
-                write_atomic(out, json.dumps(res, ensure_ascii=True).encode(), 0o644)
-                os.unlink(path)   # the path unit must not fire again for it
-                print('%s: %s %s' % (base, res.get('result'), res.get('summary', '')), flush=True)
-            self.prune()
+            self._spool_fd = self._open_spool()
+            if self._spool_fd is None:
+                return
+            try:
+                self._process()
+            finally:
+                os.close(self._spool_fd)
+                self._spool_fd = None
+
+    def _process(self):
+        names = sorted(n for n in os.listdir(self._spool_fd) if n.endswith('.req') and re.fullmatch(r'[\w.-]+', n))
+        refused = self.program_refusal() if names else None
+        for n in names:
+            path = os.path.join(self.spool, n)
+            base = n[:-4]
+            res = {'request_id': base}
+            try:
+                if refused:
+                    raise Fail('integrity', refused)
+                req = self.load_request(path)
+                res.update(version=req['version'], change_id=req['change_id'])
+                res.update(self.apply(req))
+            except Fail as e:
+                res.update(result='failed', step=e.step, summary=e.summary, **e.extra)
+            except Exception as e:
+                res.update(result='failed', step='request', summary='%s: %s' % (type(e).__name__, clean(str(e), 300)))
+            m = re.match(r'v(\d+)-c(\d+)$', base)
+            if m and 'version' not in res:
+                res.update(version=int(m.group(1)), change_id=int(m.group(2)))
+            write_atomic(base + '.result', json.dumps(res, ensure_ascii=True).encode(), 0o644, dir_fd=self._spool_fd)
+            os.unlink(n, dir_fd=self._spool_fd)   # the path unit must not fire again for it
+            print('%s: %s %s' % (base, res.get('result'), res.get('summary', '')), flush=True)
+        self.prune()
 
     program_check = None   # set by main(): checks the installed program against the signed manifest
 
@@ -380,16 +418,42 @@ class Applier:
 from .integrity import INSTALL_DIR  # noqa: E402
 
 
-def write_atomic(path, data, mode=None):
-    d = os.path.dirname(path)
-    tmp = os.path.join(d, '.%s.jtwaf-tmp' % os.path.basename(path))
-    with open(tmp, 'wb') as fh:
-        fh.write(data)
-        fh.flush()
-        os.fsync(fh.fileno())
-    if mode is not None:
-        os.chmod(tmp, mode)
-    os.replace(tmp, path)
+def _read_plain(path):
+    """Contents of a regular file (not following a final symlink), None when it does not exist."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, 'rb') as fh:
+        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+            raise Fail('snapshot', '%s is not a regular file' % path)
+        return fh.read()
+
+
+def write_atomic(path, data, mode=None, dir_fd=None):
+    """Write a temporary file next to the target (exclusive create, never through a link) and rename it
+    over the target. With dir_fd, path is a name inside that directory."""
+    if dir_fd is None:
+        d, name = os.path.split(path)
+        dfd = os.open(d or '.', os.O_RDONLY | os.O_DIRECTORY)
+    else:
+        dfd, name = dir_fd, path
+    tmp = '.%s.jtwaf-tmp' % name
+    try:
+        try:
+            os.unlink(tmp, dir_fd=dfd)
+        except FileNotFoundError:
+            pass
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+        with os.fdopen(fd, 'wb') as fh:
+            fh.write(data)
+            fh.flush()
+            os.fchmod(fh.fileno(), mode if mode is not None else 0o644)
+            os.fsync(fh.fileno())
+        os.replace(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+    finally:
+        if dir_fd is None:
+            os.close(dfd)
 
 
 def main(argv=None):

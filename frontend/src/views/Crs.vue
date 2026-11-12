@@ -11,9 +11,14 @@
         <div v-for="(w, i) in crs.warnings" :key="i">{{ safeText(w, 500) }}</div>
       </div>
       <FlowSteps v-if="showGuide" :title="t('guide.crs.title')" :steps="flow" />
+      <div v-if="wafModel" class="alert wafeffective">
+        <span><Icon name="info" /> {{ t('waf.crs_effective', { mode: wafModel.engine.global, ext: wafMode(wafModel.summary.external), int: wafMode(wafModel.summary.internal) }) }}</span>
+        <RouterLink class="btn small" to="/waf"><Icon name="go" />{{ t('waf.crs_link') }}</RouterLink>
+      </div>
       <div class="tiles">
         <div class="tile"><div class="tl">{{ t('crs.version') }}</div><div class="tv">{{ safeText(crs.version, 20) || '—' }}</div></div>
-        <div class="tile"><div class="tl">{{ t('crs.engine_mode') }}</div><div class="tv small">{{ safeText(crs.engine_mode, 30) || '—' }}</div></div>
+        <div class="tile"><div class="tl">{{ t('crs.engine_mode') }}</div><div class="tv small">{{ safeText(crs.engine_mode, 30) || '—' }}</div>
+          <div v-if="wafModel" class="ts"><RouterLink to="/waf">{{ t('waf.lane.external') }}{{ t('waf.sum.colon') }}{{ wafMode(wafModel.summary.external) }}</RouterLink></div></div>
         <div class="tile"><div class="tl">{{ t('crs.paranoia_level') }}</div><div class="tv">{{ crs.blocking_paranoia_level ?? crs.paranoia_level ?? '—' }}</div>
           <div class="ts">{{ t('crs.detection_paranoia') }} {{ crs.detection_paranoia_level ?? '—' }}</div></div>
         <div class="tile"><div class="tl">{{ t('crs.thresholds') }}</div><div class="tv">{{ crs.inbound_threshold ?? '—' }} / {{ crs.outbound_threshold ?? '—' }}</div>
@@ -98,7 +103,18 @@ const flow = computed(() => [
   { key: 'result', label: t('guide.crs.result'), desc: t('guide.crs.result_d'), icon: 'block' },
   { key: 'events', label: t('guide.ev.list'), desc: t('guide.ev.list_d'), icon: 'list', to: '/events' },
 ])
+// the effective behaviour (site rules can block while the global engine only logs): from /waf/model
+const wafModel = ref(null)
+function wafMode(sm) {
+  if (!sm) return '—'
+  return sm.min_block_score !== null && sm.mode !== 'off' ? t('waf.mode.blocking', { n: sm.min_block_score }) : t('waf.mode.' + sm.mode)
+}
+onMounted(() => { get('/waf/model').then((m) => { wafModel.value = m }).catch(() => { /* the page works without it */ }) })
 onMounted(async () => {
   try { crs.value = await get('/crs') } catch (e) { error.value = e }
 })
 </script>
+
+<style scoped>
+.wafeffective { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); background: var(--panel-2); color: var(--text); }
+</style>

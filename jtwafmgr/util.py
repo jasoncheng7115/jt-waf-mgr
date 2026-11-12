@@ -59,8 +59,28 @@ def ip_in(ip, networks):
 # log, passwords included. Everything stored or shown goes through here first.
 
 REDACTED = '***'
-_VAR_RE = re.compile(r'\b(?:ARGS|ARGS_GET|ARGS_POST|ARGS_NAMES|REQUEST_COOKIES|REQUEST_COOKIES_NAMES|'
-                     r'REQUEST_HEADERS|FILES|FILES_NAMES|XML|JSON)[:.]([^\s:\'"`,)]+)', re.I)
+# Every free-text field is cut to this many characters before any regex sees it (a 1 MB attack
+# parameter must not stall the single-threaded collector); the stored copy is clipped shorter.
+PRE_CLIP = 4096
+# Variable references ("found within ARGS:password") are looked for in a larger window: the
+# reference follows the matched text, which may itself be long.
+REF_SCAN = 65536
+REF_LIMIT = 1000
+_VAR_RE = re.compile(r'\b(ARGS|ARGS_GET|ARGS_POST|ARGS_NAMES|REQUEST_COOKIES|REQUEST_COOKIES_NAMES|'
+                     r'REQUEST_HEADERS|FILES|FILES_NAMES|XML|JSON)([:.])([^\s:\'"`,)]+)', re.I)
+# Bare cookie collections ("found within REQUEST_COOKIES: <value>") have no name to judge.
+_COOKIE_VAR_RE = re.compile(r'\bREQUEST_COOKIES(?:_NAMES)?\b', re.I)
+# Headers whose value is a credential whatever the parameter names inside it are.
+_SECRET_HEADERS = ('cookie', 'set-cookie', 'authorization', 'proxy-authorization')
+# The regexes below are linear: names can only start at the beginning of a run (lookbehind) and
+# use possessive quantifiers, so a long run is never re-scanned from every position.
+_KV_RE = re.compile(r'(?<![\w.\-\[\]])([\w.\-\[\]]++)(\s*+=\s*+)([^&\s;]++)')
+_JSON_KV_RE = re.compile(r'"([\w.\-]++)"(\s*+:\s*+)"(?:[^"\\]|\\.)*+"?')
+# masks to the end of the line (was: only on the last line of the text)
+_HEADER_RE = re.compile(r'(?i)\b(authorization|cookie)(\s*+:\s*+)(\S[^\r\n]*+)')
+# multipart/form-data part header: Content-Disposition: form-data; name="password"
+_PART_RE = re.compile(r'(?i)\bname\s{0,8}+=\s{0,8}+"([^"\r\n]{0,256}+)"')
+_PART_END_RE = re.compile(r'(?:\r?\n|\\r\\n|\\n)--')
 
 
 class Redactor:
@@ -75,9 +95,20 @@ class Redactor:
         tokens = [t for t in re.split(r'[^a-z0-9]+', n) if t]
         if any(t in self.words for t in tokens):
             return True
-        if n in ('cookie', 'authorization', 'proxy-authorization'):
+        if n in _SECRET_HEADERS:
             return True
         return any(len(w) >= 5 and w in n for w in self.words)
+
+    def is_sensitive_var(self, collection, name):
+        """A ModSecurity variable such as ARGS:password or REQUEST_COOKIES:PHPSESSID.
+        Cookies are always secret: session cookies have no recognisable names (PHPSESSID,
+        KEYCLOAK_IDENTITY, wordpress_logged_in_*, connect.sid ...)."""
+        c = collection.upper()
+        if c in ('REQUEST_COOKIES', 'REQUEST_COOKIES_NAMES'):
+            return True
+        if c == 'REQUEST_HEADERS' and name.lower().strip() in _SECRET_HEADERS:
+            return True
+        return self.is_sensitive(name)
 
     def query(self, q):
         """Mask values of sensitive parameters in a query string; keep the names."""
@@ -93,25 +124,50 @@ class Redactor:
         return '&'.join(out)
 
     def references_sensitive(self, *texts):
+        """The first sensitive variable a rule message refers to, or None. Looks at the first
+        REF_SCAN characters of each text with a linear regex; a text stuffed with more than
+        REF_LIMIT different variable names counts as sensitive (fail closed)."""
+        seen = 0
         for t in texts:
             if not t:
                 continue
-            for m in _VAR_RE.finditer(t):
-                if self.is_sensitive(m.group(1)):
-                    return m.group(0)
+            t = t[:REF_SCAN]
+            # findall + dict.fromkeys: matching and de-duplication happen in C
+            for coll, sep, name in dict.fromkeys(_VAR_RE.findall(t)):
+                seen += 1
+                if seen > REF_LIMIT or self.is_sensitive_var(coll, name):
+                    return coll + sep + name
+            m = _COOKIE_VAR_RE.search(t)
+            if m:
+                return m.group(0)
         return None
 
-    def text(self, t):
-        """Mask key=value / "key": "value" pairs with sensitive keys inside free text."""
+    def text(self, t, limit=PRE_CLIP):
+        """Mask key=value / "key": "value" pairs with sensitive keys inside free text.
+        The input is cut to `limit` characters first (clipping only removes a suffix, so every
+        value still visible keeps the name in front of it)."""
         if not t:
             return t
-        t = re.sub(r'(?i)([\w.\-\[\]]+)(\s*=\s*)([^&\s;]+)',
-                   lambda m: m.group(1) + m.group(2) + REDACTED if self.is_sensitive(m.group(1)) else m.group(0), t)
-        t = re.sub(r'(?i)"([\w.\-]+)"(\s*:\s*)"(?:[^"\\]|\\.)*"',
-                   lambda m: '"%s"%s"%s"' % (m.group(1), m.group(2), REDACTED) if self.is_sensitive(m.group(1)) else m.group(0), t)
-        t = re.sub(r'(?i)\b(authorization|cookie)(\s*:\s*)(\S.*)$',
-                   lambda m: m.group(1) + m.group(2) + REDACTED, t)
-        return t
+        t = clip(t, limit)
+        t = _KV_RE.sub(lambda m: m.group(1) + m.group(2) + REDACTED if self.is_sensitive(m.group(1)) else m.group(0), t)
+        t = _JSON_KV_RE.sub(lambda m: '"%s"%s"%s"' % (m.group(1), m.group(2), REDACTED) if self.is_sensitive(m.group(1)) else m.group(0), t)
+        t = _HEADER_RE.sub(lambda m: m.group(1) + m.group(2) + REDACTED, t)
+        return self._multipart(t)
+
+    def _multipart(self, t):
+        out, pos = [], 0
+        for m in _PART_RE.finditer(t):
+            if m.start() < pos or not self.is_sensitive(m.group(1)):
+                continue
+            end = _PART_END_RE.search(t, m.end())
+            stop = end.start() if end else len(t)
+            out.append(t[pos:m.end()])
+            out.append(REDACTED)
+            pos = stop
+        if not out:
+            return t
+        out.append(t[pos:])
+        return ''.join(out)
 
 
 def _unquote(s):

@@ -5,6 +5,10 @@
       <h1><Icon name="guide" /> {{ t('guide.title') }}</h1>
     </div>
     <p class="muted">{{ t('guide.intro') }}</p>
+    <section class="card wafcard">
+      <div><h2><Icon name="shield" /> {{ t('waf.title') }}</h2><p class="muted small">{{ t('waf.guide_link_d') }}</p></div>
+      <RouterLink class="btn" to="/waf"><Icon name="go" />{{ t('waf.crs_link') }}</RouterLink>
+    </section>
 
     <section class="card">
       <h2>{{ t('guide.arch.title') }}</h2>
@@ -141,6 +145,9 @@ const roleIcon = { viewer: 'show', operator: 'tool', approver: 'approve', admin:
 
 <style scoped>
 .archwrap { overflow-x: auto; }
+.wafcard { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.wafcard h2 { display: flex; gap: 6px; align-items: center; margin: 0 0 4px; }
+.wafcard p { margin: 0; }
 .archsvg { width: 100%; min-width: 720px; height: auto; display: block; }
 .arch-group { fill: var(--panel-2); stroke: var(--border-strong); stroke-dasharray: none; }
 .arch-grouplabel { fill: var(--muted); font-size: 14px; font-weight: 600; }

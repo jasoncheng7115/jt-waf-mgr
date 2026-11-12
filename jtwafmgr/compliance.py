@@ -102,7 +102,7 @@ class Monitor:
             if res['ok']:
                 self._verified = (res['last_id'] or 0, res['last_hash'])
                 anchors = self.anchors.read(None if full else 1)
-                problems = self.anchors.check(self.db, anchors)
+                problems = self.anchors.check(self.db, anchors, self.cfg['retention']['audit_days'])
             count = self.db.one('SELECT COUNT(*) FROM audit')[0]
             anchor = None
             tip = (res.get('last_id'), res.get('last_hash'))
@@ -110,9 +110,11 @@ class Monitor:
                     not (self._anchored[0] == tip and time.time() - self._anchored[1] < 60):
                 # (the incremental and the daily full check can fall due together: one anchor is enough)
                 try:
-                    anchor = self.anchors.append(res['last_id'], res['last_hash'], count)
+                    anchor = self.anchors.append(res['last_id'], res['last_hash'], count,
+                                                 int(self.db.get_meta('audit_base_id', 0) or 0))
                     self._anchored = (tip, time.time())
-                    self.audit.notice('audit_anchor', id=anchor['id'], hash=anchor['hash'], count=count)
+                    self.audit.notice('audit_anchor', id=anchor['id'], hash=anchor['hash'], count=count,
+                                      base_id=anchor['base_id'])
                 except OSError as e:
                     problems.append({'reason': 'anchor_write_failed', 'error': e.strerror})
             ok = res['ok'] and not problems

@@ -76,7 +76,12 @@ class Request:
 
     def body(self):
         if self._body is None:
-            n = int(self.headers.get('Content-Length') or 0)
+            try:
+                n = int(self.headers.get('Content-Length') or 0)
+            except ValueError:
+                raise ApiError(400, 'bad_request', 'invalid Content-Length')
+            if n < 0:
+                raise ApiError(400, 'bad_request', 'invalid Content-Length')
             if n > self.app.cfg['server']['max_body_bytes']:
                 raise ApiError(413, 'payload_too_large')
             raw = self.h.rfile.read(n) if n else b''

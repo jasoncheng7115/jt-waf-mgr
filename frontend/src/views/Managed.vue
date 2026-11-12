@@ -9,6 +9,7 @@
     </div>
     <ErrorBox :error="error" />
     <Loading v-if="!m && !error" />
+    <RulesFileTransfer v-if="m" :adopted="!!m.adopted" />
     <template v-if="m">
       <div v-if="m.drift" class="alert error">{{ t('managed.drift_now') }}
         <ul class="plainlist small">
@@ -126,6 +127,7 @@ import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import TruncText from '../components/TruncText.vue'
 import StateBadge from '../components/StateBadge.vue'
+import RulesFileTransfer from '../components/RulesFileTransfer.vue'
 import Icon from '../components/Icon.vue'
 import SelectBox from '../components/SelectBox.vue'
 import DataTable from '../components/DataTable.vue'
