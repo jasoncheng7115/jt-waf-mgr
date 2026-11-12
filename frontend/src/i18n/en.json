@@ -170,6 +170,7 @@
  "analysis.skip.regex_redos": "Regex could backtrack catastrophically (ReDoS)",
  "analysis.skip.regex_too_long": "Regex longer than 200 characters",
  "analysis.skip.rules_vary": "Different rules each time: no narrow exclusion possible",
+ "analysis.skip.scanner_pattern": "Scanner: the outside addresses behind these blocks were blocked on 5 or more different paths (probing, not users)",
  "analysis.skip.too_few_sources": "Only one or two outside sources: not enough to call it a false positive",
  "analysis.skip.used_internally": "Internal users use this path too (part of an application): no block",
  "analysis.skipped_before": "Left out before asking the model",

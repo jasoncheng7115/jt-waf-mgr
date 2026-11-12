@@ -170,6 +170,7 @@
  "analysis.skip.regex_redos": "正規表示式可能造成災難性回溯 (ReDoS)",
  "analysis.skip.regex_too_long": "正規表示式超過 200 個字元",
  "analysis.skip.rules_vary": "每次命中的規則不同，無法提出窄範圍排除",
+ "analysis.skip.scanner_pattern": "掃描器：這些封鎖背後的外部位址在 5 個以上不同路徑被封鎖（是探測，不是使用者）",
  "analysis.skip.too_few_sources": "只有一兩個外部來源，不足以判定為誤判",
  "analysis.skip.used_internally": "內部使用者也在使用這個路徑（應用程式的一部分），不提出封鎖",
  "analysis.skipped_before": "詢問模型前就排除的路徑",

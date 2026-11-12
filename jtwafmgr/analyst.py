@@ -54,6 +54,7 @@ MAX_FP_EVENTS = 50000
 FP_MAX_RULES = 5
 FP_MAX_TARGETS = 5
 ALERT_KINDS = ('attack_in_progress',)        # what the model may raise; the others are decided here
+SCAN_PATHS = 5                                # one outside address blocked on this many paths: a scanner, not a user
 MAX_ALERTS_PER_KIND = 5                       # per run: a flood of candidates is not a flood of notifications
 BATCH = 15                                    # candidates per LLM request
 REPLY_EXCERPT = 4000
@@ -376,6 +377,24 @@ def gather_fp(app, window_hours, min_events):
                     g['samples'][rid].append(s)
     out = [g for g in groups.values() if g['events'] >= min_events and g['rules']]
     out.sort(key=lambda g: (-len(g['internal']), -len(g['sources']), -g['events'], g['host'], g['path']))
+    return out
+
+
+def scanner_groups(groups):
+    """Blocked-request groups that only outside scanners produced: an outside address behind blocked requests to
+    SCAN_PATHS or more different paths is probing (/.env.bak, /config.json, /Dockerfile...), not a user hit by a
+    false positive. Marks them g['scanner'] = True and returns them (no internal source in the group)."""
+    per = collections.Counter()
+    for g in groups:
+        for ip in g['sources'] - g['internal']:
+            per[ip] += 1
+    scanners = {ip for ip, n in per.items() if n >= SCAN_PATHS}
+    out = []
+    for g in groups:
+        ext = g['sources'] - g['internal']
+        if not g['internal'] and ext and ext <= scanners:
+            g['scanner'] = True
+            out.append(g)
     return out
 
 
@@ -799,7 +818,13 @@ def _analyse(app, client, a, st, log):
         chosen.append(g)
     cands = [candidate_public(app, i, g) for i, g in enumerate(chosen, 1)]
     fchosen = []
-    for g in gather_fp(app, a['window_hours'], a['min_events']):
+    fgroups = gather_fp(app, a['window_hours'], a['min_events'])
+    for g in scanner_groups(fgroups):
+        st['skipped'].append({'host': _clean(g['host'], 100), 'path': _clean(g['path'], 300), 'reason': 'scanner_pattern',
+                              'sources': len(g['sources'])})
+    for g in fgroups:
+        if g.get('scanner'):
+            continue
         spec, _ = exclusion_spec(g)
         known = fp_known(app, spec) if spec else None
         if known:
@@ -1001,6 +1026,8 @@ def _alerts(app, a, st, by_id, fp_by_id, verdicts, model_alerts, adopted, model,
             except ChangeError as e:
                 v['problem'] = 'refused_%s' % (e.details.get('reason') or e.code)
                 skip(v['problem'])
+        if problem == 'too_few_sources':
+            continue                           # nor an alert: no internal user, one or two outside addresses
         fp_alerts = sum(1 for x in st['alerts'] if x['kind'] == 'false_positive')
         if fp_alerts >= MAX_ALERTS_PER_KIND:
             continue

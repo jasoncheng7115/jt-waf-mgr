@@ -527,6 +527,7 @@ class TestFalsePositivesAndAlerts(AnalystBase):
         self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'false_positive', 'confidence': 0.95, 'reason': 'x'})
         self.assertEqual(self.run_analyst()['proposals'], [])
         self.assertIn('too_few_sources', [s['reason'] for s in json.loads(self.last_run()['skipped'])])
+        self.assertIsNone(self.app.db.one('SELECT 1 FROM alerts'))        # nor a false-positive alert
         self.fpev(ip='203.0.113.32')
         out = self.run_analyst()
         self.assertEqual(len(out['proposals']), 1)
@@ -544,6 +545,26 @@ class TestFalsePositivesAndAlerts(AnalystBase):
         self.assertEqual(c.exception.code, 'note_required')
         self.wf.approve(r['id'], self.user('appr'), auth.totp_code(sec, int(time.time() // 30)), 'checked: editor content')
         self.assertEqual(self.wf.get(r['id'])['state'], 'applying')
+
+    def test_one_outside_scanner_on_many_paths_is_not_a_false_positive(self):
+        # one address probing backup / config files (blocked by 930130 / 920440): a scan, never users hit by a false positive
+        self.adopt()
+        paths = ['/env.bak', '/env.old', '/settings.py.bak', '/static/config.json', '/aws-config.json', '/Dockerfile']
+        for p in paths:
+            for _ in range(3):
+                self.fpev(path=p, ip='203.0.113.40', method='GET', rule=930130, var='REQUEST_FILENAME', value=p,
+                          data='Matched Data: config.json found within REQUEST_FILENAME: ' + p)
+        for ip in ('192.168.77.21', '203.0.113.31', '203.0.113.40'):       # a real one on the same site still counts
+            self.fpev(ip=ip)
+        self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'false_positive', 'confidence': 0.95,
+                                      'reason': 'a file the application may use'})
+        self.run_analyst()
+        sent = [c['path'] for c in fp_candidates_of(self.srv.seen[-1]['body'])]
+        self.assertEqual(sent, ['/api/notes'])                                  # the scanned paths never reach the model
+        skipped = json.loads(self.last_run()['skipped'])
+        self.assertEqual(sorted(x['path'] for x in skipped if x['reason'] == 'scanner_pattern'), sorted(p.lower() for p in paths))
+        kinds = [(r['kind'], json.loads(r['details'])['path']) for r in self.app.db.q('SELECT kind, details FROM alerts')]
+        self.assertEqual(kinds, [('false_positive', '/api/notes')])
 
     def test_attack_that_got_content_is_an_alert(self):
         self.adopt()

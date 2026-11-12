@@ -2,6 +2,15 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.12 (2026-11-13)
+
+- Event analysis no longer mistakes a scanner for users hit by a false positive. An outside address blocked on 5 or
+  more different paths in the window is probing: its paths are skipped as "scanner" and not sent to the model.
+  Found on real data, where one address probing `/env.bak`, `/settings.py.bak`, `/static/config.json`... produced
+  false-positive alerts.
+- A false positive seen from only one or two outside addresses (no internal user) gets neither an exclusion nor an
+  alert (before, the exclusion was already withheld but the alert was still opened).
+
 ## 0.4.11 (2026-11-13)
 
 - Overview: without a GeoIP database, the source list says that countries, networks and the world map appear once

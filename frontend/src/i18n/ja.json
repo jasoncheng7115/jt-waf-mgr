@@ -170,6 +170,7 @@
  "analysis.skip.regex_redos": "正規表現が破滅的なバックトラックを起こし得る (ReDoS)",
  "analysis.skip.regex_too_long": "正規表現が 200 文字を超える",
  "analysis.skip.rules_vary": "毎回ルールが異なり狭い除外を作れない",
+ "analysis.skip.scanner_pattern": "スキャナー：これらのブロックの外部アドレスは 5 つ以上の異なるパスでブロックされています（ユーザーではなく探査）",
  "analysis.skip.too_few_sources": "外部の送信元が 1、2 件だけで、誤検知と判断するには不十分",
  "analysis.skip.used_internally": "内部の利用者もこのパスを使用（アプリケーションの一部）のためブロックしない",
  "analysis.skipped_before": "モデルに問い合わせる前に除外したパス",
