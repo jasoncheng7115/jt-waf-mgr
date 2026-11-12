@@ -60,6 +60,7 @@ EVENTS = {
     'change.apply_failed': ('changes', 'critical', True),
     'change.rejected': ('changes', 'info', False),
     'change.rollback_requested': ('changes', 'warning', True),
+    'report.daily': ('system', 'info', True),
     'analyst.proposals': ('analysis', 'info', True),
     'analyst.failed': ('analysis', 'warning', True),
     'backup.failed': ('system', 'critical', True),
@@ -98,6 +99,17 @@ TEXT = {
         'user.created': '新增帳號',
         'token.created': '新增 API 權杖',
         'settings.changed': '設定已變更',
+        'report.daily': '每日摘要（{day}）',
+        'f.events': '事件',
+        'f.blocked': '封鎖',
+        'f.logged': '只記錄',
+        'f.sources': '外部來源',
+        'f.top_hosts': '事件最多的站台',
+        'f.top_rules': '命中最多的規則',
+        'f.open_alerts': '待處理警示',
+        'f.applied': '已套用的變更',
+        'f.proposed': '事件分析提案',
+        'f.vs': '前 24 小時',
         'notify.test': '測試通知',
         'notify.test_text': '這是 jt-waf-mgr 的測試通知，收到表示這個管道設定正確。',
         'open': '前往檢視',
@@ -138,6 +150,17 @@ TEXT = {
         'user.created': 'Account created',
         'token.created': 'API token created',
         'settings.changed': 'Setting changed',
+        'report.daily': 'Daily report ({day})',
+        'f.events': 'Events',
+        'f.blocked': 'Blocked',
+        'f.logged': 'Logged only',
+        'f.sources': 'External sources',
+        'f.top_hosts': 'Busiest sites',
+        'f.top_rules': 'Most matched rules',
+        'f.open_alerts': 'Open alerts',
+        'f.applied': 'Changes applied',
+        'f.proposed': 'Analysis proposals',
+        'f.vs': 'previous 24 h',
         'notify.test': 'Test notification',
         'notify.test_text': 'This is a test notification from jt-waf-mgr: this channel is set up correctly.',
         'open': 'Open',
@@ -179,6 +202,17 @@ TEXT = {
         'user.created': 'アカウントを作成しました',
         'token.created': 'API トークンを作成しました',
         'settings.changed': '設定が変更されました',
+        'report.daily': '日次レポート（{day}）',
+        'f.events': 'イベント',
+        'f.blocked': 'ブロック',
+        'f.logged': '記録のみ',
+        'f.sources': '外部の送信元',
+        'f.top_hosts': 'イベントの多いサイト',
+        'f.top_rules': '一致の多いルール',
+        'f.open_alerts': '対応待ちアラート',
+        'f.applied': '適用した変更',
+        'f.proposed': 'イベント分析の提案',
+        'f.vs': '直前 24 時間',
         'notify.test': 'テスト通知',
         'notify.test_text': 'jt-waf-mgr からのテスト通知です。このチャネルは正しく設定されています。',
         'open': '表示する',
@@ -474,6 +508,23 @@ def render(db, cfg, event, d):
                 facts.append((L(label), d[k]))
         text = d.get('reason') or ''
         path = d.get('link') or '/alerts'
+    elif event == 'report.daily':
+        kw['day'] = _v(d.get('day'), 20)
+        def cnt(k):
+            cur, prev = int(d.get(k) or 0), d.get('prev_' + k)
+            return '%d（%s %s）' % (cur, L('f.vs'), prev) if prev is not None and lang == 'zh-TW' else \
+                ('%d (%s %s)' % (cur, L('f.vs'), prev) if prev is not None else str(cur))
+        facts += [(L('f.events'), cnt('events')), (L('f.blocked'), cnt('blocked')), (L('f.logged'), cnt('logged')),
+                  (L('f.sources'), d.get('sources', 0))]
+        if d.get('top_hosts'):
+            facts.append((L('f.top_hosts'), ', '.join('%s %s' % (h, n) for h, n in d['top_hosts'][:3])))
+        if d.get('top_rules'):
+            facts.append((L('f.top_rules'), ', '.join('%s %s' % (r, n) for r, n in d['top_rules'][:3])))
+        facts += [(L('f.open_alerts'), d.get('open_alerts', 0)), (L('f.applied'), d.get('applied', 0)),
+                  (L('f.proposed'), d.get('proposed', 0))]
+        if d.get('open_alerts'):
+            sev = 'warning'
+        path = '/'
     elif event == 'alert.reminder':
         kw['open'] = _int(d.get('open')) or 0
         for it in (d.get('items') or [])[:5]:
@@ -881,6 +932,41 @@ def remind(app):
     return len(rows)
 
 
+def daily_report(app, now=None):
+    """Once a day at notify.report_hour: what happened in the last 24 hours. Returns the details, or None."""
+    cfg, db = app.cfg, app.db
+    hour = cfg['notify'].get('report_hour', -1)
+    if hour is None or hour < 0:
+        return None
+    now = now or util.now()
+    lt = time.localtime(now)
+    day = time.strftime('%Y-%m-%d', lt)
+    if lt.tm_hour < hour or db.get_meta('notify.report_day') == day:
+        return None
+    db.set_meta('notify.report_day', day)        # first: one report a day even if sending fails later
+    since, prev = now - 86400, now - 2 * 86400
+
+    def counts(a, b):
+        r = db.one("SELECT COUNT(*) n, SUM(outcome='blocked') b, SUM(outcome='logged') l FROM events WHERE ts>=? AND ts<?", (a, b))
+        return r['n'] or 0, r['b'] or 0, r['l'] or 0
+    n, b, lg = counts(since, now)
+    pn, pb, pl = counts(prev, since)
+    d = {'day': day, 'events': n, 'blocked': b, 'logged': lg, 'prev_events': pn, 'prev_blocked': pb, 'prev_logged': pl,
+         'sources': db.one("SELECT COUNT(DISTINCT src_ip) FROM events WHERE ts>=? AND origin='external'", (since,))[0],
+         # the time index first (the day's rows), then group: never a scan of the whole history
+         'top_hosts': [[r['host'], r['c']] for r in db.q('SELECT host, COUNT(*) c FROM events INDEXED BY events_ts WHERE ts>=? '
+                                                          'GROUP BY host ORDER BY c DESC LIMIT 3', (since,))],
+         'top_rules': [[r['rule_id'], r['c']] for r in db.q(
+             'SELECT er.rule_id, COUNT(*) c FROM events e INDEXED BY events_ts JOIN event_rules er ON er.event_id=e.id '
+             'WHERE e.ts>=? AND er.rule_id NOT IN (%s) GROUP BY er.rule_id ORDER BY c DESC LIMIT 3'
+             % ','.join(str(int(x)) for x in sorted(util.SCORING_RULES)), (since,))],
+         'open_alerts': db.one("SELECT COUNT(*) FROM alerts WHERE state='open'")[0],
+         'applied': db.one("SELECT COUNT(*) FROM audit WHERE action='change.applied' AND ts>=?", (since,))[0],
+         'proposed': db.one("SELECT COUNT(*) FROM changes WHERE proposed_by='analyst' AND created_at>=?", (since,))[0]}
+    enqueue(db, cfg, 'report.daily', d, severity='warning' if d['open_alerts'] else 'info')
+    return d
+
+
 def run(app, log=print, limit=200):
     """jt-waf-mgr-notify.service: send what is due, remind open alerts, forget old rows."""
     cfg, db = app.cfg, app.db
@@ -911,6 +997,14 @@ def run(app, log=print, limit=200):
                 continue
             st = process(app, r, broken)
             counts[st] = counts.get(st, 0) + 1
+    try:      # after what was due went out: the counting never delays an urgent message
+        if cfg['notify']['enabled'] and daily_report(app):
+            for r in db.q("SELECT * FROM notifications WHERE status='pending' AND event='report.daily' AND next_at<=?", (util.now(),)):
+                if db.x("UPDATE notifications SET status='sending' WHERE id=? AND status='pending'", (r['id'],)).rowcount == 1:
+                    st = process(app, r, broken)
+                    counts[st] = counts.get(st, 0) + 1
+    except Exception as e:
+        log('notify: daily report failed: %s' % type(e).__name__)
     db.x('DELETE FROM notifications WHERE created_at<?', (now - KEEP_DAYS * 86400,))
     db.set_meta('notify.last_run', util.iso(now))
     if counts:

@@ -21,7 +21,7 @@ anything request-derived).
 ## Settings (`PATCH /settings/ui`, admin; secrets write-only)
 
 `notify.enabled`, `notify.language` (zh-TW | en | ja), `notify.base_url`, `notify.max_per_hour` (1–1000),
-`notify.remind_hours` (0–720, 0 = never), `notify.matrix` (`{event: [channel…]}`; an event not listed uses its
+`notify.remind_hours` (0–720, 0 = never), `notify.report_hour` (-1 = none, 0–23: the daily report), `notify.matrix` (`{event: [channel…]}`; an event not listed uses its
 default), and per channel:
 
 - e-mail: `email_enabled`, `smtp_host`, `smtp_port`, `smtp_tls` (starttls | tls | none), `smtp_username`,
@@ -41,7 +41,7 @@ the matching secret is stored is refused (`key_required_for_new_host`) unless th
 `config.changed_outside`, `change.apply_blocked_drift`, `auth.step_up_locked`, `account.locked`, `totp.disabled`,
 `change.awaiting_approval`, `change.check_failed`, `change.applied`, `change.apply_failed`, `change.rejected`
 (off by default), `change.rollback_requested`, `analyst.proposals`, `analyst.failed`, `backup.failed`,
-`system.version_changed`, `user.created`, `token.created`, `settings.changed` (the last three off by default).
+`system.version_changed`, `report.daily`, `user.created`, `token.created`, `settings.changed` (the last three off by default).
 
 ## Routes
 

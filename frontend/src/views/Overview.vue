@@ -49,6 +49,11 @@
       <p v-if="custError" class="alert warn small">{{ custError }}</p>
       <p class="muted small">{{ t('overview.range_custom_hint', { days: 31 }) }}</p>
     </div>
+    <div v-if="alertCount.open" class="alert warn integritybanner" role="status">
+      <Icon name="bell" /><strong>{{ t('overview.open_alerts', { n: alertCount.open }) }}</strong>
+      <span v-if="alertCount.critical">{{ t('overview.open_alerts_critical', { n: alertCount.critical }) }}</span>
+      <RouterLink class="btn small" to="/alerts"><Icon name="go" />{{ t('nav.alerts') }}</RouterLink>
+    </div>
     <div v-if="integrityFails.length" class="alert error integritybanner" role="alert">
       <strong>{{ t('overview.integrity_problem') }}</strong>
       {{ integrityFails.map((k) => tOr('syscheck.k.' + k, k)).join(', ') }}
@@ -153,7 +158,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { get } from '../api.js'
 import { t, tOr } from '../i18n.js'
-import { hasRole } from '../store.js'
+import { hasRole, alertCount } from '../store.js'
 import { fmtNum, fmtTime, fmtShortTime, safeText } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'

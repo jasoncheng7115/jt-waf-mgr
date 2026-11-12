@@ -184,6 +184,7 @@ DEFAULTS = {
         'base_url': '',               # https://waf.example.com: links in messages; empty = no links
         'max_per_hour': 60,           # per channel; more are recorded as suppressed
         'remind_hours': 24,           # open alerts are reminded every N hours; 0 = never
+        'report_hour': 8,             # the daily report (the last 24 hours) at this hour, local time; -1 = none
         'matrix': {},                 # {event: [channels]}; an event not listed uses its default
         'email_enabled': False, 'smtp_host': '', 'smtp_port': 587, 'smtp_tls': 'starttls', 'smtp_username': '',
         'smtp_password': '', 'smtp_from': '', 'email_to': [],
@@ -297,6 +298,8 @@ class Config:
             raise ConfigError('notify.language: ' + ', '.join(LANGUAGES))
         if nt['smtp_tls'] not in ('none', 'starttls', 'tls'):
             raise ConfigError('notify.smtp_tls: none, starttls or tls')
+        if not -1 <= nt['report_hour'] <= 23:
+            raise ConfigError('notify.report_hour: -1 (none) or 0-23')
         if not 1 <= nt['smtp_port'] <= 65535 or not 1 <= nt['max_per_hour'] <= 1000 or not 0 <= nt['remind_hours'] <= 720:
             raise ConfigError('notify: smtp_port 1-65535, max_per_hour 1-1000, remind_hours 0-720')
         if not isinstance(nt['matrix'], dict):

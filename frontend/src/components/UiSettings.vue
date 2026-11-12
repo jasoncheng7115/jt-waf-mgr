@@ -89,7 +89,7 @@ const GROUPS = [
   { key: 'geoip', icon: 'globe', keys: ['geoip.enabled', 'geoip.account_id', 'geoip.license_key', 'geoip.editions', 'geoip.update_days'] },
   { key: 'llm', icon: 'server', keys: ['llm.url', 'llm.api_key', 'llm.model', 'llm.timeout_seconds', 'llm.enabled'] },
   { key: 'analyst', icon: 'timer', keys: ['analyst.enabled', 'analyst.interval_minutes', 'analyst.window_hours', 'analyst.max_proposals', 'analyst.min_events', 'analyst.min_sources'] },
-  { key: 'notify', icon: 'notify', keys: ['notify.enabled', 'notify.language', 'notify.base_url', 'notify.max_per_hour', 'notify.remind_hours'] },
+  { key: 'notify', icon: 'notify', keys: ['notify.enabled', 'notify.language', 'notify.base_url', 'notify.max_per_hour', 'notify.remind_hours', 'notify.report_hour'] },
   { key: 'n_email', icon: 'mail', channel: 'email', keys: ['notify.email_enabled', 'notify.smtp_host', 'notify.smtp_port', 'notify.smtp_tls', 'notify.smtp_username', 'notify.smtp_password', 'notify.smtp_from', 'notify.email_to'] },
   { key: 'n_telegram', icon: 'chat', channel: 'telegram', keys: ['notify.telegram_enabled', 'notify.telegram_token', 'notify.telegram_chat_id'] },
   { key: 'n_teams', icon: 'chat', channel: 'teams', keys: ['notify.teams_enabled', 'notify.teams_webhook'] },

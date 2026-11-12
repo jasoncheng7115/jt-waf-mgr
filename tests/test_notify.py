@@ -356,6 +356,30 @@ class TestHardening(NotifyBase):
         self.assertTrue(out.endswith('</code>'))
 
 
+class TestDailyReport(NotifyBase):
+    def test_once_a_day_after_the_hour(self):
+        self.webhook(report_hour=0)
+        now = time.time()
+        for i, (outcome, host) in enumerate((('blocked', 'app.example.com'), ('logged', 'app.example.com'), ('logged', 'shop.example.com'))):
+            self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, status, outcome, "
+                          "decided_by, rule_ids, local_rule_ids, families, message, matches) VALUES ('waf1', ?, ?, ?, 'GET', '/x', '', "
+                          "'203.0.113.9', 'external', 403, ?, NULL, ',930130,', ',', ',lfi,', '', '[]')", ('r%d' % i, now - 60, host, outcome))
+        d = notify.daily_report(self.app, now)
+        self.assertEqual((d['events'], d['blocked'], d['logged'], d['sources']), (3, 1, 2, 1))
+        self.assertEqual(d['top_hosts'][0], ['app.example.com', 2])
+        self.assertIsNone(notify.daily_report(self.app, now + 60))           # once a day
+        self.setn(language='en', base_url='https://waf.example.com')
+        m = notify.render(self.app.db, self.app.cfg, 'report.daily', d)
+        self.assertIn('Daily report', m.title)
+        self.assertIn(('Blocked', '1 (previous 24 h 0)'), m.facts)
+        self.assertEqual(m.link, 'https://waf.example.com/')
+        self.assertEqual(len(self.rows(event='report.daily')), 1)
+
+    def test_off(self):
+        self.webhook(report_hour=-1)
+        self.assertIsNone(notify.daily_report(self.app))
+
+
 class TestAlerts(NotifyBase):
     def test_system_events_open_one_alert_and_remind(self):
         self.webhook(remind_hours=1)

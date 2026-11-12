@@ -52,6 +52,7 @@ EDITABLE = {
     'notify.base_url': ('str', {'re': r'(https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[\w./-]*)?)?', 'max': 300}),
     'notify.max_per_hour': ('int', {'min': 1, 'max': 1000}),
     'notify.remind_hours': ('int', {'min': 0, 'max': 720}),
+    'notify.report_hour': ('int', {'min': -1, 'max': 23}),
     'notify.matrix': ('matrix', {}),
     'notify.email_enabled': ('bool', {}),
     'notify.smtp_host': ('str', {'re': r'[A-Za-z0-9.:-]{0,253}', 'max': 253}),

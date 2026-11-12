@@ -2,6 +2,13 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.5 (2026-11-13)
+
+- Daily report through the notification channels at a set hour (default 08:00, -1 = none): events, blocks and
+  logged-only requests against the previous 24 hours, external sources, busiest sites and most matched rules, open
+  alerts, changes applied, analysis proposals.
+- Overview: a notice with the number of open alerts (and critical ones) and a link to them.
+
 ## 0.4.4 (2026-11-13)
 
 - The guide's architecture diagram shows the event analysis, the notifications, the LLM server and the channels.
