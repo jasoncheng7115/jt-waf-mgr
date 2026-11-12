@@ -29,7 +29,7 @@
 | G1 單元與整合 | `python3 -m unittest discover -s tests -t .` | 全部通過（`make_release.sh` 也會執行） |
 | G2 建置 | `tools/build_frontend.sh` | 建置成功；`check_i18n`（3 種語言、沒有全形斜線、沒有產品名稱）；`check_ui`（按鈕與卡片標題有圖示、沒有原生 select / 日期、表格使用 DataTable） |
 | G3 發佈 | `python3 tools/preflight.py` | 發佈內容中沒有私人名稱、位址或機密（截圖：沒有 PNG 文字區塊）；三種語言的 README 標題含版本號且有語言連結 |
-| G4 瀏覽器端到端 | `tools/e2e/run.sh <dir>` | 每一頁的 zh-TW 與 en、淺色與深色；佈景主題 / 語言選單；排序、篩選、欄位、分頁；下拉選單、日期選擇器；圖表與提示框；使用說明；登入頁；沒有主控台錯誤、沒有未翻譯的 i18n 鍵、沒有缺圖示的按鈕；README 頁面的日文版；手機（375 px）與平板（768 px）：不橫向捲動、選單可到達每個群組 |
+| G4 瀏覽器端到端 | `tools/e2e/run.sh <dir>` | 每一頁的 zh-TW 與 en、淺色與深色；佈景主題 / 語言選單；排序、篩選、欄位、分頁；下拉選單、日期選擇器；圖表與提示框；使用說明；登入頁；沒有主控台錯誤、沒有未翻譯的 i18n 鍵、沒有缺圖示的按鈕；每一頁也以日文檢查（未翻譯鍵、版面）；世界地圖（陸地、圓圈、提示框、依國家篩選）、通知預覽（兩種語言、Escape 關閉）；手機（375 px）與平板（768 px）：不橫向捲動、選單可到達每個群組 |
 | G5 安全檢測 | `tools/e2e/run.sh` 的一部分（`tools/security_scan.py`） | 0 項失敗：標頭、cookie、每個路由的驗證、授權（檢視者、API 權杖、來源網路）、CSRF、方法、路徑穿越、每個 GET 路由的惡意輸入（沒有 5xx）、格式錯誤的內容、登入（相同錯誤訊息、鎖定、沒有開放式重新導向、Host 標頭） |
 | G6 DAST（OWASP ZAP） | `tools/zap_scan.py` | 對拋棄式實例登入後做被動與主動掃描；看到的網址 ≥ 40；沒有未列入 `deploy/zap-baseline.conf` 接受清單的 High / Medium / Low 警示 |
 | G7 畫面檢視 | G4 的截圖 | 介面有變更時由人檢視，包含 375 px 與 768 px |
