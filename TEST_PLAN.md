@@ -29,7 +29,7 @@ short form used while releasing; this document says what each gate covers, how i
 |---|---|---|
 | G1 Unit and integration | `python3 -m unittest discover -s tests -t .` | all pass (also run by `make_release.sh`) |
 | G2 Build | `tools/build_frontend.sh` | build OK; `check_i18n` (3 languages, no full-width slash, no product name); `check_ui` (icons on buttons and card titles, no native select / date, tables via DataTable) |
-| G3 Publication | `python3 tools/preflight.py` | no private names, addresses or secrets in what is published |
+| G3 Publication | `python3 tools/preflight.py` | no private names, addresses or secrets in what is published (screenshots: no PNG text chunks); README in three languages with the version in the title and language links |
 | G4 Browser end to end | `tools/e2e/run.sh <dir>` | every page in zh-TW and en, light and dark; theme / language menus; sorting, filtering, columns, paging; select box, date picker; charts and tooltips; guide; login page; no console errors, no raw i18n keys, no button without icon |
 | G5 Security checks | part of `tools/e2e/run.sh` (`tools/security_scan.py`) | 0 failed: headers, cookies, authentication on every route, authorisation (viewer, API token, source network), CSRF, methods, traversal, hostile input on every GET route (no 5xx), malformed bodies, login (same error, lockout, no open redirect, Host header) |
 | G6 DAST (OWASP ZAP) | `tools/zap_scan.py` | logged-in passive and active scan of a disposable instance; URLs seen ≥ 40; no High / Medium / Low alert that is not accepted in `deploy/zap-baseline.conf` |
@@ -68,6 +68,10 @@ short form used while releasing; this document says what each gate covers, how i
   audit, redirects refused, secrets scrubbed from errors and audit, rate limit, obsolete approval requests
   skipped, settings validation and bound secrets, API roles. Alerts: dedup, handle once, reminders.
 - Audit coverage: every write route audits (`TestAuditCoverage`).
+- Syslog: RFC 3164 / 5424 over UDP and TCP (octet counting), requests never wait for the network, records kept and
+  resent after an outage, a TLS / connection error never drops records, an unsendable record does not block the
+  queue, a syslog settings change is sent with the previous settings, the CA file is not a web setting.
+- Tests leave no temporary directory behind.
 
 ## 5. Security testing (G5, G6, G13)
 

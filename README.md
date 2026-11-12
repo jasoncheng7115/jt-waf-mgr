@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.2
+# jt-waf-mgr v0.4.3
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -18,7 +18,7 @@
 >
 > By Jason Tools Co., Ltd. · License: AGPL-3.0
 
-![Overview](images/overview.png)
+![Overview](docs/shots/en/overview.png)
 
 ---
 
@@ -74,9 +74,9 @@ something you can read, and every change into a workflow you can trust:
 
 | | |
 |---|---|
-| ![Events](images/events.png) | ![WAF model](images/waf-model.png) |
-| ![Event analysis](images/analysis.png) | ![Notifications](images/notifications.png) |
-| ![Alerts](images/alerts.png) | ![System check](images/system-check.png) |
+| ![Events](docs/shots/en/events.png) | ![WAF model](docs/shots/en/waf-model.png) |
+| ![Event analysis](docs/shots/en/analysis.png) | ![Notifications](docs/shots/en/notifications.png) |
+| ![Alerts](docs/shots/en/alerts.png) | ![System check](docs/shots/en/system-check.png) |
 
 ## Requirements
 
@@ -90,8 +90,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.2.tar.gz.sig jt-waf-mgr-0.4.2.tar.gz
-tar xzf jt-waf-mgr-0.4.2.tar.gz && cd jt-waf-mgr-0.4.2
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.3.tar.gz.sig jt-waf-mgr-0.4.3.tar.gz
+tar xzf jt-waf-mgr-0.4.3.tar.gz && cd jt-waf-mgr-0.4.3
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

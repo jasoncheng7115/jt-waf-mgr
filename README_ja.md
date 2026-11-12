@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.2
+# jt-waf-mgr v0.4.3
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -18,7 +18,7 @@
 >
 > Jason Tools Co., Ltd. · ライセンス：AGPL-3.0
 
-![概要](images/overview.png)
+![概要](docs/shots/ja/overview.png)
 
 ---
 
@@ -68,9 +68,9 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 
 | | |
 |---|---|
-| ![イベント](images/events.png) | ![WAF 判定フロー](images/waf-model.png) |
-| ![イベント分析](images/analysis.png) | ![通知](images/notifications.png) |
-| ![アラート](images/alerts.png) | ![システムチェック](images/system-check.png) |
+| ![イベント](docs/shots/ja/events.png) | ![WAF 判定フロー](docs/shots/ja/waf-model.png) |
+| ![イベント分析](docs/shots/ja/analysis.png) | ![通知](docs/shots/ja/notifications.png) |
+| ![アラート](docs/shots/ja/alerts.png) | ![システムチェック](docs/shots/ja/system-check.png) |
 
 ## 要件
 
@@ -83,8 +83,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.2.tar.gz.sig jt-waf-mgr-0.4.2.tar.gz
-tar xzf jt-waf-mgr-0.4.2.tar.gz && cd jt-waf-mgr-0.4.2
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.3.tar.gz.sig jt-waf-mgr-0.4.3.tar.gz
+tar xzf jt-waf-mgr-0.4.3.tar.gz && cd jt-waf-mgr-0.4.3
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

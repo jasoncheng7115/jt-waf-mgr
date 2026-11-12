@@ -65,6 +65,8 @@ const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
   '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/nope'];
 
+const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules'];
+
 async function audit(page, where) {
   const r = await page.evaluate(() => {
     const out = { selects: document.querySelectorAll('select').length,
@@ -93,7 +95,16 @@ async function audit(page, where) {
       await rawKeys(page, lang + ' ' + p);
       await audit(page, lang + ' ' + p);
       if (lang === 'zh-TW') await page.screenshot({ path: SHOTS + '/light' + p.replace(/\//g, '_') + '.png', fullPage: true });
+      if (lang === 'en' && README_PAGES.includes(p)) await page.screenshot({ path: SHOTS + '/en' + p.replace(/\//g, '_') + '.png', fullPage: true });
     }
+  }
+  // Japanese: the pages shown in the READMEs (no raw keys there either), screenshots for README_ja
+  await setLang(page, 'ja');
+  for (const p of README_PAGES) {
+    await page.goto(base + p, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(250);
+    await rawKeys(page, 'ja ' + p);
+    await page.screenshot({ path: SHOTS + '/ja' + p.replace(/\//g, '_') + '.png', fullPage: true });
   }
   await setLang(page, 'zh-TW');
   // theme switch to dark via the UI

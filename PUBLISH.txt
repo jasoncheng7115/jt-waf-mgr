@@ -4,7 +4,6 @@ LICENSE
 README.md
 README_zh-TW.md
 README_ja.md
-images/
 CHANGELOG.md
 SECURITY.md
 SECURITY_zh-TW.md

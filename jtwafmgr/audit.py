@@ -217,14 +217,22 @@ class Audit:
     def _connect(addr, proto, local, ca_file=None):
         if local:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            s.connect(addr)
+            try:
+                s.connect(addr)
+            except BaseException:
+                s.close()
+                raise
             return s
         host, _, port = addr.rpartition(':')
         host = host.strip('[]')
         if proto == 'udp':
             info = socket.getaddrinfo(host, int(port or 514), type=socket.SOCK_DGRAM)[0]
             s = socket.socket(info[0], socket.SOCK_DGRAM)
-            s.connect(info[4])
+            try:
+                s.connect(info[4])
+            except BaseException:
+                s.close()
+                raise
             return s
         s = socket.create_connection((host, int(port or (6514 if proto == 'tls' else 514))), timeout=2)
         if proto == 'tls':

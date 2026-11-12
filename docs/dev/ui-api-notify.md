@@ -102,3 +102,25 @@ its status and a short reason from a JSON body.
 
 `GET /overview?range=custom&since=<RFC 3339>&until=<RFC 3339>`: 1 hour to 31 days; the timeline counts hours up to
 7 days and local days beyond (`bucket_seconds` in the answer).
+
+`GET /events/timeline?<event filters>&since=&until=` (viewer, token `events:read`): the event list's timeline with the
+same filters; default the last 7 days, at most 31 (`clamped: true` when cut), hours up to 7 days, local days beyond.
+```json
+{"since": "…", "until": "…", "bucket_seconds": 3600, "clamped": false, "max_days": 31,
+ "timeline": [{"t": "…", "blocked": 2, "logged": 5, "external": 6, "internal": 1}]}
+```
+
+## Syslog (0.4.1)
+
+Settings (`PATCH /settings/ui`, admin): `syslog.enabled`, `syslog.address` (`/dev/log` or `host:port`, port 1–65535),
+`syslog.protocol` (`udp` | `tcp` | `tls`), `syslog.format` (`rfc3164` | `rfc5424`), `syslog.facility`. `[syslog] ca_file`
+(a CA bundle for TLS) is set in config.toml only.
+
+- Records are queued and sent by a background thread: a request never waits for the network. While the destination is
+  unreachable they are kept (up to 5,000, then the oldest are dropped and counted) and retried every 30 seconds.
+- RFC 5424: `<PRI>1 TIMESTAMP HOST jt-waf-mgr PID audit - {"jt_waf_mgr": {...}}`; over TCP / TLS with octet-counting
+  framing (RFC 6587). RFC 3164 over TCP / TLS ends each record with a line feed. The JSON is ASCII-only (control
+  characters and newlines escaped): one record is one line.
+- A change of a `syslog.*` setting is audited before it applies and sent with the previous settings (switching syslog
+  off is critical), so the SIEM always sees where its copy went.
+

@@ -81,7 +81,7 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.2</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.3</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -91,7 +91,7 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
     <div class="chips"><span class="chip">nginx</span><span class="chip">libmodsecurity v3</span><span class="chip">OWASP CRS 4</span>
       <span class="chip">Python 3.11+ stdlib</span><span class="chip">Vue 3</span><span class="chip">AGPL-3.0</span></div>
   </div>
-  <img class="shot" src="shots/overview.png" alt="jt-waf-mgr overview">
+  <img class="shot" src="shots/en/overview.png" data-shot="overview" alt="jt-waf-mgr overview">
 </div></div>
 
 <section id="features"><div class="wrap">
@@ -120,11 +120,11 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 <section id="ai"><div class="wrap two">
   <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
     <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul></div>
-  <img class="shot" src="shots/analysis.png" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
+  <img class="shot" src="shots/en/analysis.png" data-shot="analysis" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
 </div></section>
 
 <section id="notify" class="alt"><div class="wrap two">
-  <img src="shots/notifications.png" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
+  <img src="shots/en/notifications.png" data-shot="notifications" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
   <div><h2 data-t="n_h"></h2><p class="sub" data-t="n_sub"></p>
     <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
       <span class="chip">Discord</span><span class="chip">Zulip</span><span class="chip">Nextcloud Talk</span><span class="chip">Webhook (HMAC)</span></div>
@@ -144,12 +144,12 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 <section id="screens" class="alt"><div class="wrap">
   <h2 data-t="sc_h"></h2><p class="sub" data-t="sc_sub"></p>
   <div class="shots">
-    <figure><img src="shots/events.png" alt="" loading="lazy"><figcaption data-t="sc_events"></figcaption></figure>
-    <figure><img src="shots/waf-model.png" alt="" loading="lazy"><figcaption data-t="sc_waf"></figcaption></figure>
-    <figure><img src="shots/changes.png" alt="" loading="lazy"><figcaption data-t="sc_changes"></figcaption></figure>
-    <figure><img src="shots/rules.png" alt="" loading="lazy"><figcaption data-t="sc_rules"></figcaption></figure>
-    <figure><img src="shots/alerts.png" alt="" loading="lazy"><figcaption data-t="sc_alerts"></figcaption></figure>
-    <figure><img src="shots/system-check.png" alt="" loading="lazy"><figcaption data-t="sc_system"></figcaption></figure>
+    <figure><img src="shots/en/events.png" data-shot="events" alt="" loading="lazy"><figcaption data-t="sc_events"></figcaption></figure>
+    <figure><img src="shots/en/waf-model.png" data-shot="waf-model" alt="" loading="lazy"><figcaption data-t="sc_waf"></figcaption></figure>
+    <figure><img src="shots/en/changes.png" data-shot="changes" alt="" loading="lazy"><figcaption data-t="sc_changes"></figcaption></figure>
+    <figure><img src="shots/en/rules.png" data-shot="rules" alt="" loading="lazy"><figcaption data-t="sc_rules"></figcaption></figure>
+    <figure><img src="shots/en/alerts.png" data-shot="alerts" alt="" loading="lazy"><figcaption data-t="sc_alerts"></figcaption></figure>
+    <figure><img src="shots/en/system-check.png" data-shot="system-check" alt="" loading="lazy"><figcaption data-t="sc_system"></figcaption></figure>
     <figure><img src="shots/overview-dark.png" alt="" loading="lazy"><figcaption data-t="sc_dark"></figcaption></figure>
   </div>
 </div></section>
@@ -157,8 +157,8 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 <section id="install"><div class="wrap">
   <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
 <pre><span class="c"># verify, unpack, install</span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.2.tar.gz.sig jt-waf-mgr-0.4.2.tar.gz
-tar xzf jt-waf-mgr-0.4.2.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.2
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.3.tar.gz.sig jt-waf-mgr-0.4.3.tar.gz
+tar xzf jt-waf-mgr-0.4.3.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.3
 sudo ./install.sh
 sudo jt-waf-mgr check
 sudo jt-waf-mgr user add alice --role admin
@@ -295,6 +295,7 @@ function apply(lang) {
   document.documentElement.lang = lang
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
   for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
+  for (const img of document.querySelectorAll('img[data-shot]')) img.src = 'shots/' + lang + '/' + img.dataset.shot + '.png'
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
 for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))

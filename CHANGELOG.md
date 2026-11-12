@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 (2026-11-13)
+
+- READMEs and the project site show the interface in the reader's language (English, Traditional Chinese and
+  Japanese screenshots, all from the synthetic test environment); the browser test checks the Japanese pages too.
+- A local or UDP syslog destination that cannot be reached no longer leaves a socket open on every retry.
+- API and test plan documents: event timeline, syslog settings and behaviour.
+
 ## 0.4.2 (2026-11-13)
 
 - Syslog over TLS can trust a SIEM's own certificate authority: `[syslog] ca_file` in config.toml (root only,

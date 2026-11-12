@@ -8,7 +8,9 @@ What each gate covers and how it passes: `TEST_PLAN.md`.
 - [ ] `python3 -m unittest discover -s tests -t .` — all pass (also run by `tools/make_release.sh`).
 - [ ] `tools/build_frontend.sh` — build, `check_i18n` (three languages, no full-width slash) and `check_ui`
       (icons on buttons, no native select / date inputs, tables through DataTable) all OK.
-- [ ] `python3 tools/preflight.py` — publication checks (private names, addresses, secrets) OK.
+- [ ] `python3 tools/preflight.py` — publication checks (private names, addresses, secrets) OK; it also checks that
+      README.md / README_zh-TW.md / README_ja.md have the new version in their title (update them and docs/index.html).
+- [ ] README screenshots refreshed from the browser test when the UI changed (`docs/shots/{en,zh-TW,ja}/`).
 
 ## 2. Browser
 - [ ] `tools/e2e/run.sh` — every page in zh-TW and en, light and dark, the theme switch, sorting /

@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.2
+# jt-waf-mgr v0.4.3
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -18,7 +18,7 @@
 >
 > Jason Tools Co., Ltd. · 授權：AGPL-3.0
 
-![總覽](images/overview.png)
+![總覽](docs/shots/zh-TW/overview.png)
 
 ---
 
@@ -64,9 +64,9 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 
 | | |
 |---|---|
-| ![事件](images/events.png) | ![WAF 判斷流程](images/waf-model.png) |
-| ![事件分析](images/analysis.png) | ![通知](images/notifications.png) |
-| ![待處理警示](images/alerts.png) | ![系統檢查](images/system-check.png) |
+| ![事件](docs/shots/zh-TW/events.png) | ![WAF 判斷流程](docs/shots/zh-TW/waf-model.png) |
+| ![事件分析](docs/shots/zh-TW/analysis.png) | ![通知](docs/shots/zh-TW/notifications.png) |
+| ![待處理警示](docs/shots/zh-TW/alerts.png) | ![系統檢查](docs/shots/zh-TW/system-check.png) |
 
 ## 需求
 
@@ -78,8 +78,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.2.tar.gz.sig jt-waf-mgr-0.4.2.tar.gz
-tar xzf jt-waf-mgr-0.4.2.tar.gz && cd jt-waf-mgr-0.4.2
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.3.tar.gz.sig jt-waf-mgr-0.4.3.tar.gz
+tar xzf jt-waf-mgr-0.4.3.tar.gz && cd jt-waf-mgr-0.4.3
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
