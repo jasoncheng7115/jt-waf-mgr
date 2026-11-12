@@ -101,10 +101,15 @@ dormant_days = 90
 max_sessions_per_user = 5
 
 [syslog]
-# One JSON line per action, program name "jt-waf-mgr", for the SIEM.
+# One JSON line per action, program name "jt-waf-mgr", for the SIEM. Destination, protocol (udp / tcp / tls),
+# format (rfc3164 / rfc5424) and facility can be changed in the web interface (Settings); the values here are
+# the defaults until then.
 enabled = true
 address = "/dev/log"
 facility = "local0"
+# For TLS to a SIEM with its own certificate authority: its CA bundle (readable by the jtwaf group). Only here,
+# never in the web interface. Empty = the system CAs.
+# ca_file = "/etc/jt-waf-mgr/siem-ca.pem"
 
 [ui]
 # Source code link in the footer (AGPL-3.0 section 13). Empty = the project's GitHub page.

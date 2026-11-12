@@ -30,7 +30,8 @@
     </section>
     <ErrorBox :error="actionError" />
 
-    <DataTable id="versions" :columns="cols" :rows="items" row-key="version" :default-sort="{ key: 'version', dir: -1 }">
+    <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+    <DataTable id="versions" :columns="cols" :rows="shownItems" row-key="version" :default-sort="{ key: 'version', dir: -1 }">
       <template #cell-created_at="{ row }">{{ fmtShortTime(row.created_at) }}</template>
       <template #cell-kind="{ row }">{{ t('versions.kind_' + row.kind) }}<div v-if="row.change_id" class="sub"><RouterLink :to="'/changes/' + row.change_id">#{{ row.change_id }}</RouterLink></div></template>
       <template #cell-state="{ row }"><span class="badge" :class="VCLS[row.state] || 'b-logged'">{{ t('vstate.' + row.state) }}</span></template>
@@ -55,6 +56,8 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { get, post } from '../api.js'
+import RowTimeline from '../components/RowTimeline.vue'
+import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
 import { hasRole } from '../store.js'
 import { safeText, safeMultiline, fmtShortTime } from '../util.js'
@@ -69,6 +72,9 @@ import SegBar from '../components/charts/SegBar.vue'
 const VCLS = { applied: 'b-ok', pending: 'b-int', superseded: 'b-logged', failed: 'b-blocked' }
 const router = useRouter()
 const items = ref([])
+const win = ref(null)
+const shownItems = computed(() => inWindow(items.value, 'created_at', win.value))
+const tlSeries = computed(() => [{ key: 'ok', label: t('vstate.applied'), tone: 's1', test: (r) => ['applied', 'superseded'].includes(r.state) }, { key: 'other', label: t('timeline.other'), tone: 's3', test: () => true }])
 const loading = ref(false)
 const error = ref(null)
 const actionError = ref(null)

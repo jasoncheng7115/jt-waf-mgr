@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 (2026-11-13)
+
+- Syslog over TLS can trust a SIEM's own certificate authority: `[syslog] ca_file` in config.toml (root only,
+  never in the web interface).
+- Timelines on the configuration change history (by cause: jt-waf-mgr, automation, outside) and the versions.
+- The analysis page says the timer checks every five minutes (not hourly).
+- Fix (independent review): with syslog over TLS, a certificate or handshake error made 0.4.1 drop the queued
+  records one by one; now every connection, name or TLS error waits and retries, and only a record the server
+  cannot take (too large) is dropped. A failed TLS handshake no longer leaves its socket open. The system check
+  warns about an unreadable CA file, unencrypted remote syslog and dropped records.
+
 ## 0.4.1 (2026-11-13)
 
 - Syslog in the web interface (Settings): on / off, destination (the local /dev/log, recommended, or host:port),

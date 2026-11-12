@@ -118,6 +118,27 @@ class TestSyslog(unittest.TestCase):
         self.assertTrue(any(b'"actor":"bob"' in g for g in srv.got))
         self.assertGreaterEqual(self.app.audit.syslog_dropped, 1)
 
+    def test_tls_failure_waits_and_keeps_every_record(self):
+        srv = self.server('tcp')                       # plain TCP: the TLS handshake fails like a bad certificate would
+        uisettings.set_many(self.app, {'syslog.address': '127.0.0.1:%d' % srv.server_address[1], 'syslog.protocol': 'tls',
+                                       'syslog.enabled': True}, 'admin1')
+        for i in range(10):
+            self.app.audit.log('test.action', 'alice', n=i)
+        for _ in range(60):
+            if self.app.audit.syslog_errors:
+                break
+            time.sleep(0.05)
+        time.sleep(0.3)
+        self.assertGreaterEqual(self.app.audit.syslog_errors, 1)
+        self.assertEqual(self.app.audit.syslog_dropped, 0)
+        self.assertGreaterEqual(len(self.app.audit._queue), 10)        # all kept for later
+        self.assertLessEqual(self.app.audit.syslog_errors, 2)          # and not retried in a loop
+
+    def test_ca_file_is_not_a_web_setting(self):
+        with self.assertRaises(uisettings.SettingError):
+            uisettings.set_many(self.app, {'syslog.ca_file': '/tmp/evil-ca.pem'}, 'admin1')
+        self.assertNotIn('syslog.ca_file', uisettings.public(self.app.cfg, self.app.db))
+
     def test_settings_validation(self):
         for bad in ({'syslog.address': 'logs.example.com'}, {'syslog.address': 'a b:514'}, {'syslog.protocol': 'quic'},
                     {'syslog.format': 'cef'}, {'syslog.facility': 'local9'}, {'syslog.address': 'logs.example.com:99999'},

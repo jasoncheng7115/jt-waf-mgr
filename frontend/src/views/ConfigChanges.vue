@@ -42,7 +42,8 @@
           <div><h3 class="charthead">{{ t('chart.cfgchg.per_day') }}</h3><HBars :items="perDay" :series="causeSeries" /></div>
         </div>
       </section>
-      <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="cfgchg-list" :columns="cols" :rows="items" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
+      <RowTimeline v-model:window="win" :rows="items" ts-key="ts" :series="tlSeries" />
+      <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="cfgchg-list" :columns="cols" :rows="shownItems" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
                  :row-class="(c) => ({ hl: open === c.id })">
         <template #cell-id="{ row }"><RouterLink class="mono" :to="'/config-changes/' + row.id">{{ row.id }}</RouterLink></template>
         <template #cell-ts="{ row }">{{ fmtMinute(row.ts) }}</template>
@@ -67,6 +68,8 @@
 <script setup>
 import { ref, computed, watch, defineComponent, h } from 'vue'
 import { get } from '../api.js'
+import RowTimeline from '../components/RowTimeline.vue'
+import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
 import { safeText, fmtMinute, fmtNum, isoToDateInput } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
@@ -94,6 +97,9 @@ const ChangedPaths = defineComponent({
 })
 
 const items = ref([])
+const win = ref(null)
+const shownItems = computed(() => inWindow(items.value, 'ts', win.value))
+const tlSeries = computed(() => [{ key: 'ours', label: tOr('cfgchg.cause.jt-waf-mgr', 'jt-waf-mgr'), tone: 's1', test: (r) => r.cause === 'jt-waf-mgr' }, { key: 'auto', label: tOr('cfgchg.cause.automation', 'automation'), tone: 's3', test: (r) => r.cause === 'automation' }, { key: 'outside', label: tOr('cfgchg.cause.outside', 'outside'), tone: 'blocked', test: () => true }])
 const cursor = ref(null)
 const loading = ref(false)
 const error = ref(null)

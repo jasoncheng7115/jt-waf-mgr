@@ -130,15 +130,23 @@ class Audit:
                     self._cond.wait(min(wait, 5))
                     continue
                 head = self._queue[0]
-                target, stream, msg = self._encode(head)
+                try:
+                    target, stream, msg = self._encode(head)
+                except Exception:   # noqa: BLE001 -- a record that cannot be encoded can never be sent
+                    self._queue.popleft()
+                    self.syslog_dropped += 1
+                    continue
                 if self._reset:
                     self._reset, dest = False, None
                     self._close()
+            phase = 'connect'
             try:
                 if self._sock is None or dest != target:
                     self._close()
-                    self._sock = self._connect(target[0], target[1], target[0].startswith('/'))
+                    self._sock = self._connect(target[0], target[1], target[0].startswith('/'),
+                                               self.cfg['syslog'].get('ca_file') or None)
                     dest = target
+                phase = 'send'
                 if stream:
                     self._sock.sendall(msg)
                 else:
@@ -149,7 +157,9 @@ class Audit:
                 self._close()
                 dest = None
                 head[4] += 1
-                unsendable = isinstance(e, (ValueError, UnicodeError)) or getattr(e, 'errno', None) in (errno.EMSGSIZE,)
+                # only this record is at fault when the destination took the connection but not the record (too
+                # big); a failed connection, name lookup or TLS handshake (certificate!) waits and retries
+                unsendable = phase == 'send' and getattr(e, 'errno', None) == errno.EMSGSIZE
                 if unsendable or (head[3] is not None and head[4] >= 3):
                     # this record can never go (too big, or for a destination given up on): drop it, not the queue
                     with self._cond:
@@ -204,7 +214,7 @@ class Audit:
         return ''.join(ch for ch in h if 33 <= ord(ch) < 127)[:255] or '-'
 
     @staticmethod
-    def _connect(addr, proto, local):
+    def _connect(addr, proto, local, ca_file=None):
         if local:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             s.connect(addr)
@@ -219,7 +229,11 @@ class Audit:
         s = socket.create_connection((host, int(port or (6514 if proto == 'tls' else 514))), timeout=2)
         if proto == 'tls':
             import ssl
-            s = ssl.create_default_context().wrap_socket(s, server_hostname=host)
+            try:
+                s = ssl.create_default_context(cafile=ca_file).wrap_socket(s, server_hostname=host)
+            except BaseException:
+                s.close()
+                raise
         s.settimeout(2)
         return s
 

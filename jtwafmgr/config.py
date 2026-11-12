@@ -118,6 +118,8 @@ DEFAULTS = {
         'protocol': 'udp',
         # rfc3164 (classic BSD syslog) | rfc5424 (with an ISO timestamp, host name and message id)
         'format': 'rfc3164',
+        # tls: a CA bundle for a SIEM with its own CA (set by root here, never in the web interface); empty = system CAs
+        'ca_file': '',
     },
     'ui': {
         'source_url': '',

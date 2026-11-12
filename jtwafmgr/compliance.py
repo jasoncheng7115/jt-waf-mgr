@@ -398,8 +398,10 @@ def system_check(app):
 
     sl = cfg['syslog']
     plain_remote = not sl['address'].startswith('/') and sl.get('protocol') != 'tls'
+    ca_bad = bool(sl.get('ca_file')) and not os.access(sl['ca_file'], os.R_OK)
     au = app.audit.__dict__
-    out.append(_item('syslog', 'warn' if not sl['enabled'] or app.audit.syslog_errors or plain_remote or au.get('syslog_dropped') else 'ok',
+    out.append(_item('syslog', 'warn' if not sl['enabled'] or app.audit.syslog_errors or plain_remote or au.get('syslog_dropped') or ca_bad else 'ok',
+                     ca_file_unreadable=ca_bad,
                      enabled=sl['enabled'], address=sl['address'], protocol=sl.get('protocol'), format=sl.get('format'),
                      unencrypted_remote=plain_remote, queued=len(au.get('_queue') or ()), dropped=au.get('syslog_dropped', 0),
                      errors=app.audit.syslog_errors,
