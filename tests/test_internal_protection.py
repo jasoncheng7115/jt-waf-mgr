@@ -2,6 +2,7 @@
 excepted), raw rules placed before a given rule, and no automatic apply for anything that blocks internal sources."""
 import json
 import unittest
+from tests.helpers import rd
 
 from jtwafmgr import rulegen, uisettings
 from jtwafmgr.changes import ChangeError
@@ -135,9 +136,9 @@ class TestInternalProtection(unittest.TestCase):
         self.assertEqual(mg.current_version()['version'], v0 + 1)           # one version for all four
         self.assertEqual(mg.item_by_rule(10203)['text'], new_text)
         self.assertEqual(json.loads(mg.item_by_rule(ids[2])['spec'])['source'], 'all')
-        after = open(mg.path('after')).read()
+        after = rd(mg.path('after'))
         self.assertLess(after.index('id:10050'), after.index('id:10299'))
-        before = open(mg.path('before')).read()
+        before = rd(mg.path('before'))
         self.assertIn('id:%d' % ids[3], before)
         # only the touched rows carry the change id
         rows = {x['rule_id']: x['change_id'] for x in self.app.db.q('SELECT rule_id, change_id FROM managed_rules')}
@@ -165,7 +166,7 @@ class TestInternalProtection(unittest.TestCase):
     def test_import_as_one_change_keeps_file_order(self):
         self.adopt()
         mg = self.wf.managed
-        after = open(mg.path('after')).read()
+        after = rd(mg.path('after'))
         new = ('SecRule TX:BLOCKING_INBOUND_ANOMALY_SCORE "@ge 15" "id:10050,phase:2,pass,nolog,t:none,'
                'setvar:tx.jt_block=1,ctl:ruleEngine=On"\n\n')
         i = after.index('SecRule TX:JT_BLOCK')

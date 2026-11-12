@@ -12,7 +12,7 @@ from jtwafmgr.apply import Applier, Fail
 from jtwafmgr.changes import ChangeError
 from jtwafmgr.managed import Managed, split_items
 from jtwafmgr.modsecconf import parse_rules_text
-from tests.helpers import FIXTURE_SITE, TempEnv, record
+from tests.helpers import FIXTURE_SITE, TempEnv, record, rd, jload, wr
 
 
 class TestRulegen(unittest.TestCase):
@@ -92,7 +92,7 @@ class TestRulegen(unittest.TestCase):
 class TestImport(unittest.TestCase):
     def test_roundtrip_fixture(self):
         path = os.path.join(FIXTURE_SITE, 'modsec', 'local-before-crs.conf')
-        text = open(path).read()
+        text = rd(path)
         items = split_items(text)
         its = [dict(it, placement='before', position=float(i), enabled=1, deleted=0) for i, it in enumerate(items)]
         out = Managed.render(its, 1)['before']
@@ -143,7 +143,7 @@ class TestWorkflow(unittest.TestCase):
         for n in sorted(os.listdir(self.spool)):
             if not n.endswith('.req'):
                 continue
-            req = json.load(open(os.path.join(self.spool, n)))
+            req = jload(os.path.join(self.spool, n))
             if ok:
                 os.makedirs(self.mdir, exist_ok=True)
                 for p, f in (('before', 'before-crs.conf'), ('after', 'after-crs.conf')):
@@ -335,7 +335,7 @@ class TestWorkflow(unittest.TestCase):
         c = self.wf.propose('add', 'redaction', {'fields': ['pin']}, 'r', 'op')
         self.wf.run_checks(c)
         self.wf.approve(c, self.user('appr'))
-        req = [json.load(open(os.path.join(self.spool, n))) for n in os.listdir(self.spool) if n.endswith('.req')][0]
+        req = [jload(os.path.join(self.spool, n)) for n in os.listdir(self.spool) if n.endswith('.req')][0]
         hashes = json.loads(self.wf.managed.current_version()['hashes'])
         self.assertEqual(req['expected_disk'], {p: hashes[p] for p in req['files']})
 
@@ -474,7 +474,7 @@ class TestApplier(unittest.TestCase):
     def test_restore_uses_memory_not_the_snapshot_files(self):
         self.request(self.files())
         self.assertEqual(self.result()['result'], 'ok')
-        before = open(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf')).read()
+        before = rd(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf'))
         snap = os.path.join(self.cfg['managed']['apply_state'], 'snapshots')
         real_snapshot = self.ap.snapshot
 
@@ -489,13 +489,13 @@ class TestApplier(unittest.TestCase):
         self.ap.health = lambda urls: next(answers)                                  # health changes -> restore
         req = self.request(self.files('SecAction "id:10151,phase:1,pass,nolog"\n'), version=2,
                            expected_disk={'before': hashlib.sha256(before.encode()).hexdigest(),
-                                          'after': hashlib.sha256(open(os.path.join(self.cfg['managed']['dir'], 'after-crs.conf')).read().encode()).hexdigest()},
+                                          'after': hashlib.sha256(rd(os.path.join(self.cfg['managed']['dir'], 'after-crs.conf')).encode()).hexdigest()},
                            health_urls=['https://a.example.com/'])
         os.replace(req, os.path.join(self.cfg['managed']['spool'], 'v2-c2.req'))
         self.ap.process()
-        res = json.load(open(os.path.join(self.cfg['managed']['spool'], 'v2-c2.result')))
+        res = jload(os.path.join(self.cfg['managed']['spool'], 'v2-c2.result'))
         self.assertEqual((res['result'], res['step']), ('failed', 'health'), res)
-        self.assertEqual(open(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf')).read(), before)
+        self.assertEqual(rd(os.path.join(self.cfg['managed']['dir'], 'before-crs.conf')), before)
 
     def test_adopt_rewrites_main_include(self):
         main = os.path.join(self.site, 'modsec', 'main.conf')
@@ -504,7 +504,7 @@ class TestApplier(unittest.TestCase):
             os.path.join(self.site, 'modsec', 'local-after-crs.conf'): os.path.join(self.cfg['managed']['dir'], 'after-crs.conf')}})
         res = self.result()
         self.assertEqual(res['result'], 'ok', res)
-        text = open(main).read()
+        text = rd(main)
         self.assertIn('Include %s/before-crs.conf' % self.cfg['managed']['dir'], text)
         self.assertNotIn('local-before-crs.conf', text)
         self.assertFalse(os.path.exists(os.path.join(self.cfg['managed']['spool'], 'v1-c1.req')))
@@ -514,9 +514,9 @@ class TestApplier(unittest.TestCase):
         res = self.result()
         self.assertEqual((res['result'], res['step']), ('failed', 'validate'))
         path = self.request(self.files())
-        req = json.load(open(path))
+        req = jload(path)
         req['sha256']['before'] = '0' * 64
-        json.dump(req, open(path, 'w'))
+        wr(path, json.dumps(req))
         self.assertEqual(self.result()['step'], 'request')
 
     def test_refuses_foreign_paths_in_adopt(self):
@@ -532,7 +532,7 @@ class TestApplier(unittest.TestCase):
         self.request(self.files())   # expected_disk None, but the files exist with other content
         self.assertEqual(self.result()['step'], 'drift')
         import hashlib
-        cur = {p: hashlib.sha256(open(os.path.join(md, f), 'rb').read()).hexdigest()
+        cur = {p: hashlib.sha256(rd(os.path.join(md, f), 'rb')).hexdigest()
                for p, f in (('before', 'before-crs.conf'), ('after', 'after-crs.conf'))}
         self.request(self.files(), expected_disk=cur)
 
@@ -542,7 +542,7 @@ class TestApplier(unittest.TestCase):
         res = self.result()
         self.assertEqual(res['step'], 'nginx_t')
         self.assertIn('restored', res['summary'])
-        self.assertEqual(open(os.path.join(md, 'before-crs.conf')).read(), '# Generated by jt-waf-mgr old\n\n')
+        self.assertEqual(rd(os.path.join(md, 'before-crs.conf')), '# Generated by jt-waf-mgr old\n\n')
 
     def test_health_change_rolls_back(self):
         calls = iter([{'https://a.example.com/': 200}, {'https://a.example.com/': 502}])
@@ -562,15 +562,15 @@ class TestSandboxBuild(unittest.TestCase):
             root = tempfile.mkdtemp(dir=env.dir)
             b = os.path.join(FIXTURE_SITE, 'modsec', 'local-before-crs.conf')
             port = sb.build(root, {b: '# candidate\nSecAction "id:10150,phase:1,pass,nolog"\n'})
-            main = open(os.path.join(root, 'conf', 'main-0.conf')).read()
+            main = rd(os.path.join(root, 'conf', 'main-0.conf'))
             self.assertIn('cand-local-before-crs.conf', main)
             self.assertIn(os.path.join(FIXTURE_SITE, 'modsec', 'crs-setup.conf'), main)
             rw = [f for f in os.listdir(os.path.join(root, 'conf')) if f.startswith('rw-')]
             self.assertEqual(len(rw), 1)
-            body = open(os.path.join(root, 'conf', rw[0])).read()
+            body = rd(os.path.join(root, 'conf', rw[0]))
             self.assertIn('SecAuditLog %s/logs/audit.log' % root, body)
             self.assertNotIn('/var/log/modsecurity', body)
-            nc = open(os.path.join(root, 'conf', 'nginx.conf')).read()
+            nc = rd(os.path.join(root, 'conf', 'nginx.conf'))
             self.assertIn('listen 127.0.0.1:%d;' % port, nc)
             self.assertIn('real_ip_header X-Forwarded-For', nc)
             self.assertNotIn('user ', nc)

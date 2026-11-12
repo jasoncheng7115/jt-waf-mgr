@@ -81,3 +81,19 @@ class TempEnv:
 
     def cleanup(self):
         shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def rd(path, mode='r'):
+    """A file's content, closing it (no ResourceWarning)."""
+    with open(path, mode) as f:
+        return f.read()
+
+
+def jload(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def wr(path, data, mode='w'):
+    with open(path, mode) as f:
+        f.write(data)

@@ -16,7 +16,7 @@ from jtwafmgr.auth import AuthError
 from jtwafmgr.compliance import audit_export, controls, system_check, verify_export
 from jtwafmgr.db import SCHEMA, Database
 from jtwafmgr.web.server import start_background
-from tests.helpers import TempEnv
+from tests.helpers import TempEnv, wr
 from tests.test_api import Client, PW
 
 HAVE_OPENSSL = shutil.which('openssl') is not None
@@ -502,7 +502,7 @@ class TestMonitor(unittest.TestCase):
         os.makedirs(d, exist_ok=True)
         for i in range(5):
             p = os.path.join(d, 'jt-waf-mgr-2026010%d-030000.db' % (i + 1))
-            open(p, 'w').write('x')
+            wr(p, 'x')
             os.utime(p, (now - 90 * 86400, now - 90 * 86400))
         mon._prune_backups()
         self.assertEqual(len([f for f in os.listdir(d) if f.endswith('.db')]), 3)
