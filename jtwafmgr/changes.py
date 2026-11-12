@@ -779,6 +779,11 @@ class Workflow:
             self.log(cid, 'apply', 'applied', summary)
             self.app.audit.log('change.applied', r['proposed_by'], 'user', None, 'ok', change_id=cid, version=version,
                                direction=r['direction'], kind=r['kind'], op=r['op'], rule_id=r['rule_id'])
+            try:
+                from .alerts import close_for_change
+                close_for_change(self.db, self.app.audit, cid)
+            except Exception:       # never let the alert bookkeeping break the apply result
+                traceback.print_exc()
         else:
             self.db.x("UPDATE versions SET state='failed', result=? WHERE version=?", (json.dumps(res), version))
             self._state(cid, 'apply_failed', summary or res.get('result'))

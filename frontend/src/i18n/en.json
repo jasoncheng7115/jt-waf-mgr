@@ -11,6 +11,8 @@
  "alerts.col.state": "State",
  "alerts.col.time": "Time",
  "alerts.col.what": "What",
+ "alerts.draft_block": "Draft a block",
+ "alerts.draft_exclusion": "Draft an exclusion",
  "alerts.f.all": "All",
  "alerts.f.handled": "Handled",
  "alerts.f.open": "Open",

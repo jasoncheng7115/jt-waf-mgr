@@ -2,6 +2,13 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.6 (2026-11-13)
+
+- Alerts can be acted on: "Draft an exclusion" (false positive) or "Draft a block" (attack) opens the change form
+  filled from a recent event of that site and path.
+- A false-positive alert is marked handled by itself (audited, with the change number) when the exclusion proposed
+  for it is applied. An attack that may have passed still needs a person.
+
 ## 0.4.5 (2026-11-13)
 
 - Daily report through the notification channels at a set hour (default 08:00, -1 = none): events, blocks and

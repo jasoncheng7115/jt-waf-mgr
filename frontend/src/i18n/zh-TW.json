@@ -11,6 +11,8 @@
  "alerts.col.state": "狀態",
  "alerts.col.time": "時間",
  "alerts.col.what": "內容",
+ "alerts.draft_block": "草擬封鎖",
+ "alerts.draft_exclusion": "草擬排除",
  "alerts.f.all": "全部",
  "alerts.f.handled": "已處理",
  "alerts.f.open": "待處理",

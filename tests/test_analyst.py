@@ -475,6 +475,11 @@ class TestFalsePositivesAndAlerts(AnalystBase):
         run = analyst.run_detail(self.app, self.last_run())
         self.assertEqual(run['alert_list'][0]['alert_id'], al['id'])
         self.assertEqual(run['false_positive_candidates'], 1)
+        # once the exclusion is applied, the alert it was proposed for is settled
+        from jtwafmgr import alerts as _alerts
+        self.assertEqual(_alerts.close_for_change(self.app.db, self.app.audit, r['id']), [al['id']])
+        self.assertEqual(self.app.db.one('SELECT state, handled_by FROM alerts WHERE id=?', (al['id'],))[:], ('handled', 'system'))
+        self.app.db.x("UPDATE alerts SET state='open', handled_by=NULL WHERE id=?", (al['id'],))
         # the next run does not propose it again while it is open
         self.srv.seen.clear()
         self.run_analyst()

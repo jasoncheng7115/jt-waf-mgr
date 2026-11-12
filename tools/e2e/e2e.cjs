@@ -117,6 +117,11 @@ async function audit(page, where) {
     await page.screenshot({ path: SHOTS + '/dark' + p.replace(/\//g, '_') + '.png', fullPage: true });
   }
   ok(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'theme persists across pages');
+  // an alert becomes a change draft
+  await page.goto(base + '/alerts', { waitUntil: 'networkidle' });
+  await page.locator('.rowacts button:has-text("草擬")').first().click();
+  await page.waitForURL((u) => u.pathname === '/changes/new', { timeout: 10000 }).catch(() => {});
+  ok(new URL(page.url()).pathname === '/changes/new', 'alert drafts a change');
   // every card title band folds, the state is remembered per page
   await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
   await page.waitForTimeout(300);

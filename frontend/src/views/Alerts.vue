@@ -50,6 +50,8 @@
         <template #cell-actions="{ row }">
           <div class="rowacts">
             <RouterLink v-if="safeLink(row.link)" :to="safeLink(row.link)" class="btn tiny"><Icon name="go" />{{ t('alerts.open') }}</RouterLink>
+            <button v-if="row.state === 'open' && canPropose && DRAFT[row.kind] && row.details.path" type="button" class="btn tiny"
+                    :disabled="drafting === row.id" @click="draft(row)"><Icon :name="DRAFT[row.kind] === 'exclusion' ? 'unlock' : 'block'" />{{ t('alerts.draft_' + DRAFT[row.kind]) }}</button>
             <button v-if="row.state === 'open' && canHandle" type="button" class="btn tiny" @click="pick(row)"><Icon name="check" />{{ t('alerts.mark_handled') }}</button>
           </div>
         </template>
@@ -66,6 +68,7 @@ import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
 import { fmtShortTime, safeText } from '../util.js'
 import { hasRole, refreshAlerts } from '../store.js'
+import { useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
 import ErrorBox from '../components/ErrorBox.vue'
 import DataTable from '../components/DataTable.vue'
@@ -98,6 +101,28 @@ const cols = computed(() => [
   { key: 'actions', label: t('alerts.col.actions'), sortable: false, filterable: false },
 ])
 function kindText(r) { return tOr('alerts.kind.' + r.kind, r.kind) }
+// an alert becomes a change: find a recent event of that site and path (paths in alerts are decoded and lower case,
+// as a rule sees them) and open the change form filled from it
+const DRAFT = { false_positive: 'exclusion', attack_passed: 'block', attack_in_progress: 'block' }
+const canPropose = computed(() => hasRole('operator'))
+const drafting = ref(null)
+const router = useRouter()
+function viewOf(p) { try { return decodeURIComponent(p).toLowerCase() } catch { return String(p).toLowerCase() } }
+async function draft(r) {
+  drafting.value = r.id
+  const mode = DRAFT[r.kind]
+  const host = String(r.details.host || '').split(',')[0].trim()
+  const path = String(r.details.path || '').split(',')[0].trim()
+  try {
+    const q = { limit: 200 }
+    if (host) q.host = host
+    if (mode === 'exclusion') q.outcome = 'blocked'
+    const res = await get('/events', q)
+    const ev = (res.items || []).find((e) => viewOf(e.path || '/') === path)
+    router.push(ev ? { path: '/changes/new', query: { from_event: ev.id, mode } }
+      : { path: '/changes/new', query: { kind: mode === 'exclusion' ? 'exclusion' : 'confident_block' } })
+  } catch (e) { error.value = e } finally { drafting.value = null }
+}
 // links come from the server and are paths inside this application only
 function safeLink(l) { return typeof l === 'string' && /^\/[A-Za-z0-9/_-]*$/.test(l) ? l : '' }
 async function load(append) {

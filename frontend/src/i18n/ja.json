@@ -11,6 +11,8 @@
  "alerts.col.state": "状態",
  "alerts.col.time": "時刻",
  "alerts.col.what": "内容",
+ "alerts.draft_block": "ブロックを起案",
+ "alerts.draft_exclusion": "除外を起案",
  "alerts.f.all": "すべて",
  "alerts.f.handled": "対応済み",
  "alerts.f.open": "対応待ち",

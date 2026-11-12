@@ -113,3 +113,29 @@ def listing(db, state=None, limit=50, cursor=None):
     rows = db.q(sql + ' ORDER BY id DESC LIMIT ?', args + [limit + 1])
     return {'items': [public(r) for r in rows[:limit]], 'next_cursor': str(rows[limit - 1]['id']) if len(rows) > limit else None,
             'counts': counts(db)}
+
+
+# alerts that the applied change settles by itself: users hit by a false positive get the exclusion that was proposed
+# for them. (An attack that may have passed is not settled by a block: someone still has to look at what it got.)
+SETTLED_BY_CHANGE = ('false_positive',)
+
+
+def close_for_change(db, audit, change_id):
+    """Mark the open alerts that point at this change handled (audited). Returns their ids."""
+    done = []
+    for r in db.q("SELECT id, kind, details FROM alerts WHERE state='open' AND kind IN (%s)" % ','.join('?' * len(SETTLED_BY_CHANGE)),
+                  SETTLED_BY_CHANGE):
+        try:
+            d = json.loads(r['details'] or '{}')
+        except ValueError:
+            continue
+        if d.get('change_id') != change_id:
+            continue
+        note = 'change #%d applied' % change_id
+        if db.x("UPDATE alerts SET state='handled', handled_by='system', handled_at=?, note=? WHERE id=? AND state='open'",
+                (util.now(), note, r['id'])).rowcount == 1:
+            audit.log('alert.handled', 'system', 'system', None, 'ok', alert_id=r['id'], kind=r['kind'], note=note,
+                      change_id=change_id)
+            done.append(r['id'])
+    return done
+
