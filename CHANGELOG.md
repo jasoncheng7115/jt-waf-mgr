@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-11-12)
 
 Interface
 - Every button has an icon; the site's own dropdowns and date picker replace the browser's; every list table

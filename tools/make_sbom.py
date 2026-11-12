@@ -13,7 +13,7 @@ import uuid
 import datetime
 
 NM = os.environ.get('JTWAF_NODE_MODULES', '/opt/jt-ipam/frontend/node_modules')
-BUNDLED = ['vue', '@vue/runtime-dom', '@vue/runtime-core', '@vue/reactivity', '@vue/shared', 'vue-router']
+BUNDLED = ['vue', '@vue/runtime-dom', '@vue/runtime-core', '@vue/reactivity', '@vue/shared', 'vue-router', '@iconoir/vue']
 
 
 def _read(p):
