@@ -4,7 +4,7 @@
      pickable: clicking a key emits `pick(item)` (the original item); linkFor then gives the secondary
      "open" link next to it (openLabel names it); activeKey marks the key that is the current filter. -->
 <template>
-  <HBars :items="bars" :series="series" :mono="mono" :pickable="pickable" :open-label="openLabel" @pick="(b) => emit('pick', b.item)" />
+  <HBars :items="bars" :series="series" :mono="mono" :pickable="pickable" :open-label="openLabel" :inline-sub="inlineSub" @pick="(b) => emit('pick', b.item)" />
 </template>
 
 <script setup>
@@ -18,6 +18,7 @@ const props = defineProps({
   linkFor: { type: Function, default: null },
   labelFor: { type: Function, default: null },
   mono: Boolean,
+  inlineSub: Boolean,
   pickable: Boolean,
   openLabel: { type: String, default: '' },
   activeKey: { type: [String, Number], default: null },

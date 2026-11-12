@@ -106,6 +106,8 @@ def check_privacy(files, deny):
             scan_text(rel, data.decode('utf-8', 'replace'), deny)
         elif data.startswith(b'\x89PNG\r\n\x1a\n'):
             check_png(rel, data, deny)
+        elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            check_webp(rel, data, deny)
         else:
             low = data.lower()
             for d, rx in deny:
@@ -131,6 +133,21 @@ def check_png(rel, data, deny):
             fail('privacy', '%s: PNG with a %s chunk (strip metadata from screenshots)' % (rel, kind.decode()))
             scan_text(rel + ':' + kind.decode(), body.decode('latin-1'), deny)
         i += 12 + n
+
+
+def check_webp(rel, data, deny):
+    """WebP thumbnails: like PNG, the image chunks are compressed bytes a short name matches by chance; only the
+    metadata chunks can carry text, and a published WebP must not have any."""
+    import struct
+    i = 12
+    while i + 8 <= len(data):
+        kind, n = struct.unpack('<4sI', data[i:i + 8])
+        if kind in (b'EXIF', b'XMP '):
+            fail('privacy', '%s: WebP with a %s chunk (strip metadata from screenshots)' % (rel, kind.decode().strip()))
+            scan_text(rel + ':' + kind.decode().strip(), data[i + 8:i + 8 + n].decode('latin-1'), deny)
+        elif kind not in (b'VP8 ', b'VP8L', b'VP8X', b'ALPH', b'ICCP', b'ANIM', b'ANMF'):
+            fail('privacy', '%s: WebP with an unknown %r chunk' % (rel, kind))
+        i += 8 + n + (n & 1)
 
 
 def check_tar(path, deny):

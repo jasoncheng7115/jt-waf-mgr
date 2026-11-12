@@ -131,24 +131,21 @@
           <h2><Icon name="shield" /> {{ t('overview.by_family') }}</h2>
           <CountList :items="data.by_family" :label-for="(it) => t('family.' + it.key)" pickable :active-key="filters.family" :open-label="t('filter.open_events')" :link-for="(it) => eventsLink('family', it.key)" @pick="(it) => toggleFilter('family', it.key)" />
         </section>
-        <section class="card">
+        <section class="card span2">
           <h2><Icon name="network" /> {{ t('overview.by_src') }}</h2>
           <p v-if="data.geoip === false" class="muted small geohint"><Icon name="globe" /> {{ t('overview.geoip_off') }}
             <RouterLink v-if="hasRole('admin')" :to="{ path: '/admin/settings', hash: '#uiset-geoip' }">{{ t('overview.geoip_setup') }}</RouterLink></p>
-          <CountList :items="data.by_src" mono pickable :active-key="filters.src_ip" :open-label="t('filter.open_lookup')" :link-for="(it) => ({ path: '/lookup/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('src_ip', it.key)" />
+          <CountList :items="data.by_src" mono inline-sub pickable :active-key="filters.src_ip" :open-label="t('filter.open_lookup')" :link-for="(it) => ({ path: '/lookup/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('src_ip', it.key)" />
         </section>
-        <section v-if="(data.by_asn || []).length" class="card">
+        <section v-if="(data.by_asn || []).length" class="card span2">
           <h2><Icon name="network" /> {{ t('overview.by_asn') }}</h2>
           <HBars :items="asnItems" :series="outcomeSeries" />
         </section>
         <section v-if="(data.by_country || []).length" class="card span2">
           <h2><Icon name="globe" /> {{ t('overview.by_country') }}</h2>
           <p class="muted small">{{ t('map.external_hint') }}</p>
-          <div class="mapgrid">
-            <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('overview.by_country')" pickable :active-key="filters.country || null"
-                      @pick="(it) => toggleFilter('country', it.key)" />
-            <HBars :items="countryItems.slice(0, 15)" :series="outcomeSeries" pickable :open-label="t('filter.open_events')" @pick="(it) => toggleFilter('country', it.key)" />
-          </div>
+          <MapGrid :items="countryItems" :series="outcomeSeries" :label="t('overview.by_country')" :active-key="filters.country || null"
+                   :open-label="t('filter.open_events')" @pick="(it) => toggleFilter('country', it.key)" />
         </section>
         <section class="card span2">
           <h2><Icon name="shield" /> {{ t('overview.by_rule') }}</h2>
@@ -173,7 +170,7 @@ import Icon from '../components/Icon.vue'
 import EventTable from '../components/EventTable.vue'
 import CountList from '../components/CountList.vue'
 import HBars from '../components/charts/HBars.vue'
-import WorldMap from '../components/charts/WorldMap.vue'
+import MapGrid from '../components/charts/MapGrid.vue'
 import Sparkline from '../components/charts/Sparkline.vue'
 import { countryName } from '../util.js'
 import { lang } from '../i18n.js'

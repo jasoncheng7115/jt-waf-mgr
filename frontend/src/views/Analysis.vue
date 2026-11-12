@@ -128,14 +128,16 @@
       <section v-if="selAlerts.length" class="card">
         <h2><Icon name="bell" /> {{ t('analysis.alerts') }} <span class="count">{{ selAlerts.length }}</span></h2>
         <p class="muted small">{{ t('analysis.alerts_hint') }}</p>
-        <ul class="plainlist">
+        <ul class="plainlist alertgrid">
           <li v-for="a in selAlerts" :key="a.alert_id" class="alertline">
-            <span class="badge" :class="a.severity === 'critical' ? 'b-blocked' : 'b-warn'">{{ t('alerts.sev.' + a.severity) }}</span>
+            <span><span class="badge" :class="a.severity === 'critical' ? 'b-blocked' : 'b-warn'">{{ t('alerts.sev.' + a.severity) }}</span></span>
             <b>{{ tOr('alerts.kind.' + a.kind, a.kind) }}</b>
-            <span v-if="a.host" class="mono small">{{ safeText(a.host, 120) }}</span>
-            <span v-if="a.path" class="mono small breakall">{{ safeText(a.path, 200) }}</span>
-            <RouterLink v-if="a.change_id" :to="'/changes/' + a.change_id">{{ t('analysis.proposed', { id: a.change_id }) }}</RouterLink>
-            <RouterLink to="/alerts">{{ t('analysis.alert_n', { id: a.alert_id }) }}</RouterLink>
+            <span class="mono small">{{ a.host ? safeText(a.host, 120) : '—' }}</span>
+            <span class="mono small breakall">{{ a.path ? safeText(a.path, 200) : '—' }}</span>
+            <span class="al-links">
+              <RouterLink v-if="a.change_id" :to="'/changes/' + a.change_id">{{ t('analysis.proposed', { id: a.change_id }) }}</RouterLink>
+              <RouterLink to="/alerts">{{ t('analysis.alert_n', { id: a.alert_id }) }}</RouterLink>
+            </span>
             <div v-if="a.reason" class="sub reason">{{ safeText(a.reason, 300) }}</div>
           </li>
         </ul>
@@ -539,8 +541,16 @@ onMounted(reload)
 .findings .sub { flex-basis: 100%; color: var(--muted); font-size: .9em; }
 .runfacts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 6px; font-weight: 600; }
 .runfacts span { display: inline-flex; align-items: center; gap: 5px; }
-.alertline { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
-.alertline .sub { flex-basis: 100%; color: var(--muted); font-size: .88em; }
+/* one grid for all rows (subgrid): severity, kind, site, path and links line up from row to row */
+.alertgrid { display: grid; grid-template-columns: max-content max-content minmax(0, max-content) minmax(0, 1fr) max-content; column-gap: 16px; }
+.alertline { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 2px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--border); text-align: left; }
+.alertline .al-links { display: flex; gap: 12px; justify-content: flex-end; white-space: nowrap; }
+.alertline .sub { grid-column: 1 / -1; color: var(--muted); font-size: .88em; }
+@media (max-width: 760px) {
+  .alertgrid { display: block; }
+  .alertline { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .alertline .sub { flex-basis: 100%; }
+}
 .ruleline { margin: 2px 0; }
 .sub-head { margin: 0; }
 .live { margin-top: 12px; }

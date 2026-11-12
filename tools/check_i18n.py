@@ -111,6 +111,9 @@ REQUIRED = {
 LITERAL = re.compile(r"""\b(?:t|tOr)\(\s*'([A-Za-z0-9_.\-]+)'\s*[,)]""")
 
 
+ZH_TERMS = [('收編', '納管'), ('擋下', '封鎖')]
+
+
 def main():
     problems = []
     dicts = {}
@@ -133,6 +136,11 @@ def main():
                 problems.append('%s.json: %s contains the product name (never translated, keep it out)' % (lang, k))
             if isinstance(v, str) and '\uff0f' in v:
                 problems.append('%s.json: %s uses a full-width slash; use "/"' % (lang, k))
+            # wording the user rejected for Taiwan usage (2026-11-13): 擋 -> 封鎖, 收編 -> 納管
+            if lang == 'zh-TW' and isinstance(v, str):
+                for bad, good in ZH_TERMS:
+                    if bad in v:
+                        problems.append('zh-TW.json: %s uses "%s"; use "%s"' % (k, bad, good))
             # placeholders must match the English ones
             if isinstance(v, str) and k in dicts['en']:
                 want = set(re.findall(r'\{(\w+)\}', dicts['en'][k]))

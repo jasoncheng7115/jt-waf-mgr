@@ -13,7 +13,7 @@
     <p class="muted">{{ t('alerts.intro') }}</p>
     <ErrorBox :error="error" />
     <div class="seg" role="tablist" :aria-label="t('alerts.filter')">
-      <button v-for="f in FILTERS" :key="f" type="button" role="tab" class="btn small" :class="{ primary: filter === f }"
+      <button v-for="f in FILTERS" :key="f" type="button" role="tab" :class="{ on: filter === f }"
               :aria-selected="filter === f ? 'true' : 'false'" @click="setFilter(f)">
         <Icon :name="f === 'open' ? 'bell' : f === 'handled' ? 'check' : 'list'" />{{ t('alerts.f.' + f) }}
         <span v-if="f === 'open' && counts.open" class="badge tiny b-warn">{{ counts.open }}</span></button>
@@ -159,7 +159,7 @@ onMounted(() => load(false))
 </script>
 
 <style scoped>
-.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.seg { margin: 8px 0 14px; }
 .sub { color: var(--muted); font-size: .85em; margin-top: 2px; }
 .reason { white-space: pre-wrap; overflow-wrap: anywhere; }
 .rowacts { display: flex; flex-wrap: wrap; gap: 6px; }

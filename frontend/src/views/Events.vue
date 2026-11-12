@@ -47,11 +47,8 @@
       <HBars :items="familyBars" :series="outcomeSeries" />
       <template v-if="countryItems.length">
         <h3 class="charthead">{{ t('map.loaded_title') }}</h3>
-        <div class="mapgrid">
-          <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('map.loaded_title')" pickable :active-key="route.query.country || null"
-                    @pick="(it) => toggleFilter('country', it.key)" />
-          <HBars :items="countryItems.slice(0, 10)" :series="outcomeSeries" pickable @pick="(it) => toggleFilter('country', it.key)" />
-        </div>
+        <MapGrid :items="countryItems" :series="outcomeSeries" :label="t('map.loaded_title')" :active-key="route.query.country || null"
+                 @pick="(it) => toggleFilter('country', it.key)" />
       </template>
       <p class="muted small">{{ t('chart.loaded_rows', { n: fmtNum(items.length) }) }}</p>
     </section>
@@ -76,7 +73,7 @@ import DatePicker from '../components/DatePicker.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
-import WorldMap from '../components/charts/WorldMap.vue'
+import MapGrid from '../components/charts/MapGrid.vue'
 import CENTRE from '../components/charts/countryCentroids.js'
 
 const KEYS = ['since', 'until', 'host', 'path_prefix', 'q', 'src_ip', 'country', 'rule_id', 'outcome', 'decided_by', 'origin', 'family']

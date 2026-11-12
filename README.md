@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.12
+# jt-waf-mgr v0.4.13
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -90,8 +90,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.12.tar.gz.sig jt-waf-mgr-0.4.12.tar.gz
-tar xzf jt-waf-mgr-0.4.12.tar.gz && cd jt-waf-mgr-0.4.12
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
+tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -117,7 +117,17 @@ sudo jt-waf-mgr doctor        # health summary at any time
 
 The upgrade verifies the new release with the installed program and the pinned key, refuses while a change is being
 applied, keeps a backup in `/var/backups/jt-waf-mgr/` and records every upgrade (and every rollback) in the audit
-trail. `./uninstall.sh` removes the program and keeps data and configuration (`--purge` removes them too).
+trail.
+
+### Uninstall
+
+```sh
+sudo ./uninstall.sh           # remove the service and the program; keep data and configuration
+sudo ./uninstall.sh --purge   # also remove /var/lib/jt-waf-mgr, /etc/jt-waf-mgr and the jtwaf user
+```
+
+The nginx configuration is never touched: remove the management vhost yourself. If the rule files were adopted, the
+managed files in `/etc/nginx/modsec/jt-waf-mgr/` stay in place and nginx keeps loading them; maintain them by hand from then on.
 
 ## Security (OWASP Top 10:2025)
 

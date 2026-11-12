@@ -17,7 +17,7 @@ mmdb_writer.write(R + '/geoip/GeoLite2-City.mmdb', {
   '192.0.2.0/24': {'country': {'iso_code': 'TW', 'names': {'en': 'Taiwan'}}}})
 mmdb_writer.write(R + '/geoip/GeoLite2-ASN.mmdb', {
   '203.0.113.0/24': {'autonomous_system_number': 64500, 'autonomous_system_organization': 'Example Hosting'},
-  '198.51.100.0/24': {'autonomous_system_number': 64501, 'autonomous_system_organization': 'Doc Net <b>x</b>'}}, database_type='GeoLite2-ASN')
+  '198.51.100.0/24': {'autonomous_system_number': 64501, 'autonomous_system_organization': 'Documentation Net'}}, database_type='GeoLite2-ASN')
 random.seed(7)
 now = time.time()
 lines = []

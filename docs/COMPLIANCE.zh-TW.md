@@ -40,7 +40,7 @@ ISO A.5.15、A.8.2、A.8.3 · 資安法 存取控制－最小權限 · OWASP A01
   - viewer：唯讀；
   - operator：提出變更；
   - approver：核准與還原；
-  - admin：收編規則檔，管理帳號、token 與設定。
+  - admin：納管規則檔，管理帳號、token 與設定。
 - API token 有權限範圍（scope）與來源網段限制，永遠不能核准變更、管理 token 或改設定。
 
 ### 職責分離（segregation_of_duties）

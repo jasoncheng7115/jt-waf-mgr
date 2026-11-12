@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.12
+# jt-waf-mgr v0.4.13
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -83,8 +83,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.12.tar.gz.sig jt-waf-mgr-0.4.12.tar.gz
-tar xzf jt-waf-mgr-0.4.12.tar.gz && cd jt-waf-mgr-0.4.12
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
+tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -109,7 +109,16 @@ sudo jt-waf-mgr doctor        # いつでも健全性を確認
 
 アップグレードはインストール済みのプログラムと固定された鍵で新しいリリースを検証し、変更の適用中は拒否し、
 `/var/backups/jt-waf-mgr/` にバックアップを残し、すべてのアップグレード（とロールバック）を監査記録に残します。
-`./uninstall.sh` はプログラムを削除し、データと設定は残します（`--purge` で併せて削除）。
+
+### アンインストール
+
+```sh
+sudo ./uninstall.sh           # サービスとプログラムを削除し、データと設定は残す
+sudo ./uninstall.sh --purge   # /var/lib/jt-waf-mgr、/etc/jt-waf-mgr と jtwaf ユーザーも削除
+```
+
+nginx の設定には触れません。管理画面の vhost はご自身で削除してください。既存のルールファイルを取り込んでいた場合、
+`/etc/nginx/modsec/jt-waf-mgr/` の管理ファイルはそのまま残り、nginx は引き続き読み込みます。以後は手動で保守してください。
 
 ## セキュリティ（OWASP Top 10:2025）
 

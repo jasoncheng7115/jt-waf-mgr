@@ -65,7 +65,7 @@ const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
   '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/nope'];
 
-const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules'];
+const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9'];
 
 async function audit(page, where) {
   const r = await page.evaluate(() => {
@@ -215,6 +215,37 @@ async function audit(page, where) {
   const bar = page.locator('.hb-bar').first();
   await bar.hover();
   ok(await page.locator('.charttip').isVisible(), 'chart tooltip on hover');
+  // the server is upgraded while the tab is open: the page notices and offers a reload
+  ok(!(await page.locator('.newver').count()), 'new version: no banner while the versions match');
+  await page.route('**/api/v1/meta', (r) => r.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ name: 'jt-waf-mgr', version: '99.0.0', source_url: '', sso_enabled: false, node_id: '', login_notice: '', password_policy: null }) }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForSelector('.newver', { timeout: 5000 }).catch(() => {});
+  ok(await page.locator('.newver:has-text("99.0.0") button').isVisible(), 'new version: the page offers a reload');
+  await page.unroute('**/api/v1/meta');
+  // Thumbnails for the project site (docs/index.html): one screen of each page, rendered at twice the resolution
+  // so they stay sharp when shown small (tools/make_thumbs.py scales them down). Same session, its own window size.
+  const THUMBS = { overview: '/', events: '/events', 'waf-model': '/waf', analysis: '/analysis', notifications: '/admin/notify',
+    alerts: '/alerts', 'system-check': '/admin/system', changes: '/changes', rules: '/rules', lookup: '/lookup/203.0.113.9' };
+  const state = await ctx.storageState();
+  for (const scheme of ['light', 'dark']) {
+    const tc = await browser.newContext({ storageState: state, viewport: { width: 1200, height: 900 }, deviceScaleFactor: 2, colorScheme: scheme });
+    await tc.addInitScript((s) => { try { localStorage.setItem('jtwaf.theme', s) } catch (e) { /* ignore */ } }, scheme);
+    const tp = await tc.newPage();
+    watch(tp, 'thumbs');
+    await tp.goto(base + '/', { waitUntil: 'networkidle' });
+    for (const lang of ['zh-TW', 'en', 'ja']) {
+      await setLang(tp, lang);
+      for (const [name, p] of Object.entries(scheme === 'light' ? THUMBS : { overview: '/' })) {
+        await tp.goto(base + p, { waitUntil: 'networkidle' });
+        await tp.waitForTimeout(400);
+        await tp.screenshot({ path: SHOTS + '/thumb-' + lang + '-' + name + (scheme === 'dark' ? '-dark' : '') + '.png' });
+      }
+    }
+    await setLang(tp, 'zh-TW');
+    await tc.close();
+  }
+  ok(fs.existsSync(SHOTS + '/thumb-ja-lookup.png') && fs.existsSync(SHOTS + '/thumb-en-overview-dark.png'), 'site thumbnails at 2x');
   await ctx.close();
   // viewer: guide and events, no admin links
   const v = await login(browser, 'viewer', 'dark');

@@ -27,6 +27,9 @@ def main(path):
             sys.exit('%s: placeholders differ between languages' % k)
         if '／' in v['zh-TW'] + v['ja']:
             sys.exit('%s: full-width slash; use "/"' % k)
+        for bad, good in (('收編', '納管'), ('擋下', '封鎖')):
+            if bad in v['zh-TW']:
+                sys.exit('%s: zh-TW uses "%s"; use "%s"' % (k, bad, good))
     with open(os.path.join(tempfile.gettempdir(), 'jt-waf-mgr-i18n.lock'), 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         for lang in LANGS:

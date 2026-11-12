@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.12
+# jt-waf-mgr v0.4.13
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -44,7 +44,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 - **總覽與事件**：在時間軸上拖曳即可放大，或自訂最長 31 天的範圍；篩選條件存在網址；事件詳情列出每條命中的規則；一鍵草擬
   排除或封鎖。
 - **WAF 判斷流程**：依目前的實際設定畫出一個請求在這些站台上怎麼被判定（各站台引擎、計分、門檻、排除、確定阻擋）。
-- **規則**：每條規則標示來源（OWASP CRS 與版本、CRS 外掛、收編時匯入、人員 / API 權杖 / 事件分析提出的變更）、每日命中、
+- **規則**：每條規則標示來源（OWASP CRS 與版本、CRS 外掛、納管時匯入、人員 / API 權杖 / 事件分析提出的變更）、每日命中、
   語法高亮。
 - **變更流程**：單筆變更或合成一筆（一次核准、一個版本、一次 reload）、上傳規則檔、證據、沙箱、健康檢查網址、核准規則
   （提出者不能核准；單人模式核准自己的放寬要重新輸入一次性驗證碼）、嚴格條件下的自動收緊、退回。
@@ -78,8 +78,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.12.tar.gz.sig jt-waf-mgr-0.4.12.tar.gz
-tar xzf jt-waf-mgr-0.4.12.tar.gz && cd jt-waf-mgr-0.4.12
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
+tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -90,7 +90,7 @@ reload，登入後改密碼並設定雙因素驗證。營運設定（GeoIP、LLM
 `/etc/jt-waf-mgr/config.toml` 只放程式啟動需要的項目。
 
 要讓 jt-waf-mgr 修改規則：啟用套用程式（`sudo ./install.sh --enable-apply`）、設定健康檢查網址，再到「規則 → 受管理的
-規則」收編現有規則檔（由 admin 核准，跟一般變更一樣）。在那之前不會動到 nginx。
+規則」納管現有規則檔（由 admin 核准，跟一般變更一樣）。在那之前不會動到 nginx。
 
 ### 升級
 
@@ -102,7 +102,17 @@ sudo jt-waf-mgr doctor        # 隨時查看健康狀態
 ```
 
 升級會用已安裝的程式與釘選的金鑰驗證新版本、有變更正在套用時拒絕升級、在 `/var/backups/jt-waf-mgr/` 保留備份，並把每次
-升級（與還原）寫進稽核記錄。`./uninstall.sh` 移除程式、保留資料與設定（`--purge` 一併移除）。
+升級（與還原）寫進稽核記錄。
+
+### 移除
+
+```sh
+sudo ./uninstall.sh           # 移除服務與程式，保留資料與設定
+sudo ./uninstall.sh --purge   # 連同 /var/lib/jt-waf-mgr、/etc/jt-waf-mgr 與 jtwaf 帳號一併移除
+```
+
+不會動到 nginx 設定：管理介面的 vhost 請自行移除。如果已經納管規則檔，`/etc/nginx/modsec/jt-waf-mgr/` 裡的受管理檔案
+會保留，nginx 照常載入；之後請自行維護。
 
 ## 安全（OWASP Top 10:2025）
 

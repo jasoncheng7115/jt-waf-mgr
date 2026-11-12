@@ -66,7 +66,7 @@ ol.flow li b { display: block; color: var(--ink); } ol.flow li span { color: var
 .chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 600; color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
 .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--blue-h); flex: none; }
 .chip:nth-child(3n+2)::before { background: var(--orange); } .chip:nth-child(3n)::before { background: var(--blue-d); }
-.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .shots figure { margin: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); transition: .15s; }
 .shots figure:hover { box-shadow: 0 8px 26px rgba(15, 23, 42, .10); transform: translateY(-2px); }
 .shots img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-bottom: 1px solid var(--border); }
@@ -78,6 +78,62 @@ ul.ticks li::before { content: "✓"; position: absolute; left: 0; top: 2px; wid
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: center; }
 footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); background: #fff; }
 @media (max-width: 860px) { .hero .wrap, .two { grid-template-columns: minmax(0, 1fr); } .hero h1 { font-size: 34px; } nav.links { display: none; } }
+/* a palette around the logo blue: every card, step and block gets its own colour (--c, --c2) */
+.grid > .card:nth-child(8n+1), ol.flow li:nth-child(6n+1) { --c: #2563c4; --c2: #3a86e6; }
+.grid > .card:nth-child(8n+2), ol.flow li:nth-child(6n+2) { --c: #4f46e5; --c2: #818cf8; }
+.grid > .card:nth-child(8n+3), ol.flow li:nth-child(6n+3) { --c: #0d9488; --c2: #2dd4bf; }
+.grid > .card:nth-child(8n+4), ol.flow li:nth-child(6n+4) { --c: #e8590c; --c2: #ff8a5c; }
+.grid > .card:nth-child(8n+5), ol.flow li:nth-child(6n+5) { --c: #db2777; --c2: #f472b6; }
+.grid > .card:nth-child(8n+6), ol.flow li:nth-child(6n+6) { --c: #0284c7; --c2: #38bdf8; }
+.grid > .card:nth-child(8n+7) { --c: #7c3aed; --c2: #a78bfa; }
+.grid > .card:nth-child(8n+8) { --c: #059669; --c2: #34d399; }
+.card, ol.flow li { border-top: 3px solid var(--c, var(--blue)); background: linear-gradient(180deg, color-mix(in srgb, var(--c, var(--blue)) 5%, #fff), #fff 70%); }
+section.alt .card, section.alt ol.flow li { background: linear-gradient(180deg, color-mix(in srgb, var(--c, var(--blue)) 6%, #fff), var(--panel-2) 70%); }
+.card h3 .ic, ol.flow li::before { background: linear-gradient(135deg, var(--c2, var(--blue-h)), var(--c, var(--blue-d))); box-shadow: 0 2px 8px color-mix(in srgb, var(--c, var(--blue)) 35%, transparent); }
+.card:hover { border-color: color-mix(in srgb, var(--c, var(--blue)) 40%, var(--border)); border-top-color: var(--c, var(--blue)); }
+#ai ul.ticks li:nth-child(odd)::before { background: linear-gradient(135deg, #818cf8, #4f46e5); }
+#notify ul.ticks li::before { background: linear-gradient(135deg, #ff8a5c, #e8590c); }
+#notify ul.ticks li:nth-child(2)::before { background: linear-gradient(135deg, #2dd4bf, #0d9488); }
+section#features { background: radial-gradient(900px 400px at 100% 0%, rgba(99, 102, 241, .07), transparent 60%), radial-gradient(800px 380px at 0% 100%, rgba(13, 148, 136, .06), transparent 60%), var(--bg); }
+section#security { background: radial-gradient(900px 420px at 0% 0%, rgba(232, 89, 12, .06), transparent 60%), radial-gradient(800px 380px at 100% 100%, rgba(37, 99, 196, .08), transparent 60%), var(--bg); }
+section#ai { background: radial-gradient(900px 420px at 100% 50%, rgba(79, 70, 229, .08), transparent 60%), var(--bg); }
+.shots figure:nth-child(4n+1) { border-top: 3px solid #3a86e6; } .shots figure:nth-child(4n+2) { border-top: 3px solid #818cf8; }
+.shots figure:nth-child(4n+3) { border-top: 3px solid #2dd4bf; } .shots figure:nth-child(4n+4) { border-top: 3px solid #ff8a5c; }
+a.shotlink { position: relative; cursor: zoom-in; }
+a.shotlink::after { content: "⤢"; position: absolute; right: 10px; bottom: 10px; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 23, 42, .62); color: #fff; font-size: 16px; opacity: 0; transition: .15s; }
+a.shotlink:hover::after, a.shotlink:focus-visible::after { opacity: 1; }
+/* install / upgrade / uninstall */
+.inst { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.iblock { background: #fff; border: 1px solid var(--border); border-top: 3px solid var(--c); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); min-width: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 6%, #fff), #fff 45%); }
+.iblock.c-install { grid-column: 1 / -1; --c: #2563c4; --c2: #3a86e6; }
+.iblock.c-upgrade { --c: #059669; --c2: #34d399; }
+.iblock.c-remove { --c: #e11d48; --c2: #fb7185; }
+.ihead { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.ihead .ic { width: 34px; height: 34px; border-radius: 10px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;
+  background: linear-gradient(135deg, var(--c2), var(--c)); box-shadow: 0 2px 8px color-mix(in srgb, var(--c) 35%, transparent); }
+.ihead h3 { margin: 2px 0 4px; font-size: 19px; } .ihead p { margin: 0; color: var(--muted); font-size: 15px; }
+.code { position: relative; } .code pre { margin: 0; padding-right: 86px; }
+button.copy { position: absolute; top: 10px; right: 10px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .08); color: #dce6f2; border-radius: 8px;
+  padding: 4px 11px; font: 600 12.5px system-ui; cursor: pointer; }
+button.copy:hover { background: rgba(255, 255, 255, .16); } button.copy.done { background: #059669; border-color: #059669; color: #fff; }
+/* the large view of a screenshot */
+dialog#lb { width: min(1400px, 96vw); height: 94vh; max-height: 94vh; padding: 0; border: 0; border-radius: 14px; background: #fff; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+dialog#lb[open] { display: flex; flex-direction: column; }
+dialog#lb::backdrop { background: rgba(15, 23, 42, .72); backdrop-filter: blur(3px); }
+.lb-bar { display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--border); flex: none; }
+#lb-title { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lb-open { font-size: 14px; white-space: nowrap; }
+.lb-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-size: 17px; cursor: pointer; flex: none; }
+.lb-x:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.lb-body { flex: 1; overflow: auto; background: var(--bg); padding: 14px; overscroll-behavior: contain; }
+.lb-body img { display: block; width: 100%; height: auto; margin: 0 auto; border-radius: 8px; box-shadow: var(--shadow); }
+body.lb-on { overflow: hidden; }
+@media (max-width: 860px) { .shots, .inst { grid-template-columns: minmax(0, 1fr); } dialog#lb { width: 100vw; height: 100vh; max-height: 100vh; max-width: 100vw; border-radius: 0; } }
+.guide-note { margin: -10px 0 22px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, #ff8a5c 10%, #fff); border: 1px solid color-mix(in srgb, #ff8a5c 35%, #fff); }
+.guide-note a { font-weight: 600; }
+p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59e0b; background: #fffbeb; border-radius: 6px; color: #78350f; font-size: 14.5px; }
 </style>
 </head>
 <body>
@@ -95,7 +151,7 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.12</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.13</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -105,7 +161,7 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
     <div class="chips"><span class="chip">nginx</span><span class="chip">libmodsecurity v3</span><span class="chip">OWASP CRS 4</span>
       <span class="chip">Python 3.11+ stdlib</span><span class="chip">Vue 3</span><span class="chip">AGPL-3.0</span></div>
   </div>
-  <a class="shotlink" href="shots/en/overview.png" data-shot-link="overview"><img class="shot" src="shots/en/overview.png" data-shot="overview" alt="jt-waf-mgr overview"></a>
+  <a class="shotlink" href="shots/en/overview.png" data-shot="overview"><img class="shot" src="shots/en/thumb/overview.webp" alt=""></a>
 </div></div>
 
 <section id="features"><div class="wrap">
@@ -133,12 +189,13 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 
 <section id="ai"><div class="wrap two">
   <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
-    <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul></div>
-  <a class="shotlink" href="shots/en/analysis.png" data-shot-link="analysis"><img class="shot" src="shots/en/analysis.png" data-shot="analysis" alt="" loading="lazy"></a>
+    <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul>
+    <p class="disclaimer" data-t="ai_disclaimer"></p></div>
+  <a class="shotlink" href="shots/en/analysis.png" data-shot="analysis"><img class="shot" src="shots/en/thumb/analysis.webp" alt="" loading="lazy"></a>
 </div></section>
 
 <section id="notify" class="alt"><div class="wrap two">
-  <a class="shotlink" href="shots/en/notifications.png" data-shot-link="notifications"><img class="shot" src="shots/en/notifications.png" data-shot="notifications" alt="" loading="lazy"></a>
+  <a class="shotlink" href="shots/en/notifications.png" data-shot="notifications"><img class="shot" src="shots/en/thumb/notifications.webp" alt="" loading="lazy"></a>
   <div><h2 data-t="n_h"></h2><p class="sub" data-t="n_sub"></p>
     <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
       <span class="chip">Discord</span><span class="chip">Zulip</span><span class="chip">Nextcloud Talk</span><span class="chip">Webhook (HMAC)</span></div>
@@ -158,29 +215,57 @@ footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top:
 <section id="screens" class="alt"><div class="wrap">
   <h2 data-t="sc_h"></h2><p class="sub" data-t="sc_sub"></p>
   <div class="shots">
-    <figure><a class="shotlink" href="shots/en/events.png" data-shot-link="events"><img src="shots/en/events.png" data-shot="events" alt="" loading="lazy"></a><figcaption data-t="sc_events"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/waf-model.png" data-shot-link="waf-model"><img src="shots/en/waf-model.png" data-shot="waf-model" alt="" loading="lazy"></a><figcaption data-t="sc_waf"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/changes.png" data-shot-link="changes"><img src="shots/en/changes.png" data-shot="changes" alt="" loading="lazy"></a><figcaption data-t="sc_changes"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/rules.png" data-shot-link="rules"><img src="shots/en/rules.png" data-shot="rules" alt="" loading="lazy"></a><figcaption data-t="sc_rules"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/alerts.png" data-shot-link="alerts"><img src="shots/en/alerts.png" data-shot="alerts" alt="" loading="lazy"></a><figcaption data-t="sc_alerts"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/system-check.png" data-shot-link="system-check"><img src="shots/en/system-check.png" data-shot="system-check" alt="" loading="lazy"></a><figcaption data-t="sc_system"></figcaption></figure>
-    <figure><img src="shots/overview-dark.png" alt="" loading="lazy"><figcaption data-t="sc_dark"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/events.png" data-shot="events"><img src="shots/en/thumb/events.webp" alt="" loading="lazy"></a><figcaption data-t="sc_events"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/waf-model.png" data-shot="waf-model"><img src="shots/en/thumb/waf-model.webp" alt="" loading="lazy"></a><figcaption data-t="sc_waf"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/changes.png" data-shot="changes"><img src="shots/en/thumb/changes.webp" alt="" loading="lazy"></a><figcaption data-t="sc_changes"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/rules.png" data-shot="rules"><img src="shots/en/thumb/rules.webp" alt="" loading="lazy"></a><figcaption data-t="sc_rules"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/alerts.png" data-shot="alerts"><img src="shots/en/thumb/alerts.webp" alt="" loading="lazy"></a><figcaption data-t="sc_alerts"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/system-check.png" data-shot="system-check"><img src="shots/en/thumb/system-check.webp" alt="" loading="lazy"></a><figcaption data-t="sc_system"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/lookup.png" data-shot="lookup"><img src="shots/en/thumb/lookup.webp" alt="" loading="lazy"></a><figcaption data-t="sc_lookup"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/thumb.png" data-shot="overview-dark" data-full="thumb"><img src="shots/en/thumb/overview-dark.webp" alt="" loading="lazy"></a><figcaption data-t="sc_dark"></figcaption></figure>
   </div>
 </div></section>
 
 <section id="install"><div class="wrap">
   <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
-<pre><span class="c"># verify, unpack, install</span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.12.tar.gz.sig jt-waf-mgr-0.4.12.tar.gz
-tar xzf jt-waf-mgr-0.4.12.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.12
+  <p class="guide-note"><span data-t="ms_note"></span> <a id="ms-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY.md" data-t="ms_link"></a></p>
+  <div class="inst">
+    <div class="iblock c-install">
+      <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
+      <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
+tar xzf jt-waf-mgr-0.4.13.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.13
+<span class="c" data-t="c_install"></span>
 sudo ./install.sh
+<span class="c" data-t="c_check"></span>
 sudo jt-waf-mgr check
-sudo jt-waf-mgr user add alice --role admin
-
-<span class="c"># later: upgrade with backup and automatic rollback</span>
-sudo ./upgrade.sh --check &amp;&amp; sudo ./upgrade.sh</pre>
-  <p data-t="in_more"></p>
+<span class="c" data-t="c_admin"></span>
+sudo jt-waf-mgr user add alice --role admin</pre></div>
+    </div>
+    <div class="iblock c-upgrade">
+      <div class="ihead"><span class="ic">↻</span><div><h3 data-t="ub_h"></h3><p data-t="ub_d"></p></div></div>
+      <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_ucheck"></span>
+sudo ./upgrade.sh --check
+<span class="c" data-t="c_up"></span>
+sudo ./upgrade.sh
+<span class="c" data-t="c_rb"></span>
+sudo ./upgrade.sh --rollback</pre></div>
+    </div>
+    <div class="iblock c-remove">
+      <div class="ihead"><span class="ic">✕</span><div><h3 data-t="rb_h"></h3><p data-t="rb_d"></p></div></div>
+      <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_keep"></span>
+sudo ./uninstall.sh
+<span class="c" data-t="c_purge"></span>
+sudo ./uninstall.sh --purge</pre></div>
+    </div>
+  </div>
 </div></section>
+
+<dialog id="lb" aria-labelledby="lb-title">
+  <div class="lb-bar"><span id="lb-title"></span><a id="lb-open" target="_blank" rel="noopener" data-t="open_full"></a>
+    <button type="button" class="lb-x" id="lb-x" aria-label="Close">✕</button></div>
+  <div class="lb-body"><img id="lb-img" alt=""></div>
+</dialog>
 
 <footer><div class="wrap">
   jt-waf-mgr · AGPL-3.0 · <a href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a> ·
@@ -221,15 +306,37 @@ const T = {
   sc_h: 'Screenshots', sc_sub: 'From a synthetic test environment (example.com and documentation addresses).',
   sc_events: 'Events with a timeline you can drag', sc_waf: 'How a request is decided', sc_changes: 'Change workflow', sc_rules: 'Rules and where they come from',
   sc_alerts: 'Alerts to follow up', sc_system: 'System check', sc_dark: 'Dark theme',
-  in_h: 'Install', in_sub: 'Debian 12 / 13 or Ubuntu 22.04 / 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
-  in_more: 'Then add the management vhost (internal networks only), sign in, change the password and set up two-factor authentication. See the README for adoption, upgrades and rollback.',
+  in_sub: 'Debian 12 / 13 or Ubuntu 22.04 / 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
+  ms_note: 'Starting from a fresh nginx, or ModSecurity without CRS 4?', ms_link: 'ModSecurity installation guide →',
+  ai_disclaimer: 'AI can be wrong, in both directions. The model only suggests: loosening always needs a person, only tightening that passed every check may apply on its own. Check the evidence before you approve.',
   sec_policy: 'Security policy',
+  in_h: 'Install, upgrade, uninstall',
+  ib_h: 'Install',
+  ib_d: 'Verify the release signature, unpack and install. Then add the management vhost (internal networks only), sign in, change the password and set up two-factor authentication. Adopting your rule files is described in the README.',
+  c_verify: '# verify the release signature and unpack',
+  c_install: '# install: checks every file and the signature first',
+  c_check: '# read the nginx / ModSecurity configuration',
+  c_admin: '# first admin account; prints a temporary password',
+  ub_h: 'Upgrade',
+  ub_d: 'Verifies the new release with the installed program and the pinned key, keeps a backup and rolls back by itself if any step fails. Every upgrade and rollback is in the audit trail.',
+  c_ucheck: '# every check, nothing changed',
+  c_up: '# backup, switch, checks',
+  c_rb: '# later, if needed: back to the previous version and database',
+  rb_h: 'Uninstall',
+  rb_d: 'Removes the service and the program. nginx is never touched: remove the management vhost yourself; adopted rule files stay in place and nginx keeps loading them.',
+  c_keep: '# keep data and configuration',
+  c_purge: '# also remove data, configuration and the jtwaf user',
+  copy: 'Copy',
+  copied: 'Copied',
+  close: 'Close',
+  open_full: 'Open the whole page',
+  sc_lookup: 'Address lookup with its location',
  },
  'zh-TW': {
   nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
   lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
   releases: '下載發行版', get_started: '開始使用',
-  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它，而且在你收編規則檔之前完全不動 nginx。',
+  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它，而且在你納管規則檔之前完全不動 nginx。',
   f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路（頁面內繪製的世界地圖，不使用地圖服務）、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
   f2_h: '安全的規則變更', f2: '排除、確定阻擋、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
   f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
@@ -257,9 +364,31 @@ const T = {
   sc_h: '截圖', sc_sub: '來自合成測試環境（example.com 與文件用位址）。',
   sc_events: '事件與可拖曳的時間軸', sc_waf: '請求怎麼被判定', sc_changes: '變更流程', sc_rules: '規則與來源',
   sc_alerts: '待處理警示', sc_system: '系統檢查', sc_dark: '深色主題',
-  in_h: '安裝', in_sub: 'Debian 12 / 13 或 Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
-  in_more: '接著加上管理介面的 vhost（只允許內部網路），登入後改密碼並設定雙因素驗證。收編、升級與退回請見 README。',
+  in_sub: 'Debian 12 / 13 或 Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  ms_note: '全新的 nginx，或還沒有 CRS 4 的 ModSecurity？', ms_link: 'ModSecurity 安裝手冊 →',
+  ai_disclaimer: 'AI 可能出錯，兩個方向都會。模型只提供建議：放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。核准前請自行查看證據。',
   sec_policy: '安全政策',
+  in_h: '安裝、升級與移除',
+  ib_h: '安裝',
+  ib_d: '驗證發行檔簽章、解開後安裝。接著加上管理介面的 vhost（只允許內部網路），登入後改密碼並設定雙因素驗證。納管現有規則檔的方式請見 README。',
+  c_verify: '# 驗證發行檔簽章並解開',
+  c_install: '# 安裝：先驗證每個檔案與簽章',
+  c_check: '# 解析 nginx / ModSecurity 設定',
+  c_admin: '# 第一個管理者帳號，會印出臨時密碼',
+  ub_h: '升級',
+  ub_d: '用已安裝的程式與釘選的金鑰驗證新版本、先備份，任何一步失敗都會自動還原。每次升級與還原都寫進稽核記錄。',
+  c_ucheck: '# 只做所有檢查，不改任何東西',
+  c_up: '# 備份、切換、檢查',
+  c_rb: '# 之後需要時：回到升級前的版本與資料庫',
+  rb_h: '移除',
+  rb_d: '移除服務與程式。不會動到 nginx：管理介面的 vhost 請自行移除；已納管的規則檔會保留，nginx 照常載入。',
+  c_keep: '# 保留資料與設定',
+  c_purge: '# 連同資料、設定與 jtwaf 帳號一併移除',
+  copy: '複製',
+  copied: '已複製',
+  close: '關閉',
+  open_full: '開啟整頁原圖',
+  sc_lookup: '查詢位址與所在位置',
  },
  ja: {
   nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
@@ -293,9 +422,31 @@ const T = {
   sc_h: 'スクリーンショット', sc_sub: '合成テスト環境（example.com とドキュメント用アドレス）より。',
   sc_events: 'ドラッグできるタイムライン付きのイベント', sc_waf: 'リクエストの判定方法', sc_changes: '変更フロー', sc_rules: 'ルールとその出所',
   sc_alerts: '対応待ちアラート', sc_system: 'システムチェック', sc_dark: 'ダークテーマ',
-  in_h: 'インストール', in_sub: 'Debian 12 / 13 または Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
-  in_more: '続いて管理画面の vhost（内部ネットワークのみ）を追加し、サインインしてパスワード変更と二要素認証を設定します。取り込み、アップグレード、ロールバックは README を参照してください。',
+  in_sub: 'Debian 12 / 13 または Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  ms_note: 'nginx を新しく入れる場合や、CRS 4 のない ModSecurity の場合は', ms_link: 'ModSecurity インストールガイド →',
+  ai_disclaimer: 'AI はどちらの方向にも誤ることがあります。モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した強化だけが自動適用されます。承認する前に証拠を確認してください。',
   sec_policy: 'セキュリティポリシー',
+  in_h: 'インストール・アップグレード・アンインストール',
+  ib_h: 'インストール',
+  ib_d: 'リリースの署名を検証し、展開してインストールします。続いて管理画面の vhost（内部ネットワークのみ）を追加し、サインインしてパスワード変更と二要素認証を設定します。既存ルールファイルの取り込みは README を参照してください。',
+  c_verify: '# リリースの署名を検証して展開',
+  c_install: '# インストール：先にすべてのファイルと署名を検証',
+  c_check: '# nginx / ModSecurity の設定を解析',
+  c_admin: '# 最初の管理者アカウント（一時パスワードを表示）',
+  ub_h: 'アップグレード',
+  ub_d: 'インストール済みのプログラムと固定された鍵で新しいリリースを検証し、バックアップを取り、どこかで失敗すれば自動で元に戻します。アップグレードとロールバックはすべて監査記録に残ります。',
+  c_ucheck: '# すべてのチェックのみ（何も変更しない）',
+  c_up: '# バックアップ、切り替え、チェック',
+  c_rb: '# 必要なら後で：アップグレード前のバージョンとデータベースに戻す',
+  rb_h: 'アンインストール',
+  rb_d: 'サービスとプログラムを削除します。nginx には触れません。管理画面の vhost はご自身で削除してください。取り込んだルールファイルは残り、nginx は引き続き読み込みます。',
+  c_keep: '# データと設定は残す',
+  c_purge: '# データ、設定、jtwaf ユーザーも削除',
+  copy: 'コピー',
+  copied: 'コピーしました',
+  close: '閉じる',
+  open_full: 'ページ全体を開く',
+  sc_lookup: 'アドレスの照会と所在地',
  },
 }
 function pick() {
@@ -309,11 +460,42 @@ function apply(lang) {
   document.documentElement.lang = lang
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
   for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
-  for (const img of document.querySelectorAll('img[data-shot]')) img.src = 'shots/' + lang + '/' + img.dataset.shot + '.png'
-  for (const a of document.querySelectorAll('a[data-shot-link]')) a.href = 'shots/' + lang + '/' + a.dataset.shotLink + '.png'
+  for (const a of document.querySelectorAll('a[data-shot]')) {
+    const thumb = 'shots/' + lang + '/thumb/' + a.dataset.shot + '.webp'
+    a.querySelector('img').src = thumb
+    a.href = a.dataset.full === 'thumb' ? thumb : 'shots/' + lang + '/' + a.dataset.shot + '.png'
+    const cap = a.parentElement.querySelector('figcaption')
+    a.querySelector('img').alt = cap ? cap.textContent : 'jt-waf-mgr'
+  }
+  document.getElementById('lb-x').setAttribute('aria-label', d.close)
+  document.getElementById('ms-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
 for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))
+// screenshots open large in the page; X, Escape or a click outside the picture closes it
+const lb = document.getElementById('lb')
+for (const a of document.querySelectorAll('a[data-shot]')) a.addEventListener('click', (e) => {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || !lb.showModal) return
+  e.preventDefault()
+  document.getElementById('lb-img').src = a.href
+  document.getElementById('lb-img').alt = a.querySelector('img').alt
+  document.getElementById('lb-title').textContent = a.querySelector('img').alt
+  document.getElementById('lb-open').href = a.href
+  lb.showModal()
+  lb.querySelector('.lb-body').scrollTop = 0
+  document.body.classList.add('lb-on')
+})
+document.getElementById('lb-x').addEventListener('click', () => lb.close())
+lb.addEventListener('click', (e) => { if (e.target === lb || e.target.classList.contains('lb-body')) lb.close() })
+lb.addEventListener('close', () => { document.body.classList.remove('lb-on'); document.getElementById('lb-img').removeAttribute('src') })
+// copy a block of commands (without the comment lines)
+for (const b of document.querySelectorAll('button.copy')) b.addEventListener('click', async () => {
+  const text = b.parentElement.querySelector('pre').innerText.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).join('\n')
+  try { await navigator.clipboard.writeText(text) } catch (e) { return }
+  const d = T[document.documentElement.lang] || T.en
+  b.textContent = d.copied; b.classList.add('done')
+  setTimeout(() => { b.textContent = d.copy; b.classList.remove('done') }, 1600)
+})
 apply(pick())
 </script>
 </body>

@@ -63,6 +63,18 @@ def main():
                 problems.append('%s: native date / time input; use DatePicker' % rel)
             if name not in TABLE_EXEMPT and re.search(r'<table\b', tpl):
                 problems.append('%s: raw <table>; use DataTable (or add it to TABLE_EXEMPT with the reason)' % rel)
+    # request data (paths, user agents, network names, model answers) must never become markup
+    sink = re.compile(r'\bv-html\b|\.innerHTML\b|\.outerHTML\b|insertAdjacentHTML|document\.write\(')
+    for dirpath, _, files in os.walk(SRC):
+        for name in files:
+            if not name.endswith(('.vue', '.js')) or name == 'worldLand.js':
+                continue
+            path = os.path.join(dirpath, name)
+            text = re.sub(r'<!--.*?-->|/\*.*?\*/', lambda m: '\n' * m.group(0).count('\n'), open(path, encoding='utf-8').read(), flags=re.S)
+            for i, line in enumerate(text.split('\n'), 1):
+                code = re.sub(r'//.*$', '', line)
+                if sink.search(code):
+                    problems.append('%s:%d: HTML sink (v-html / innerHTML); render as text' % (os.path.relpath(path, ROOT), i))
     for p in problems:
         print(p)
     print('ui check: %s (%d problems)' % ('OK' if not problems else 'FAILED', len(problems)))

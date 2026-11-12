@@ -2,6 +2,25 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.13 (2026-11-13)
+
+- Tabs and segmented controls (changes, alerts and others) are as wide as their buttons instead of the whole row.
+- The country map lists the first six countries beside it, with "show all"; the map stays in view while the long
+  list scrolls. The overview's source address and network owner cards span the full width; an address shows
+  internal / external and its country on the same line.
+- An open page notices when the server was upgraded (every few minutes and when the tab comes back to the front) and
+  offers a reload; until then it kept running the version it had loaded.
+- Traditional Chinese: 「收編」 is now 「納管」 (adopting the rule files) everywhere; the i18n checks reject the old word.
+- The UI check rejects HTML sinks (`v-html`, `innerHTML` and the like) in the front end.
+- Project site: light theme in the logo's colours with a palette per card, sharp thumbnails (taken at twice the
+  resolution by the browser test, `tools/make_thumbs.py`), screenshots open large in the page with a close button,
+  separate install, upgrade and uninstall blocks with a copy button. READMEs: an Uninstall section.
+- Test environment: the synthetic network name no longer contains markup (it showed up in screenshots).
+- Settings, focus sites: the site names nginx serves are offered as one-click choices (with a search when there are
+  many); typing names by hand still works.
+- The guide link moves to the right of Admin in the top bar. The alerts page tabs use the same segmented style as
+  the other pages. Event analysis: the alerts of a run line up in columns.
+
 ## 0.4.12 (2026-11-13)
 
 - Event analysis no longer mistakes a scanner for users hit by a false positive. An outside address blocked on 5 or

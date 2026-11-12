@@ -38,6 +38,19 @@
                 <label v-for="c in s[k].choices" :key="c" class="chipcheck" :class="{ on: (form[k] || []).includes(c) }">
                   <input v-model="form[k]" type="checkbox" :value="c"><Icon v-if="(form[k] || []).includes(c)" name="check" /><span class="mono">{{ c }}</span></label>
               </div>
+              <div v-else-if="k === 'waf.focus_sites'" class="hostpickwrap">
+                <textarea :id="'uiset-in-' + k" v-model="form[k]" rows="3" class="w-lg mono" spellcheck="false" maxlength="20000"></textarea>
+                <!-- site names read from nginx: a click adds or removes one; typing by hand stays possible -->
+                <div v-if="hostChoices.length" class="hostpick" role="group" :aria-label="t('uiset.focus.from_nginx')">
+                  <div class="hp-head"><span class="muted small">{{ t('uiset.focus.from_nginx') }}</span>
+                    <input v-if="hostChoices.length > 12" v-model="hostQ" type="search" class="hp-q" :placeholder="t('uiset.focus.search')" :aria-label="t('uiset.focus.search')"></div>
+                  <div class="chips">
+                    <button v-for="h in shownHosts" :key="h" type="button" class="chipcheck hp-chip" :class="{ on: focusSet.has(h) }"
+                            :aria-pressed="focusSet.has(h) ? 'true' : 'false'" @click="toggleHost(h)"><Icon :name="focusSet.has(h) ? 'check' : 'add'" /><span class="mono">{{ h }}</span></button>
+                  </div>
+                  <p v-if="hostQ && !shownHosts.length" class="muted small">{{ t('common.no_data') }}</p>
+                </div>
+              </div>
               <textarea v-else-if="s[k].type === 'list' || MULTILINE.includes(k)" :id="'uiset-in-' + k" v-model="form[k]" rows="3"
                         class="w-lg" :class="{ mono: s[k].type === 'list' }" spellcheck="false" maxlength="20000"></textarea>
               <input v-else-if="s[k].type === 'int'" :id="'uiset-in-' + k" v-model.number="form[k]" type="number" class="w-sm" :min="s[k].min" :max="s[k].max">
@@ -309,8 +322,39 @@ function pinTop(el) {
   for (const ev of stopOn) window.addEventListener(ev, stop, { capture: true, passive: true })
   setTimeout(stop, 4000)
 }
+// Focus sites: the server names nginx serves, offered as one-click choices next to the text box. Only plain names fit
+// the setting (no wildcards, regexes or "_").
+const hostChoices = ref([])
+const hostQ = ref('')
+const focusSet = computed(() => new Set(String(form['waf.focus_sites'] || '').split('\n').map((x) => x.trim().toLowerCase()).filter(Boolean)))
+const shownHosts = computed(() => {
+  const q = hostQ.value.trim().toLowerCase()
+  return q ? hostChoices.value.filter((h) => h.includes(q)) : hostChoices.value
+})
+function toggleHost(h) {
+  const lines = String(form['waf.focus_sites'] || '').split('\n').map((x) => x.trim()).filter(Boolean)
+  const i = lines.findIndex((x) => x.toLowerCase() === h)
+  if (i >= 0) lines.splice(i, 1)
+  else lines.push(h)
+  form['waf.focus_sites'] = lines.join('\n')
+}
+async function loadHosts() {
+  try {
+    const r = await get('/vhosts')
+    const names = new Set()
+    for (const v of r.items || []) {
+      for (const n of v.server_names || []) {
+        const h = String(n).toLowerCase()
+        if (/^[a-z0-9.-]{1,253}$/.test(h) && h.includes('.') && !h.startsWith('.')) names.add(h)
+      }
+    }
+    hostChoices.value = [...names].sort()
+  } catch (e) { /* nginx not readable: typing by hand still works */ }
+}
+
 onMounted(async () => {
   try { load(await get('/settings/ui')) } catch (e) { error.value = e }
+  if (s.value && s.value['waf.focus_sites']) loadHosts()
   goToHash()
   if (shownGroups.value.some((g) => g.key === 'llm')) {
     try {
@@ -322,6 +366,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.hostpickwrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hostpick { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 8px 10px; max-width: 760px; }
+.hp-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.hp-q { width: 14em; max-width: 100%; }
+.hostpick .chips { max-height: 220px; overflow: auto; }
+.hp-chip { font: inherit; cursor: pointer; }
 .uiset { scroll-margin-top: 70px; transition: box-shadow .3s; }
 .uiset.flash { box-shadow: 0 0 0 3px var(--accent); }
 .uiset .ghint { color: var(--muted); font-size: .92em; margin: -2px 0 10px; }

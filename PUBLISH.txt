@@ -28,6 +28,7 @@ tools/build_frontend.sh
 tools/check_i18n.py
 tools/check_ui.py
 tools/i18n_add.py
+tools/make_thumbs.py
 tools/make_worldmap.py
 tools/preflight.py
 tools/make_release.sh
@@ -44,6 +45,9 @@ docs/dev/
 docs/COMPLIANCE.md
 docs/COMPLIANCE.zh-TW.md
 docs/COMPLIANCE.ja.md
+docs/MODSECURITY.md
+docs/MODSECURITY.zh-TW.md
+docs/MODSECURITY.ja.md
 docs/index.html
 docs/shots/
 docs/logo-mark.svg

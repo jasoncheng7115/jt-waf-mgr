@@ -308,7 +308,7 @@ input[type=checkbox] { padding: 0; }
 .btn.danger { color: var(--blocked); border-color: var(--blocked); background: transparent; }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 3px 9px; font-size: 13px; }
-.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.seg { display: inline-flex; width: fit-content; max-width: 100%; align-self: flex-start; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
 .seg button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13.5px; padding: 4px 12px; border: none; background: var(--panel); color: var(--muted); cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border-strong); }
 .seg button.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
@@ -407,6 +407,8 @@ pre.diff .dh { color: var(--muted); font-weight: 600; }
 .loginnotice { white-space: pre-line; text-align: left; margin: 0 0 12px; }
 .lastlogin { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .lastlogin .btn { margin-left: auto; }
+.newver { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.newver .btn { margin-left: auto; }
 .policy { margin: 0 0 10px; padding-left: 0; }
 .policy li::before { content: "· "; }
 .integritybanner { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
@@ -652,6 +654,7 @@ td .pickval + .geotag { margin-top: 2px; }
 .openlink:hover { color: var(--accent); }
 .openlink .icon { width: .95em; height: .95em; }
 .hb-line { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.sub.sub-inl { display: inline; margin-left: 10px; white-space: nowrap; font-family: var(--sans); font-size: 12.5px; }
 .hb-pick { min-width: 0; }
 .hb-pickbar { cursor: pointer; }
 .hb-on .hb-bar { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
@@ -705,7 +708,7 @@ td .pickval + .geotag { margin-top: 2px; }
   .timebars .chartsvg { min-width: 720px; height: auto; }
   .fs-box { min-width: 0; }
   .footer { flex-wrap: wrap; }
-  .lastlogin .btn, .integritybanner .btn { margin-left: 0; }
+  .lastlogin .btn, .newver .btn, .integritybanner .btn { margin-left: 0; }
   dl.kv, dl.kv.two { grid-template-columns: minmax(0, 1fr); gap: 0 10px; }
   dl.kv dt { margin-top: 6px; }
 }

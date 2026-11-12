@@ -68,6 +68,11 @@
     <div v-else class="bare-top"><ThemeSwitch /><LangSwitch /></div>
 
     <main class="content">
+      <!-- the server was upgraded while this tab was open: the page still runs the old program until it reloads -->
+      <div v-if="newVersion" class="alert info newver" role="status">
+        <span>{{ t('app.new_version', { version: safeText(newVersion, 20) }) }}</span>
+        <button type="button" class="btn small primary" @click="reloadPage"><Icon name="refresh" />{{ t('app.reload') }}</button>
+      </div>
       <div v-if="!bare && state.lastLogin" class="alert lastlogin" :class="state.lastLogin.failed_since > 0 ? 'warn' : 'info'" role="status">
         <span v-if="state.lastLogin.at">{{ t('lastlogin.at', { at: fmtMinute(state.lastLogin.at), ip: safeText(state.lastLogin.ip || '—', 45) }) }}</span>
         <span v-else>{{ t('lastlogin.first') }}</span>
@@ -91,7 +96,7 @@ import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { state, hasRole, clearSession, pending, refreshPending, alertCount, refreshAlerts } from './store.js'
 import { startCardFold, relabelCardFold } from './cardFold.js'
-import { post } from './api.js'
+import { get, post } from './api.js'
 import { t, lang } from './i18n.js'
 import { safeText, fmtMinute } from './util.js'
 import LangSwitch from './components/LangSwitch.vue'
@@ -127,7 +132,6 @@ const navGroups = computed(() => [
     { to: '/changes', label: t('nav.changes_list'), icon: 'change', badge: pending.count || 0, badgeTitle: t('nav.pending_approval') },
     ...(isApprover.value ? [{ to: '/config-changes', label: t('nav.config_changes'), icon: 'history' }] : []),
   ] },
-  { key: 'guide', to: '/guide', label: t('nav.guide'), icon: 'help', inlineIcon: true },
   ...(isAdmin.value ? [{ key: 'admin', label: t('nav.admin'), icon: 'settings', items: [
     { to: '/admin/users', label: t('nav.users'), icon: 'users' },
     { to: '/admin/tokens', label: t('nav.tokens'), icon: 'key' },
@@ -137,6 +141,7 @@ const navGroups = computed(() => [
     { to: '/admin/notify', label: t('nav.notify'), icon: 'notify' },
     { to: '/admin/settings', label: t('nav.settings'), icon: 'settings' },
   ] }] : []),
+  { key: 'guide', to: '/guide', label: t('nav.guide'), icon: 'help', inlineIcon: true },
 ])
 const trig = {}
 function groupActive(g) { return g.items.some((l) => route.path === l.to || route.path.startsWith(l.to + '/')) }
@@ -199,9 +204,23 @@ function onFocusIn(e) {
 }
 watch(() => route.fullPath, () => { openMenu.value = null })
 
+// After an upgrade an open tab keeps the program it loaded; look at the server's version every few minutes and when
+// the tab comes back to the front, and offer a reload when it changed.
+const newVersion = ref('')
+let ticks = 0
+async function checkVersion() {
+  try {
+    const m = await get('/meta')
+    if (state.meta.version && m && m.version && m.version !== state.meta.version) newVersion.value = m.version
+  } catch { /* offline or signed out: try again later */ }
+}
+function onVisible() { if (document.visibilityState === 'visible') checkVersion() }
+function reloadPage() { window.location.reload() }
+
 let timer = null
 onMounted(() => {
-  timer = setInterval(() => { refreshPending(true); refreshAlerts(true) }, 60000)
+  timer = setInterval(() => { refreshPending(true); refreshAlerts(true); if (++ticks % 5 === 0) checkVersion() }, 60000)
+  document.addEventListener('visibilitychange', onVisible)
   startCardFold()
   document.addEventListener('pointerdown', onDocDown, true)
   document.addEventListener('keydown', onDocKey)
@@ -209,6 +228,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   clearInterval(timer)
+  document.removeEventListener('visibilitychange', onVisible)
   if (ro) ro.disconnect()
   cancelAnimationFrame(raf)
   document.removeEventListener('pointerdown', onDocDown, true)
