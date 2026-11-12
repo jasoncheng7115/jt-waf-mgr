@@ -1,9 +1,12 @@
 <!-- Columns over time (one or more stacked series) with a crosshair tooltip that snaps to the nearest bucket.
-     data: [{ t, <seriesKey>: n }]   series: [{ key, label, tone }] -->
+     data: [{ t, <seriesKey>: n }]   series: [{ key, label, tone }]
+     selectable: drag across the columns to pick a time range -> emits select { since, until } (ISO). -->
 <template>
   <div ref="box" class="timebars">
-    <svg ref="svg" :viewBox="'0 0 ' + Wr + ' ' + H" :width="Wr" :height="H" class="chartsvg" role="img" :aria-label="label || t('chart.timeline')"
-         @pointermove="move" @pointerleave="leave">
+    <svg ref="svg" :viewBox="'0 0 ' + Wr + ' ' + H" :width="Wr" :height="H" class="chartsvg" :class="{ brushable: selectable }" role="img"
+         :aria-label="label || t('chart.timeline')"
+         @pointermove="move" @pointerleave="leave" @pointerdown="down" @pointerup="up" @pointercancel="cancel">
+      <rect v-if="brush" class="brush" :x="brush.x" :y="PADT" :width="brush.w" :height="H - PADT - PADB" />
       <line v-for="g in grid" :key="'g' + g.v" class="gridline" :x1="PADL" :x2="Wr" :y1="g.y" :y2="g.y" />
       <text v-for="g in grid" :key="'l' + g.v" class="axis-label" :x="PADL - 6" :y="g.y + 4" text-anchor="end">{{ fmtCompact(g.v) }}</text>
       <line class="axis" :x1="PADL" :y1="H - PADB" :x2="Wr" :y2="H - PADB" />
@@ -19,6 +22,7 @@
       </g>
       <text v-for="tk in ticks" :key="'t' + tk.x" class="axis-label" :x="tk.x" :y="H - 6" text-anchor="middle">{{ tk.label }}</text>
     </svg>
+    <p v-if="brush && brushText" class="brushtext" aria-live="polite">{{ brushText }}</p>
     <div v-if="series.length > 1" class="legend">
       <span v-for="s in series" :key="s.key" class="lg-item"><span class="lg" :class="'tone-' + s.tone"></span>{{ s.label }}</span>
     </div>
@@ -37,7 +41,10 @@ const props = defineProps({
   data: { type: Array, default: () => [] },
   series: { type: Array, required: true },
   label: { type: String, default: '' },
+  selectable: Boolean,
+  bucketSeconds: { type: Number, default: 3600 },
 })
+const emit = defineEmits(['select'])
 // the drawing is as wide as its box (1 unit = 1 px): no letterboxing, text never stretched
 const H = 190, PADL = 48, PADB = 24, PADT = 10
 const box = ref(null)
@@ -108,15 +115,48 @@ function fmtDay(iso) {
   return isNaN(d) ? String(iso) : new Intl.DateTimeFormat(lang.value, { month: '2-digit', day: '2-digit' }).format(d)
 }
 function fmtCompact(v) { return v >= 10000 ? Math.round(v / 1000) + 'K' : fmtNum(v) }
-function move(e) {
-  if (!svg.value || !props.data.length) return
+function indexAt(e) {
   // map the pointer into viewBox units with the SVG's own transform (exact whatever the scaling / centring)
   const ctm = svg.value.getScreenCTM()
-  if (!ctm) return
+  if (!ctm) return -1
   const pt = svg.value.createSVGPoint()
   pt.x = e.clientX; pt.y = e.clientY
   const x = pt.matrixTransform(ctm.inverse()).x
-  const i = Math.min(props.data.length - 1, Math.max(0, Math.floor((x - PADL) / slot.value)))
+  return Math.min(props.data.length - 1, Math.max(0, Math.floor((x - PADL) / slot.value)))
+}
+// drag to select a range of buckets
+const drag = ref(null)          // { a, b }
+const brush = computed(() => {
+  if (!drag.value || drag.value.a === drag.value.b) return null
+  const lo = Math.min(drag.value.a, drag.value.b), hi = Math.max(drag.value.a, drag.value.b)
+  return { x: PADL + lo * slot.value, w: (hi - lo + 1) * slot.value, lo, hi }
+})
+const brushText = computed(() => {
+  if (!brush.value) return ''
+  const a = props.data[brush.value.lo].t, b = new Date(new Date(props.data[brush.value.hi].t).getTime() + props.bucketSeconds * 1000).toISOString()
+  return t('chart.brush_range', { since: daily.value ? fmtDay(a) : fmtShortTime(a), until: daily.value ? fmtDay(b) : fmtShortTime(b) })
+})
+function down(e) {
+  if (!props.selectable || !props.data.length || e.button > 0) return
+  const i = indexAt(e)
+  if (i < 0) return
+  drag.value = { a: i, b: i }
+  try { svg.value.setPointerCapture(e.pointerId) } catch { /* old browsers */ }
+}
+function up() {
+  const b = brush.value
+  drag.value = null
+  if (!b) return
+  const since = new Date(props.data[b.lo].t).toISOString()
+  const until = new Date(new Date(props.data[b.hi].t).getTime() + props.bucketSeconds * 1000).toISOString()
+  emit('select', { since, until })
+}
+function cancel() { drag.value = null }
+function move(e) {
+  if (!svg.value || !props.data.length) return
+  const i = indexAt(e)
+  if (i < 0) return
+  if (drag.value) drag.value.b = i
   hover.value = i
   const d = props.data[i]
   at(e, daily.value ? fmtDay(d.t) : fmtShortTime(d.t), props.series.map((s) => ({ value: fmtNum(d[s.key] || 0), label: s.label, tone: s.tone })))

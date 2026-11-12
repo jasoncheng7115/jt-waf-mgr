@@ -104,6 +104,22 @@ Actions (approver unless noted), all return the full Change:
 - `POST /changes/{id}/recheck` (operator) body `{"evidence_override": "justification (optional)"}` — from `failed` or
   `pending_approval`; with an override, a failed evidence check no longer blocks (recorded; never auto-applied).
 
+### Several operations as one change (0.3.4)
+`POST /changes` with `{"op": "bundle", "ops": [{"op": "add|modify|disable|enable|delete", "kind": "…", "spec": {…}, "item_id": 12}, …],
+"reason": "…", "tests": [Test]}` (1–100 operations, each item at most once). Every operation is validated like a
+single change (raw rules: admins only; rule ids handed out in order, never reused). The change has `op` and `kind`
+`"bundle"`, `spec.ops` lists the operations with their `rule_id` and `direction`, and it is tightening only when every
+operation tightens. Checks: static on the resulting files, evidence per operation (`EvidenceResult.bundle`: one result
+per operation, the change passes when all pass), sandbox on the result (a 403 test is required when a confident
+block is added). One approval, one version, one nginx reload, one rollback.
+
+`POST /managed/import` accepts `"as_one": true`: all differences of the uploaded file as one bundle; new rules
+are placed right before the next existing rule of the uploaded file.
+
+Confident block spec: `"source": "external"` (default) | `"all"` (internal sources too, except
+`[network] known_scanners`; never applied automatically). Raw spec, `op: add`: `"before_rule_id": 10299` puts the
+rule right before that managed rule of the same file (default: at the end).
+
 ## Versions
 
 `GET /api/v1/versions` (viewer) → `{"items": [{"version": 5, "created_at", "change_id", "kind": "change|adopt|rollback",

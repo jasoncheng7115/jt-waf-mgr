@@ -1,15 +1,11 @@
-<!-- Follow the system / light / dark (per browser). -->
+<!-- Follow the system / light / dark (per browser): one icon (the current choice) that opens the menu. -->
 <template>
-  <div class="seg themeswitch" role="radiogroup" :aria-label="t('theme.label')">
-    <button v-for="v in THEMES" :key="v" type="button" role="radio" :aria-checked="theme === v ? 'true' : 'false'"
-            :class="{ on: theme === v }" :title="t('theme.' + v)" :aria-label="t('theme.' + v)" @click="setTheme(v)">
-      <Icon :name="v" />
-    </button>
-  </div>
+  <IconMenu class="themeswitch" :icon="theme" :title="t('theme.label') + ': ' + t('theme.' + theme)" :model-value="theme"
+            :options="THEMES.map((v) => ({ value: v, label: t('theme.' + v), icon: v }))" @change="setTheme" />
 </template>
 
 <script setup>
 import { t } from '../i18n.js'
 import { theme, setTheme, THEMES } from '../theme.js'
-import Icon from './Icon.vue'
+import IconMenu from './IconMenu.vue'
 </script>

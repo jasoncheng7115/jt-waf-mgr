@@ -11,6 +11,7 @@
       <section class="card">
         <dl class="kv two">
           <dt>{{ t('rules.directive') }}</dt><dd class="mono">{{ safeText(rule.directive, 40) }}</dd>
+          <dt>{{ t('prov.title') }}</dt><dd><ProvenanceTag :p="rule.provenance" /></dd>
           <dt>{{ t('rules.source') }}</dt><dd>{{ t('source.' + (rule.source || 'local')) }}
             <span v-if="!rule.managed" class="chip tag">{{ t('rules.unmanaged') }}</span></dd>
           <dt>{{ t('rules.category') }}</dt><dd>{{ t('category.' + (rule.category || 'other')) }}</dd>
@@ -31,15 +32,15 @@
         </div>
       </section>
       <section v-if="rule.comment" class="card">
-        <h2>{{ t('rules.comment') }}</h2>
-        <pre class="code">{{ safeMultiline(rule.comment) }}</pre>
+        <h2><Icon name="info" /> {{ t('rules.comment') }}</h2>
+        <p class="prose">{{ safeMultiline(rule.comment) }}</p>
       </section>
       <section class="card">
-        <h2>{{ t('rule.text') }}</h2>
-        <pre class="code">{{ safeMultiline(rule.text) }}</pre>
+        <h2><Icon name="code" /> {{ t('rule.text') }}</h2>
+        <RuleText :text="rule.text" />
       </section>
       <section class="card">
-        <h2>{{ t('rule.hits_by_day') }}</h2>
+        <h2><Icon name="chart" /> {{ t('rule.hits_by_day') }}</h2>
         <div class="chartgrid">
           <div><h3 class="charthead">{{ t('chart.outcome_split') }}</h3><SegBar :parts="hitParts" :label="t('chart.outcome_split')" /></div>
         </div>
@@ -52,12 +53,14 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { get } from '../api.js'
+import ProvenanceTag from '../components/ProvenanceTag.vue'
 import { t } from '../i18n.js'
 import { safeText, safeMultiline, fmtNum, fmtTime } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import Icon from '../components/Icon.vue'
 import FlowSteps from '../components/FlowSteps.vue'
+import RuleText from '../components/RuleText.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import TimeBars from '../components/charts/TimeBars.vue'
 import { hasRole } from '../store.js'
@@ -119,3 +122,7 @@ async function load() {
 }
 watch(() => props.id, load, { immediate: true })
 </script>
+
+<style scoped>
+.prose { margin: 0; white-space: pre-line; max-width: 80ch; }
+</style>

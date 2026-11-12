@@ -1,5 +1,138 @@
 # Changelog
 
+## 0.4.0 (2026-11-12)
+
+- Notifications: e-mail (SMTP, text + HTML), Telegram, Microsoft Teams (Workflows, Adaptive Card), Slack,
+  Discord, Zulip, Nextcloud Talk (signed bot) and a generic webhook (JSON, HMAC-SHA256 signature, optional
+  bearer token). Set up in Settings > Notifications with a "send a test" per channel; a matrix decides which
+  events go to which channel (security and integrity, changes awaiting approval / applied / failed, event
+  analysis, backups, version changes, accounts). Messages in Traditional Chinese, English or Japanese, with a
+  link back to the page. The web service only queues them; a new sandboxed one-shot unit
+  (jt-waf-mgr-notify: request file + one-minute timer) sends them, retries (1, 5, 15 minutes), records
+  failures, limits each channel per hour and keeps 90 days of delivery records. Values from requests are
+  never markup, mentions or links in a message; secrets are write-only and never in errors or the audit trail.
+- Alerts to follow up: what the event analysis or the system finds that someone has to look at (an attack the
+  site may have answered with content, users hit by a false positive, an attack in progress, outside
+  configuration changes, integrity problems, failed applies or backups, attacks on one-time codes) opens an
+  alert, listed under Alerts with a count in the menu, notified at once and reminded until an approver marks
+  it handled with a note (audited).
+- Event analysis: also looks at requests the anomaly score blocked and proposes the narrowest exclusion for a
+  false positive (one site, one path or path prefix, the rules and request parts that matched); exclusions
+  always wait for a person. Confident blocks proposed by the analysis can apply by themselves when the new
+  workflow switch is on (same conditions as other automatic tightening: external sources only, clean
+  evidence, sandbox passed, daily limit). An attack probe the site answered with 2xx opens a critical alert;
+  the model may flag an attack in progress.
+- Overview: drag across the hourly timeline to look at that time range, or pick a custom range (1 hour to 31
+  days; days instead of hours beyond a week); external sources show their country and network owner.
+- Every card title can be folded (button or a click on the title band), remembered per page; cards with
+  buttons in the title get the title band too; card titles fit on phones.
+- Fixes: chart tooltips are no longer squeezed or cut off inside small cards; a link to a settings card keeps
+  it at the top while the cards above it load.
+- System check: notifications (on, channels in use, failures, stuck queue); Wazuh rule drafts for alerts and
+  failed notifications. Schema 7.
+- Event analysis page: a summary of the latest run (events analysed, how long it took, candidates, verdicts,
+  proposals, alerts, the model's main points); every run records the number of events analysed and its duration.
+- Timelines with drag-to-select on the event list and the address lookup (from the server, same filters) and on
+  the audit trail, alerts, notification deliveries and changes (from the loaded rows).
+- Top bar grouped into drop-downs (events, rules, changes, admin) with the open-alert and pending-approval
+  counts on their group.
+- Rules show where they come from: OWASP CRS (version, registered automation), a CRS plugin, imported at
+  adoption, a change by a person / an API token / the event analysis (with the change), a vhost, an unmanaged
+  site file, the ModSecurity base settings.
+- Audit trail: the raw action name and a readable one in the reader's language; details open in a dialog with
+  syntax-coloured JSON.
+- Filter forms: applied conditions in colour; changed but not applied ones marked and the Apply button asks to be
+  pressed.
+- Overview tiles: icon, label, number, trend line and a full-width trend chart at the bottom.
+- Layout: system check cards (status colour, problems first, no stretched cards, missing labels translated),
+  the WAF model's scoring card and the lists of uninspected sites / locations, centred table rows, the guide's
+  diagram line no longer on the group border, separated badges.
+- Wording: 「封鎖」 instead of 「擋下」 in Traditional Chinese; the LLM is "self-hosted" (地端), not "local" (本機).
+- From the independent review: exclusions proposed by the analysis are one exact path written one way (no case,
+  ./ or ../ variants) and plain request parts read only from ModSecurity's own text; none from one or two outside
+  addresses; approving one needs a one-time code and a note; at most five alerts of a kind per run; chat
+  messages can never mention people; webhook token and secret bound to the webhook address (scheme, host, port);
+  no SMTP password without TLS; no loopback / link-local notification targets; one dead channel does not hold
+  up the others; rollback stops the analysis and notification units while the database is restored; the names
+  analyst, system and cli are reserved.
+
+## 0.3.5 (2026-11-12)
+
+- Settings cards: two-column rows (name, explanation and where the value comes from on the left, the control
+  on the right), on/off switches, database choices as chips, short number fields, unsaved rows marked, the
+  save result next to the buttons.
+- Notices keep a clear gap to the text before and after them, on every page.
+- Local LLM settings in a clear order (address and key, test, model, switch on) with a step diagram: one
+  "Save and test connection" button, and the model is chosen from ONE list filled by the last test (the
+  separate text field and second list are gone). Reasoning models (a <think> block before the answer) work
+  for the test and the analysis.
+- The analysis interval is set in minutes (at least 10); the timer wakes the job every 5 minutes. A value
+  stored in hours by 0.3.4 is read as minutes.
+- Analysis page: live progress while a run is asked for or running (each step as it happens, also after
+  leaving the page and coming back), then the result.
+- Rule texts with syntax highlighting and a formatted view (one action per line, chained rules indented), the
+  exact original one click away, copy button; also in diffs, the change preview and managed rules.
+- Database backups can be downloaded (admin, fresh one-time code each time, audited). The nightly backup is
+  no longer skipped after a backup made by hand the evening before.
+- Long lists: one way to page through them -- "next" past the loaded rows loads the next batch (the separate
+  "load more" button is gone).
+- Overview: focus sites with events get a full-width card each, quiet ones share one line; rules chart full
+  width with readable labels; trend lines show the value at the pointer; horizontal bars keep each label next
+  to its bar; the source column stays on one line.
+- Settings: the read-only configuration list refreshes after a save and no longer repeats what is set in the
+  web interface; links to a settings card scroll to it.
+- Flows with descriptions are a vertical timeline; every card title has an icon; theme and language are one
+  icon menu each; compliance values as a labelled grid; paths aligned; audit record opens into view.
+- Wording: two-factor authentication (雙因素驗證); API token is 「API 權杖」 in Traditional Chinese.
+- Security: a number beyond the database range in a query parameter (e.g. cursor) answered 500; now 400.
+- From an independent review of the backup download and schedule: one-time codes for sensitive actions
+  (backup download, approving one's own loosening) are limited to 5 wrong codes per 10 minutes (then refused,
+  recorded as critical) and a code can never be used twice, also by two requests at once; the backup is
+  sent in pieces (not read into memory) and checked against its recorded SHA-256; a failing nightly backup is
+  retried hourly (three times) and never removes good copies; the newest three backups are always kept; the
+  monitor's timers use a monotonic clock; Wazuh rule drafts for downloads and repeated wrong codes.
+- Release gates: TEST_PLAN.md; a security scan of every route on every browser test run
+  (tools/security_scan.py); an OWASP ZAP passive + active scan of a logged-in disposable instance
+  (tools/zap_scan.py, accepted findings with reasons in deploy/zap-baseline.conf).
+- Adoption is no longer recorded as an outside configuration change: the site's old rule files leaving
+  main.conf are part of jt-waf-mgr's own change. (The record made at the first site's adoption stays as it
+  is; the system check stops warning about it after 7 days.)
+
+## 0.3.4 (2026-11-12)
+
+- Settings in the web interface (admin, audited, in effect at once, stored in the database and laid over
+  the configuration file): GeoIP account and license key, the local LLM server, the scheduled event
+  analysis, focus sites, known scanners, catch-all hosts, paths changed by known automation, login notice,
+  compliance level, password and lockout policy. Secrets are write-only (only "set, ends with …" is shown)
+  and never written to the audit trail. config.toml keeps only what the program needs to start.
+- Scheduled event analysis with a local, OpenAI-compatible LLM (new page "Analysis", its own sandboxed unit
+  with an hourly timer and "Run now"): recent external events that no confident rule blocked are grouped by
+  path, the model judges which are attack probes, and every answer is validated by the program (ids,
+  regex compiles, is narrow, matches every observed form, matches no common or legitimate path) before it
+  becomes an ordinary confident-block proposal. The analysis never approves anything; its proposals always
+  wait for a person, also when automatic apply of tightening changes is on. Any LLM error: nothing proposed.
+- "Test connection" for the LLM server runs in the analysis unit (the web service keeps no network access
+  beyond localhost).
+- Several rule operations as one change ("bundle"): checked, approved and applied together - one version,
+  one nginx reload, one rollback. Uploading a rules file can propose all differences as one change; new
+  rules keep their place in the file.
+- Confident blocks can also cover internal sources ("external and internal, known scanners excepted");
+  such a rule is never applied automatically and its sandbox test expects the internal request refused.
+- A new raw rule can be placed right before a given managed rule (e.g. before 10299).
+- Configuration changes by known automation (e.g. the CRS update, country lists) are recorded as
+  "automation" instead of "outside" when their paths are listed.
+- GeoIP: switching it on or off in Settings takes effect without a restart.
+- Charts: a distribution bar is one framed track; stacked horizontal bars no longer look like two pieces.
+- Consecutive button rows no longer touch.
+- From an independent review: rule ids of a bundle are reserved like any other; at most 20 confident blocks
+  per bundle and one pass over the access logs for all of them; every confident block of a bundle needs its
+  own matching 403 test; a change whose rules would differ at apply time from the checked ones (e.g. known
+  scanners changed meanwhile) is checked and approved again; the analysis refuses a model regex that could
+  backtrack catastrophically before it meets any request data; known scanners must be internal and no wider
+  than /16; a new LLM server address needs the API key entered again; rule comments never end in a
+  backslash; many rules inserted before one rule keep their order; the sandbox's internal test address is
+  never a known scanner.
+
 ## 0.3.3 (2026-11-12)
 
 - Adoption: the root apply program also validates rule by rule (it re-checks every request itself and

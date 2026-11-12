@@ -11,7 +11,7 @@
     </section>
 
     <section class="card">
-      <h2>{{ t('guide.arch.title') }}</h2>
+      <h2><Icon name="map" /> {{ t('guide.arch.title') }}</h2>
       <p class="muted small">{{ t('guide.arch.hint') }}</p>
       <div class="archwrap">
         <svg class="archsvg" viewBox="0 0 1000 520" role="group" :aria-label="t('guide.arch.title')">
@@ -60,7 +60,7 @@
     </section>
 
     <section class="card">
-      <h2>{{ t('guide.roles.title') }}</h2>
+      <h2><Icon name="users" /> {{ t('guide.roles.title') }}</h2>
       <div class="rolegrid">
         <div v-for="r in roles" :key="r" class="rolecard" :class="{ mine: state.user && state.user.role === r }">
           <h3><Icon :name="roleIcon[r]" /> {{ t('role.' + r) }}<span v-if="state.user && state.user.role === r" class="badge tiny b-ok">{{ t('guide.roles.you') }}</span></h3>
@@ -114,7 +114,7 @@ const edges = [
   edge('m-n', 'managed', 't', 'nginx', 'b', { a: [570, 180], b: [570, 122], label: 'guide.edge.loads', lx: 576, ly: 156, anchor: 'start' }),
   edge('ap-m', 'apply', 'l', 'managed', 'r', { label: 'guide.edge.writes' }),
   edge('ap-n', 'apply', 't', 'nginx', 'r', { d: 'M775,180 L775,92 L630,92', label: 'guide.edge.test_reload', lx: 782, ly: 140, anchor: 'start' }),
-  edge('a-c', 'auditlog', 'b', 'collector', 't', { d: 'M380,244 L380,282 L280,282 L280,320', label: 'guide.edge.reads', lx: 300, ly: 274, anchor: 'start' }),
+  edge('a-c', 'auditlog', 'b', 'collector', 't', { d: 'M380,244 L380,264 L280,264 L280,320', label: 'guide.edge.reads', lx: 386, ly: 259, anchor: 'start' }),
   edge('c-d', 'collector', 'r', 'database', 'l'),
   edge('w-d', 'workflow', 'l', 'database', 'r'),
   edge('u-w', 'webui', 'l', 'workflow', 'r'),

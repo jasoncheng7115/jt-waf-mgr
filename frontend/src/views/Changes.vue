@@ -36,7 +36,8 @@
       </div>
       <p class="muted small">{{ t('chart.change.loaded', { n: fmtNum(items.length) }) }}</p>
     </section>
-    <DataTable id="changes" :columns="cols" :rows="items" row-key="id" :default-sort="{ key: 'id', dir: -1 }"
+    <RowTimeline v-model:window="win" :rows="items" ts-key="created_at" :series="tlSeries" />
+    <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(true)" id="changes" :columns="cols" :rows="shownItems" row-key="id" :default-sort="{ key: 'id', dir: -1 }"
                clickable @row-click="(c) => router.push('/changes/' + c.id)">
       <template #cell-id="{ row }"><RouterLink class="mono" :to="'/changes/' + row.id" @click.stop>{{ row.id }}</RouterLink></template>
       <template #cell-created_at="{ row }">{{ fmtShortTime(row.created_at) }}</template>
@@ -49,7 +50,6 @@
       <template #cell-proposed_by="{ row }">{{ safeText(row.proposed_by, 64) }}<span v-if="row.proposed_via === 'api'" class="chip tag">API</span></template>
       <template #cell-updated_at="{ row }">{{ fmtShortTime(row.updated_at) }}</template>
     </DataTable>
-    <LoadMore :cursor="cursor" :busy="loading" @more="load(true)" />
   </div>
 </template>
 
@@ -57,12 +57,13 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { get } from '../api.js'
+import RowTimeline from '../components/RowTimeline.vue'
+import { inWindow } from '../timeWindow.js'
 import { t } from '../i18n.js'
 import { hasRole, pending, refreshPending } from '../store.js'
 import { safeText, fmtShortTime, fmtNum } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
-import LoadMore from '../components/LoadMore.vue'
 import TruncText from '../components/TruncText.vue'
 import StateBadge from '../components/StateBadge.vue'
 import DirectionBadge from '../components/DirectionBadge.vue'
@@ -81,6 +82,9 @@ const route = useRoute()
 const router = useRouter()
 const tab = computed(() => (TABS.includes(route.query.tab) ? route.query.tab : 'open'))
 const items = ref([])
+const win = ref(null)
+const shownItems = computed(() => inWindow(items.value, 'created_at', win.value))
+const tlSeries = computed(() => [{ key: 'tighten', label: t('direction.tighten'), tone: 's1', test: (r) => r.direction === 'tighten' }, { key: 'loosen', label: t('direction.loosen'), tone: 's2', test: (r) => r.direction === 'loosen' }, { key: 'other', label: t('timeline.other'), tone: 's3', test: () => true }])
 const cursor = ref(null)
 const loading = ref(false)
 const error = ref(null)

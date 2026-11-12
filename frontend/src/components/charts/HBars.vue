@@ -18,7 +18,7 @@
       </div>
       <div class="hb-bar" :class="{ 'hb-pickbar': pickable }" tabindex="0" @pointermove="show($event, it)" @pointerleave="hide" @focus="show($event, it)" @blur="hide"
            @click="pickable && pick(it)" @keydown.enter.prevent="pickable && pick(it)">
-        <span v-for="s in series" :key="s.key" class="hb-seg" :class="'tone-' + s.tone" :style="{ width: w(it.values[s.key]) + '%' }"></span>
+        <span v-for="s in series.filter((x) => (it.values[x.key] || 0) > 0)" :key="s.key" class="hb-seg" :class="'tone-' + s.tone" :style="{ width: w(it.values[s.key]) + '%' }"></span>
       </div>
       <div class="hb-num">{{ fmtNum(sum(it)) }}</div>
     </div>

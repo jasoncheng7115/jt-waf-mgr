@@ -2,9 +2,15 @@
 # Patterns are relative to the project root; a directory entry includes everything below it.
 LICENSE
 README.md
+README_zh-TW.md
+README_ja.md
+images/
 CHANGELOG.md
 SECURITY.md
+SECURITY_zh-TW.md
+SECURITY_ja.md
 TEST_CHECKLIST.md
+TEST_PLAN.md
 PUBLISH.txt
 install.sh
 upgrade.sh
@@ -22,6 +28,8 @@ tools/make_release.sh
 tools/make_sbom.py
 tools/sync_github.sh
 tools/test_upgrade.sh
+tools/security_scan.py
+tools/zap_scan.py
 tools/e2e/
 tools/upgrade-test/
 tools/git-hooks/
@@ -29,4 +37,10 @@ docs/spec/
 docs/dev/
 docs/COMPLIANCE.md
 docs/COMPLIANCE.zh-TW.md
+docs/COMPLIANCE.ja.md
+docs/index.html
+docs/shots/
+docs/logo-mark.svg
+docs/favicon.svg
+docs/.nojekyll
 docs/brand/

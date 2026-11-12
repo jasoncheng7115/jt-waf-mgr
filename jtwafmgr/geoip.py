@@ -214,14 +214,20 @@ class GeoIP:
 
     def __init__(self, cfg):
         self.cfg = cfg
-        g = cfg['geoip']
-        self.enabled = bool(g['enabled'])
-        self.dir = g['dir']
-        self.internal = cfg.internal_networks if hasattr(cfg, 'internal_networks') else []
+        self.dir = cfg['geoip']['dir']
         self._dbs = {}                    # edition -> (mtime, MMDB)
         self._lock = threading.Lock()
         self._checked = 0.0
         self._cached = functools.lru_cache(maxsize=20000)(self._lookup)
+
+    # Read from the configuration every time: an administrator can change these in the web interface.
+    @property
+    def enabled(self):
+        return bool(self.cfg['geoip'].get('enabled'))
+
+    @property
+    def internal(self):
+        return getattr(self.cfg, 'internal_networks', [])
 
     def _path(self, edition):
         return os.path.join(self.dir, edition + '.mmdb')
@@ -327,7 +333,8 @@ class GeoIP:
             info['last_error'] = ((st.get('editions') or {}).get(ed) or {}).get('error')
             eds.append(info)
         g = self.cfg['geoip']
-        return {'enabled': self.enabled, 'configured': bool(g['account_id']) and _key_present(g['license_key_file']),
+        acc, key = credentials(g)
+        return {'enabled': self.enabled, 'configured': bool(acc and key),
                 'editions': eds, 'update_days': g['update_days'], 'last_run': st.get('finished_at'),
                 'last_ok': st.get('ok'), 'requested': os.path.exists(os.path.join(self.dir, REQUEST_FILE))}
 
@@ -339,6 +346,28 @@ class GeoIP:
             os.write(fd, util.iso(time.time()).encode())
         finally:
             os.close(fd)
+
+
+def credentials(g):
+    """(account id, license key): from the web interface (written to the GeoIP directory by the service, which
+    this restricted updater can read) or, for older installs, from the configuration file."""
+    account, key = g.get('account_id') or '', g.get('license_key') or ''
+    try:
+        with open(os.path.join(g['dir'], 'account.json'), encoding='utf-8') as fh:
+            acc = json.load(fh)
+        account = account or str(acc.get('account_id') or '')
+    except (OSError, ValueError):
+        pass
+    if not key:
+        for path in (os.path.join(g['dir'], 'license.key'), g.get('license_key_file') or ''):
+            try:
+                with open(path, encoding='utf-8') as fh:
+                    key = fh.read().strip()
+            except OSError:
+                continue
+            if key:
+                break
+    return account, key
 
 
 def _key_present(path):
@@ -410,12 +439,11 @@ def update(cfg, force=False, fetch=None, log=print):
     if not g['enabled']:
         st.update(ok=None, note='disabled')
         return _write_status(d, st)
-    if not g['account_id'] or not _key_present(g['license_key_file']):
-        st.update(ok=None, note='not configured: [geoip] account_id and license_key_file')
+    account, key = credentials(g)
+    if not account or not key:
+        st.update(ok=None, note='not configured: set the MaxMind account and license key in Settings')
         return _write_status(d, st)
-    with open(g['license_key_file'], encoding='utf-8') as fh:
-        key = fh.read().strip()
-    auth = base64.b64encode(('%s:%s' % (g['account_id'], key)).encode()).decode()
+    auth = base64.b64encode(('%s:%s' % (account, key)).encode()).decode()
     fetch = fetch or _fetch
     for ed in g['editions']:
         target = os.path.join(d, ed + '.mmdb')

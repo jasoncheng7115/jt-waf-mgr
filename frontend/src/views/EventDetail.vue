@@ -43,7 +43,7 @@
       </section>
 
       <section class="card">
-        <h2>{{ t('event.matches') }} <span class="count">{{ (ev.matches || []).length }}</span></h2>
+        <h2><Icon name="shield" /> {{ t('event.matches') }} <span class="count">{{ (ev.matches || []).length }}</span></h2>
         <div v-if="ev.truncated" class="alert info">{{ t('event.truncated') }}</div>
         <div v-if="(ev.matches || []).length" class="chartgrid">
           <div><h3 class="charthead">{{ t('chart.match_severity') }}</h3><SegBar :parts="severityParts" :label="t('chart.match_severity')" /></div>

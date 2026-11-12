@@ -19,14 +19,15 @@
       <div class="small">{{ t('audit.verify_offline') }} <code class="mono">jt-waf-mgr audit-verify {{ safeText(exported.file, 120) }}</code></div>
     </div>
     <form class="filters inline" @submit.prevent="apply">
-      <label class="field"><span>{{ t('audit.action') }}</span><input v-model.trim="f.action" maxlength="64" placeholder="login.failed"></label>
-      <label class="field"><span>{{ t('audit.actor') }}</span><input v-model.trim="f.actor" maxlength="64"></label>
-      <div class="actions"><button class="btn primary" type="submit"><Icon name="filter" />{{ t('filter.apply') }}</button>
-        <button class="btn ghost" type="button" @click="clear"><Icon name="clear" />{{ t('filter.reset') }}</button></div>
+      <label class="field" :class="fieldClass('action')"><span>{{ t('audit.action') }}</span><input v-model.trim="f.action" maxlength="64" placeholder="login.failed"></label>
+      <label class="field" :class="fieldClass('actor')"><span>{{ t('audit.actor') }}</span><input v-model.trim="f.actor" maxlength="64"></label>
+      <div class="actions"><button class="btn primary" :class="{ 'needs-apply': dirty }" type="submit"><Icon name="filter" />{{ t('filter.apply') }}</button>
+        <button class="btn ghost" type="button" @click="clear"><Icon name="clear" />{{ t('filter.reset') }}</button>
+        <span v-if="dirty" class="applyhint" role="status"><Icon name="warning" />{{ t('filter.not_applied') }}</span></div>
     </form>
     <ErrorBox :error="error" />
     <section v-if="items.length" class="card">
-      <h2>{{ t('chart.audit.loaded', { n: fmtNum(items.length) }) }}</h2>
+      <h2><Icon name="chart" /> {{ t('chart.audit.loaded', { n: fmtNum(items.length) }) }}</h2>
       <div class="chartgrid">
         <div><h3 class="charthead">{{ t('chart.audit.results') }}</h3><SegBar :parts="resultParts" :label="t('chart.audit.results')" /></div>
       </div>
@@ -35,43 +36,56 @@
         <div><h3 class="charthead">{{ t('chart.audit.top_actors') }}</h3><HBars :items="topActors" :series="okSeries" mono /></div>
       </div>
     </section>
-    <DataTable id="admin-audit" :columns="cols" :rows="items" :row-class="(a) => ({ crit: isCrit(a), hl: open === a.id })" :default-sort="{ key: 'id', dir: -1 }" :page-size="50">
+    <RowTimeline v-model:window="win" :rows="items" ts-key="ts" :series="tlSeries" />
+    <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="admin-audit" :columns="cols" :rows="shownItems" :row-class="(a) => ({ crit: isCrit(a), hl: open === a.id })" :default-sort="{ key: 'id', dir: -1 }" :page-size="50">
       <template #cell-ts="{ row }">{{ fmtTime(row.ts) }}</template>
       <template #cell-action="{ row }"><span class="mono">{{ safeText(row.action, 64) }}</span></template>
+      <template #cell-action_text="{ row }">{{ actionText(row.action) }}</template>
       <template #cell-actor="{ row }">{{ safeText(row.actor, 64) }} <span class="muted small">{{ t('actor.' + (row.actor_type || 'user')) }}</span></template>
       <template #cell-src_ip="{ row }"><span class="mono">{{ safeText(row.src_ip, 45) }}</span></template>
       <template #cell-result="{ row }"><span class="badge" :class="resultClass(row)">{{ tOr('result.' + (row.result || 'ok'), row.result) }}</span></template>
-      <template #cell-hash="{ row }"><HashText :value="row.hash" />
-        <button type="button" class="btn small ghost" :aria-pressed="open === row.id ? 'true' : 'false'" :aria-label="t('audit.show_record', { id: row.id })"
-                :title="t('audit.show_record', { id: row.id })" @click="open = open === row.id ? null : row.id"><Icon :name="open === row.id ? 'hide' : 'show'" /></button></template>
+      <template #cell-hash="{ row }"><HashText :value="row.hash" /></template>
+      <template #cell-view="{ row }"><button type="button" class="btn tiny" :aria-label="t('audit.show_record', { id: row.id })"
+                :title="t('audit.show_record', { id: row.id })" @click="toggleRow(row.id, $event)"><Icon name="show" />{{ t('audit.details') }}</button></template>
       <template #cell-details="{ row }"><TruncText :text="detailsText(row.details)" :max="300" mono /></template>
-      <template #footer><LoadMore :cursor="cursor" :busy="loading" @more="load(false)" /></template>
     </DataTable>
-    <section v-if="openRow" class="card recdetail">
-      <div class="cardhead">
-        <h2>{{ t('audit.record', { id: openRow.id }) }} · <span class="mono">{{ safeText(openRow.action, 64) }}</span></h2>
-        <button class="btn small ghost" type="button" @click="open = null"><Icon name="close" />{{ t('common.dismiss') }}</button>
-      </div>
-      <dl class="kv">
-        <dt>ID</dt><dd class="mono">{{ openRow.id }}</dd>
-        <dt>{{ t('event.time') }}</dt><dd class="mono">{{ fmtTime(openRow.ts) }}</dd>
-        <dt>{{ t('audit.prev_hash') }}</dt><dd class="mono breakall">{{ safeText(openRow.prev_hash, 80) || '—' }}</dd>
-        <dt>{{ t('audit.hash') }}</dt><dd class="mono breakall">{{ safeText(openRow.hash, 80) || '—' }}</dd>
-        <dt>{{ t('audit.details') }}</dt><dd><pre class="code small">{{ safeMultiline(detailsPretty(openRow.details)) }}</pre></dd>
-      </dl>
-    </section>
+    <!-- one record, on top of the list: Escape, the close button or a click outside closes it -->
+    <div v-if="openRow" class="modalback" @click.self="closeRow">
+      <section ref="recEl" class="card modal recdetail" role="dialog" aria-modal="true" :aria-label="t('audit.record', { id: openRow.id })"
+               tabindex="-1" @keydown.esc.stop="closeRow">
+        <div class="cardhead">
+          <h2><Icon name="page" /> {{ t('audit.record', { id: openRow.id }) }}</h2>
+          <button class="btn small ghost" type="button" @click="closeRow"><Icon name="close" />{{ t('common.dismiss') }}</button>
+        </div>
+        <dl class="kv two">
+          <dt>{{ t('audit.action') }}</dt><dd><span class="mono">{{ safeText(openRow.action, 64) }}</span> · {{ actionText(openRow.action) }}</dd>
+          <dt>{{ t('event.time') }}</dt><dd class="mono">{{ fmtTime(openRow.ts) }}</dd>
+          <dt>{{ t('audit.actor') }}</dt><dd>{{ safeText(openRow.actor, 64) }} <span class="muted small">{{ t('actor.' + (openRow.actor_type || 'user')) }}</span></dd>
+          <dt>{{ t('audit.src_ip') }}</dt><dd class="mono">{{ safeText(openRow.src_ip, 45) || '—' }}</dd>
+          <dt>{{ t('audit.result') }}</dt><dd><span class="badge" :class="resultClass(openRow)">{{ tOr('result.' + (openRow.result || 'ok'), openRow.result) }}</span></dd>
+          <dt>ID</dt><dd class="mono">{{ openRow.id }}</dd>
+          <dt>{{ t('audit.prev_hash') }}</dt><dd class="mono breakall">{{ safeText(openRow.prev_hash, 80) || '—' }}</dd>
+          <dt>{{ t('audit.hash') }}</dt><dd class="mono breakall">{{ safeText(openRow.hash, 80) || '—' }}</dd>
+        </dl>
+        <h3 class="charthead">{{ t('audit.details') }}</h3>
+        <JsonView :value="openRow.details || {}" />
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useFilterState } from '../filterState.js'
 import { get, post, ApiError } from '../api.js'
+import RowTimeline from '../components/RowTimeline.vue'
+import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
 import { safeText, safeMultiline, fmtTime, fmtNum, saveBlob, stamp } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
-import LoadMore from '../components/LoadMore.vue'
 import TruncText from '../components/TruncText.vue'
+import JsonView from '../components/JsonView.vue'
 import HashText from '../components/HashText.vue'
 import ChainResult from '../components/ChainResult.vue'
 import Icon from '../components/Icon.vue'
@@ -83,7 +97,12 @@ import HBars from '../components/charts/HBars.vue'
 const route = useRoute()
 const router = useRouter()
 const f = reactive({ action: '', actor: '' })
+const { dirty, fieldClass } = useFilterState(f, () => ({ action: typeof route.query.action === 'string' ? route.query.action : '',
+  actor: typeof route.query.actor === 'string' ? route.query.actor : '' }))
 const items = ref([])
+const win = ref(null)
+const shownItems = computed(() => inWindow(items.value, 'ts', win.value))
+const tlSeries = computed(() => [{ key: 'ok', label: t('result.ok'), tone: 's1', test: (r) => (r.result || 'ok') === 'ok' }, { key: 'other', label: t('chart.audit.not_ok'), tone: 's2', test: () => true }])
 const cursor = ref(null)
 const loading = ref(false)
 const error = ref(null)
@@ -116,12 +135,35 @@ const cols = computed(() => [
   { key: 'id', label: 'ID', align: 'num', hidden: true },
   { key: 'ts', label: t('event.time'), nowrap: true, text: (a) => fmtTime(a.ts) },
   { key: 'action', label: t('audit.action'), required: true, nowrap: true },
+  { key: 'action_text', label: t('audit.action_text'), value: (a) => actionText(a.action) },
   { key: 'actor', label: t('audit.actor'), nowrap: true, text: (a) => (a.actor || '') + ' ' + t('actor.' + (a.actor_type || 'user')) },
   { key: 'src_ip', label: t('audit.src_ip'), nowrap: true },
   { key: 'result', label: t('audit.result'), value: (a) => tOr('result.' + (a.result || 'ok'), a.result) },
-  { key: 'hash', label: t('audit.hash'), nowrap: true, sortable: false },
-  { key: 'details', label: t('audit.details'), sortable: false, text: (a) => detailsText(a.details) },
+  { key: 'hash', label: t('audit.hash'), nowrap: true, sortable: false, hidden: true },
+  { key: 'view', label: t('audit.details'), sortable: false, filterable: false, text: (a) => detailsText(a.details) },
+  { key: 'details', label: t('audit.details_json'), sortable: false, hidden: true, text: (a) => detailsText(a.details) },
 ])
+// the record opens below the table: bring it into view (it is easy to miss under a long list)
+const recEl = ref(null)
+const flashRec = ref(false)
+let opener = null
+async function toggleRow(id, e) {
+  opener = e && e.currentTarget
+  open.value = open.value === id ? null : id
+  if (open.value == null) return
+  await nextTick()
+  if (recEl.value) recEl.value.focus()
+}
+function closeRow() {
+  open.value = null
+  if (opener && opener.focus) opener.focus()
+}
+// the readable name of an audit action in the reader's language (the raw name stays in its own column)
+function actionText(a) {
+  const k = 'auditact.' + String(a || '')
+  const v = tOr(k, '')
+  return v || String(a || '').replace(/[._]/g, ' ')
+}
 const openRow = computed(() => items.value.find((a) => a.id === open.value) || null)
 
 // Charts over the rows loaded so far (not the whole trail).
@@ -214,3 +256,9 @@ watch(() => route.query, () => {
   load(true)
 }, { immediate: true })
 </script>
+
+<style scoped>
+.hashcell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.recdetail { scroll-margin-top: 70px; transition: box-shadow .3s; }
+.recdetail.flash { box-shadow: 0 0 0 3px var(--accent); }
+</style>

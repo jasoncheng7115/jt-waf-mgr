@@ -194,7 +194,7 @@ jt-waf-mgr **只寫自己的檔案**，預設：
 
 ## 8. 認證與權限
 
-- 人：OIDC（Keycloak 或任何相容的 IdP），必要時可要求 IdP 端的兩步驟驗證（檢查 `amr`／`acr`）。
+- 人：OIDC（Keycloak 或任何相容的 IdP），必要時可要求 IdP 端的雙因素驗證（檢查 `amr`／`acr`）。
 - 角色：
   - `viewer`：看；
   - `operator`：提出變更、套用已核准的收緊；

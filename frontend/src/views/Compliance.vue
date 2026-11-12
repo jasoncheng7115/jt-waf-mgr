@@ -32,7 +32,7 @@
 
       <section v-for="c in shown" :key="c.id" class="card control" :class="'st-' + c.status">
         <div class="cardhead">
-          <h2>{{ tOr('compliance.ctl.' + c.id + '.title', c.id) }}</h2>
+          <h2><Icon name="shield" /> {{ tOr('compliance.ctl.' + c.id + '.title', c.id) }}</h2>
           <span class="badge" :class="BADGE[c.status] || 'b-logged'">{{ t('compliance.st.' + c.status) }}</span>
         </div>
         <p>{{ tOr('compliance.ctl.' + c.id + '.desc', '') }}</p>
@@ -45,11 +45,15 @@
           <span class="small">{{ t('compliance.needs') }}</span>
           <ul class="plainlist"><li v-for="n in c.needs" :key="n" class="mono small breakall">{{ safeText(n, 300) }}</li></ul>
         </div>
-        <dl v-if="c.values && Object.keys(c.values).length" class="kv two small">
-          <template v-for="(v, k) in c.values" :key="k">
-            <dt class="mono">{{ safeText(k, 60) }}</dt><dd class="mono breakall">{{ valueText(v) }}</dd>
-          </template>
-        </dl>
+        <div v-if="c.values && Object.keys(c.values).length" class="facts">
+          <div v-for="(v, k) in c.values" :key="k" class="fact">
+            <div class="fact-k" :title="k">{{ tOr('compliance.val.' + k, k) }}</div>
+            <div class="fact-v">
+              <span v-if="typeof v === 'boolean'" class="badge" :class="v ? 'b-ok' : 'b-warn'"><Icon :name="v ? 'check' : 'warning'" /> {{ v ? t('common.yes') : t('common.no') }}</span>
+              <span v-else class="mono breakall">{{ valueText(v) }}</span>
+            </div>
+          </div>
+        </div>
       </section>
       <p v-if="!shown.length" class="empty">{{ t('common.no_data') }}</p>
       <p class="muted small">{{ t('compliance.footer') }}</p>
@@ -137,3 +141,11 @@ async function load() {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 8px; margin-top: 10px; }
+.fact { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--panel-2); min-width: 0; }
+.fact-k { color: var(--muted); font-size: 12.5px; margin-bottom: 3px; }
+.fact-v { font-size: 14px; font-weight: 600; }
+.fact-v .badge { font-weight: 600; }
+</style>

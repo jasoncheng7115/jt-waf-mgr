@@ -42,9 +42,11 @@ class ApiError(Exception):
 
 
 class Response:
-    def __init__(self, status=200, body=b'', ctype='application/json', headers=None):
+    def __init__(self, status=200, body=b'', ctype='application/json', headers=None, stream=None, length=None):
+        """stream: an open binary file sent in pieces (large downloads); length: its size."""
         self.status, self.body, self.ctype = status, body, ctype
         self.headers = headers or []
+        self.stream, self.length = stream, length
 
 
 def json_response(status, obj, headers=None):
@@ -256,6 +258,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise ApiError(403, 'forbidden')
 
     def _send(self, req, resp, head):
+        if getattr(resp, 'stream', None) is not None:
+            return self._send_stream(req, resp, head)
         body = resp.body if isinstance(resp.body, bytes) else resp.body.encode('utf-8')
         enc = None
         if len(body) > 1024 and 'gzip' in (self.headers.get('Accept-Encoding') or '') and (
@@ -280,6 +284,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def _send_stream(self, req, resp, head):
+        try:
+            self.send_response(resp.status)
+            self.send_header('Content-Type', resp.ctype)
+            self.send_header('Content-Length', str(resp.length))
+            for k, v in SECURITY_HEADERS:
+                self.send_header(k, v)
+            self.send_header('Cache-Control', 'no-store')
+            for k, v in resp.headers:
+                self.send_header(k, v)
+            self.end_headers()
+            if not head:
+                left = resp.length
+                while left > 0:
+                    chunk = resp.stream.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            resp.stream.close()
 
 
 _TYPES = {'.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',

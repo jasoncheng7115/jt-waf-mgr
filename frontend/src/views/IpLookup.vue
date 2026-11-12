@@ -13,7 +13,7 @@
     <Loading v-if="loading" />
     <template v-if="data">
       <section class="card">
-        <h2 class="mono">{{ safeText(data.ip, 45) }} <OriginBadge :origin="data.origin" /> <GeoTag :geo="data.geo" full />
+        <h2 class="mono"><Icon name="globe" /> {{ safeText(data.ip, 45) }} <OriginBadge :origin="data.origin" /> <GeoTag :geo="data.geo" full />
           <span v-if="data.blocked_now" class="badge b-blocked">{{ t('lookup.blocked_now') }}</span></h2>
         <div class="tiles">
           <div class="tile"><div class="tl">{{ t('lookup.d7_events') }}</div><div class="tv">{{ fmtNum(data.d7.events) }}</div><div class="ts">{{ t('outcome.blocked') }} {{ fmtNum(data.d7.blocked) }}</div></div>
@@ -25,15 +25,17 @@
           <div><h3 class="charthead">{{ t('chart.ip_split', { period: t('lookup.d7_events') }) }}</h3><SegBar :parts="split(data.d7)" :label="t('lookup.d7_events')" /></div>
           <div><h3 class="charthead">{{ t('chart.ip_split', { period: t('lookup.d30_events') }) }}</h3><SegBar :parts="split(data.d30)" :label="t('lookup.d30_events')" /></div>
         </div>
+        <EventTimeline v-if="data.d30.events" :query="{ src_ip: data.ip, since: since30 }" :title="t('lookup.timeline')"
+                       @select="(r) => router.push({ path: '/events', query: { src_ip: data.ip, since: r.since, until: r.until } })" />
         <div class="actions"><RouterLink class="btn small" :to="{ path: '/events', query: { src_ip: data.ip } }"><Icon name="list" />{{ t('lookup.view_events') }}</RouterLink></div>
       </section>
       <div class="cols2">
         <section class="card">
-          <h2>{{ t('lookup.hosts') }} <span class="count">{{ data.hosts.length }}</span></h2>
+          <h2><Icon name="server" /> {{ t('lookup.hosts') }} <span class="count">{{ data.hosts.length }}</span></h2>
           <HBars :items="hostBars" :series="countSeries" />
         </section>
         <section class="card">
-          <h2>{{ t('lookup.rules') }} <span class="count">{{ data.rules.length }}</span></h2>
+          <h2><Icon name="shield" /> {{ t('lookup.rules') }} <span class="count">{{ data.rules.length }}</span></h2>
           <HBars :items="ruleBars" :series="countSeries" mono />
         </section>
       </div>
@@ -46,6 +48,8 @@ import GeoTag from '../components/GeoTag.vue'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { get } from '../api.js'
+import EventTimeline from '../components/EventTimeline.vue'
+const since30 = new Date(Date.now() - 30 * 86400e3).toISOString()
 import { t, tOr } from '../i18n.js'
 import { hasRole } from '../store.js'
 import { safeText, fmtNum, fmtTime } from '../util.js'

@@ -3,7 +3,7 @@
     <h1>{{ t('account.title') }}</h1>
     <div class="cols2">
       <section class="card">
-        <h2>{{ t('account.profile') }}</h2>
+        <h2><Icon name="user" /> {{ t('account.profile') }}</h2>
         <dl class="kv">
           <dt>{{ t('login.username') }}</dt><dd class="mono">{{ safeText(user.username) }}</dd>
           <dt>{{ t('users.role') }}</dt><dd>{{ t('role.' + user.role) }}</dd>
@@ -28,7 +28,7 @@
       </section>
 
       <section class="card">
-        <h2>{{ t('totp.title') }}</h2>
+        <h2><Icon name="fingerprint" /> {{ t('totp.title') }}</h2>
         <p class="muted">{{ t('totp.intro') }}</p>
         <p>
           <span class="badge" :class="user.totp_enabled ? 'b-ok' : 'b-warn'">
@@ -82,7 +82,7 @@
 
     <section class="card">
       <div class="cardhead">
-        <h2>{{ t('sessions.title') }}</h2>
+        <h2><Icon name="sessions" /> {{ t('sessions.title') }}</h2>
         <button class="btn small" type="button" :disabled="busy || sessions.length < 2" @click="revokeOthers"><Icon name="logout" />{{ t('sessions.revoke_others') }}</button>
       </div>
       <ErrorBox :error="sessError" />

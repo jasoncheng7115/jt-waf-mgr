@@ -13,7 +13,7 @@
     <template v-if="data">
       <p class="muted small">{{ t('review.generated', { at: fmtMinute(data.generated_at), node: safeText(data.node_id, 60) }) }}</p>
       <section class="card">
-        <h2>{{ t('nav.users') }} <span class="count">{{ data.users.length }}</span></h2>
+        <h2><Icon name="users" /> {{ t('nav.users') }} <span class="count">{{ data.users.length }}</span></h2>
         <div class="chartgrid">
           <div><h3 class="charthead">{{ t('users.role') }}</h3><SegBar :parts="roleParts" :label="t('users.role')" /></div>
           <div><h3 class="charthead">{{ t('totp.title') }}</h3><SegBar :parts="totpParts" :label="t('totp.title')" /></div>
@@ -32,7 +32,7 @@
         </DataTable>
       </section>
       <section class="card">
-        <h2>{{ t('nav.tokens') }} <span class="count">{{ data.tokens.length }}</span></h2>
+        <h2><Icon name="key" /> {{ t('nav.tokens') }} <span class="count">{{ data.tokens.length }}</span></h2>
         <DataTable id="review-tokens" :columns="tokenCols" :rows="data.tokens">
           <template #cell-name="{ row }">{{ safeText(row.name, 64) }} <span class="muted small mono">{{ safeText(row.id, 20) }}</span></template>
           <template #cell-scopes="{ row }"><span v-for="s in row.scopes" :key="s" class="chip mono">{{ safeText(s, 40) }}</span></template>
@@ -43,7 +43,7 @@
         </DataTable>
       </section>
       <section class="card">
-        <h2>{{ t('review.policy') }}</h2>
+        <h2><Icon name="lock" /> {{ t('review.policy') }}</h2>
         <dl class="kv two">
           <template v-for="(v, k) in data.policy" :key="k">
             <dt class="mono">{{ safeText(k, 60) }}</dt><dd class="mono">{{ Array.isArray(v) ? v.map((x) => safeText(x, 30)).join(', ') : safeText(v, 60) }}</dd>

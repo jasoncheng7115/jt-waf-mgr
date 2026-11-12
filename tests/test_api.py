@@ -186,6 +186,35 @@ class TestApi(unittest.TestCase):
         st, obj2, _ = c.req('GET', '/api/v1/events?limit=1&cursor=' + obj['next_cursor'])
         self.assertNotEqual(obj['items'][0]['id'], obj2['items'][0]['id'])
 
+    def test_custom_range_and_event_timeline(self):
+        import urllib.parse
+        c = Client(self.port)
+        c.login('viewer1')
+        iso = lambda ts: urllib.parse.quote(time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime(ts)))   # noqa: E731
+        now = time.time()
+        st, o, _ = c.req('GET', '/api/v1/overview?range=custom&since=%s&until=%s' % (iso(now - 2 * 3600), iso(now + 30)))
+        self.assertEqual((st, o['range'], o['bucket_seconds'], o['totals']['events']), (200, 'custom', 3600, 3))
+        self.assertEqual(sum(b['blocked'] + b['logged'] for b in o['timeline']), 3)
+        st, o, _ = c.req('GET', '/api/v1/overview?range=custom&since=%s' % iso(now - 20 * 86400))
+        self.assertEqual((st, o['bucket_seconds']), (200, 86400))           # days beyond a week
+        for bad in ('range=custom', 'range=custom&since=%s' % iso(now - 40 * 86400), 'range=custom&since=%s' % iso(now - 60),
+                    'range=custom&since=x', 'range=1y'):
+            self.assertEqual(c.req('GET', '/api/v1/overview?' + bad)[0], 400, bad)
+        st, tl, _ = c.req('GET', '/api/v1/events/timeline?outcome=blocked')
+        self.assertEqual(st, 200)
+        self.assertEqual(sum(b['blocked'] for b in tl['timeline']), 2)
+        self.assertEqual(sum(b['logged'] for b in tl['timeline']), 0)
+        st, tl, _ = c.req('GET', '/api/v1/events/timeline?since=%s' % iso(now - 90 * 86400))
+        self.assertTrue(tl['clamped'])
+
+    def test_reserved_names(self):
+        from jtwafmgr.auth import AuthError
+        for n in ('analyst', 'system', 'cli'):
+            with self.assertRaises(AuthError):
+                self.app.auth.create_user(n, 'viewer', password=PW)
+            with self.assertRaises(AuthError):
+                self.app.auth.create_token(n.upper(), ['events:read'], [], None, 'admin1')
+
     def test_overview(self):
         c = Client(self.port)
         c.login('viewer1')

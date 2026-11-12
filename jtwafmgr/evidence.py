@@ -269,6 +269,19 @@ class Evidence:
         spec = json.loads(r['spec'])
         if r['op'] == 'adopt':
             return {'ok': True, 'skipped': 'adoption keeps every rule as it is'}
+        if r['op'] == 'bundle':
+            # every operation is judged on its own; the bundle passes only when all of them pass.
+            # The confident blocks share one pass over the access logs.
+            ops = spec['ops']
+            blk = [i for i, b in enumerate(ops) if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify', 'enable')]
+            res = dict(zip(blk, self.block_evidence_many([ops[i]['spec'] for i in blk]))) if blk else {}
+            parts = []
+            for i, b in enumerate(ops):
+                sub = res[i] if i in res else self.check({'op': b['op'], 'kind': b['kind'], 'spec': json.dumps(b['spec']),
+                                                          'rule_id': b['rule_id']})
+                parts.append(dict(sub, op=b['op'], kind=b['kind'], rule_id=b['rule_id']))
+            return {'ok': all(p.get('ok') for p in parts), 'complete': all(p.get('complete', True) for p in parts),
+                    'bundle': parts}
         if r['kind'] == 'confident_block' and r['op'] in ('add', 'modify', 'enable'):
             return self.block_evidence(spec)
         if r['kind'] in ('exclusion', 'redaction') and r['op'] in ('add', 'modify', 'enable'):
@@ -298,58 +311,74 @@ class Evidence:
         return None
 
     def block_evidence(self, spec):
-        target = spec.get('target', 'path')
-        if target not in rulegen.BLOCK_TARGETS:
-            raise ValueError('unknown target')
-        view = self.rule_view(spec)
-        if view is None:
-            return {'ok': True, 'skipped': 'headers other than User-Agent are not in the access log', 'complete': False}
-        rx = _Rx(spec['regex'])
-        exc = [_Rx(e) for e in spec.get('exceptions') or []]
-        host_cond = rulegen._host_cond(spec.get('host'))
-        host_rx = (_Rx(host_cond[1][len('@rx '):]), host_cond[2]) if host_cond else None
+        return self.block_evidence_many([spec])[0]
+
+    def block_evidence_many(self, specs):
+        """Evidence for several confident blocks in ONE pass over the access logs, with one deadline
+        (a bundle must not scan the logs once per rule)."""
         catch_all = set(x.lower() for x in self.cfg['evidence']['catch_all_hosts'])
+        out, live = [None] * len(specs), []
+        for i, spec in enumerate(specs):
+            target = spec.get('target', 'path')
+            if target not in rulegen.BLOCK_TARGETS:
+                raise ValueError('unknown target')
+            view = self.rule_view(spec)
+            if view is None:
+                out[i] = {'ok': True, 'skipped': 'headers other than User-Agent are not in the access log', 'complete': False}
+                continue
+            host_cond = rulegen._host_cond(spec.get('host'))
+            live.append({'i': i, 'view': view, 'rx': _Rx(spec['regex']),
+                         'exc': [_Rx(e) for e in spec.get('exceptions') or []],
+                         'host_rx': (_Rx(host_cond[1][len('@rx '):]), host_cond[2]) if host_cond else None,
+                         'ext': 0, 'ext_ok': collections.Counter(), 'intl': collections.Counter(),
+                         'known': collections.Counter(), 'sites': collections.Counter(),
+                         'ext_examples': collections.Counter()})
         deadline = time.time() + self.cfg['evidence']['max_scan_seconds']
-        total = ext = 0
-        ext_ok, intl, known, sites = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
-        ext_examples = collections.Counter()
-        complete = True
-        for d in self.logs.lines(deadline):
-            total += 1
-            if not rx.search(view(d)):
-                continue
-            if exc:
-                fn = transform(request_filename(log_bytes(d['uri'], d['esc'])), EXCEPTION_TRANSFORMS)
-                if any(e.search(fn) for e in exc):
-                    continue
-            if host_rx and not host_rx[0].search(transform(log_bytes(d['host'], False), host_rx[1])):
-                continue
-            sites[d['host']] += 1
-            shape = util.clip(d['uri'].split('?', 1)[0], 100)
-            if util.ip_in(d['ip'], self.cfg.internal_networks):
-                if util.ip_in(d['ip'], self.cfg.known_scanners):
-                    known[d['ip']] += 1
-                else:
-                    intl[(d['host'], d['status'], d['ip'], shape)] += 1
-            else:
-                ext += 1
-                ext_examples[(d['host'], d['status'], shape)] += 1
-                if d['status'][:1] in '23' and d['host'] not in catch_all:
-                    ext_ok[(d['host'], d['status'], shape, util.clip(d['ua'], 40))] += 1
-        if time.time() > deadline:
-            complete = False
-        ok = complete and not ext_ok and not intl
-        return {
-            'ok': ok, 'complete': complete, 'scanned': total, 'files': len(self.logs.files()),
-            'external_hits': ext, 'external_success': sum(ext_ok.values()), 'internal_other': sum(intl.values()),
-            'internal_known': sum(known.values()),
-            'sites': [{'host': k, 'hits': n} for k, n in sites.most_common(10)],
-            'external_success_samples': [{'host': k[0], 'status': k[1], 'path': k[2], 'ua': k[3], 'count': n}
-                                         for k, n in ext_ok.most_common(15)],
-            'internal_samples': [{'host': k[0], 'status': k[1], 'ip': k[2], 'path': k[3], 'count': n}
-                                 for k, n in intl.most_common(15)],
-            'external_samples': [{'host': k[0], 'status': k[1], 'path': k[2], 'count': n} for k, n in ext_examples.most_common(10)],
-        }
+        total = 0
+        if live:
+            for d in self.logs.lines(deadline):
+                total += 1
+                fn = None
+                for st in live:
+                    if not st['rx'].search(st['view'](d)):
+                        continue
+                    if st['exc']:
+                        if fn is None:
+                            fn = transform(request_filename(log_bytes(d['uri'], d['esc'])), EXCEPTION_TRANSFORMS)
+                        if any(e.search(fn) for e in st['exc']):
+                            continue
+                    hr = st['host_rx']
+                    if hr and not hr[0].search(transform(log_bytes(d['host'], False), hr[1])):
+                        continue
+                    st['sites'][d['host']] += 1
+                    shape = util.clip(d['uri'].split('?', 1)[0], 100)
+                    if util.ip_in(d['ip'], self.cfg.internal_networks):
+                        if util.ip_in(d['ip'], self.cfg.known_scanners):
+                            st['known'][d['ip']] += 1
+                        else:
+                            st['intl'][(d['host'], d['status'], d['ip'], shape)] += 1
+                    else:
+                        st['ext'] += 1
+                        st['ext_examples'][(d['host'], d['status'], shape)] += 1
+                        if d['status'][:1] in '23' and d['host'] not in catch_all:
+                            st['ext_ok'][(d['host'], d['status'], shape, util.clip(d['ua'], 40))] += 1
+        complete = time.time() <= deadline
+        files = len(self.logs.files()) if live else 0
+        for st in live:
+            ext_ok, intl = st['ext_ok'], st['intl']
+            out[st['i']] = {
+                'ok': complete and not ext_ok and not intl, 'complete': complete, 'scanned': total, 'files': files,
+                'external_hits': st['ext'], 'external_success': sum(ext_ok.values()), 'internal_other': sum(intl.values()),
+                'internal_known': sum(st['known'].values()),
+                'sites': [{'host': k, 'hits': n} for k, n in st['sites'].most_common(10)],
+                'external_success_samples': [{'host': k[0], 'status': k[1], 'path': k[2], 'ua': k[3], 'count': n}
+                                             for k, n in ext_ok.most_common(15)],
+                'internal_samples': [{'host': k[0], 'status': k[1], 'ip': k[2], 'path': k[3], 'count': n}
+                                     for k, n in intl.most_common(15)],
+                'external_samples': [{'host': k[0], 'status': k[1], 'path': k[2], 'count': n}
+                                     for k, n in st['ext_examples'].most_common(10)],
+            }
+        return out
 
     # --- exclusions ----------------------------------------------------------------------------
     def exclusion_impact(self, spec, days=30):

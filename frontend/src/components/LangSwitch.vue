@@ -1,5 +1,5 @@
 <template>
-  <SelectBox class="langswitch" small :model-value="lang" :options="options" :aria-label="t('app.language')" @change="change" />
+  <IconMenu class="langswitch" icon="globe" :title="t('app.language') + ': ' + current" :model-value="lang" :options="options" @change="change" />
 </template>
 
 <script setup>
@@ -7,9 +7,10 @@ import { computed } from 'vue'
 import { lang, setLang, LANGUAGES, t } from '../i18n.js'
 import { state } from '../store.js'
 import { patch } from '../api.js'
-import SelectBox from './SelectBox.vue'
+import IconMenu from './IconMenu.vue'
 
-const options = computed(() => LANGUAGES.map((l) => ({ value: l.code, label: l.label, icon: 'globe' })))
+const options = computed(() => LANGUAGES.map((l) => ({ value: l.code, label: l.label })))
+const current = computed(() => (LANGUAGES.find((l) => l.code === lang.value) || {}).label || '')
 
 async function change(code) {
   setLang(code)

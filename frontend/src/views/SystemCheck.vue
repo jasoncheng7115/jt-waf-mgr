@@ -22,9 +22,9 @@
         <div><h3 class="charthead">{{ t('chart.syscheck.status') }}</h3><SegBar :parts="statusParts" :label="t('chart.syscheck.status')" /></div>
       </div>
       <div class="checkgrid">
-        <section v-for="it in data.items" :key="it.key" class="card checkcard" :class="'cs-' + it.status">
+        <section v-for="it in sortedItems" :key="it.key" class="card checkcard" :class="'cs-' + it.status">
           <div class="cardhead">
-            <h2>{{ tOr('syscheck.k.' + it.key, it.key) }}</h2>
+            <h2><Icon name="verify" /> {{ tOr('syscheck.k.' + it.key, it.key) }}</h2>
             <span class="badge" :class="BADGE[it.status] || 'b-logged'">{{ tOr('syscheck.status.' + it.status, it.status) }}</span>
           </div>
           <p class="muted small">{{ tOr('syscheck.d.' + it.key, '') }}</p>
@@ -62,7 +62,7 @@
 
     <section class="card">
       <div class="cardhead">
-        <h2>{{ t('backup.title') }}</h2>
+        <h2><Icon name="backup" /> {{ t('backup.title') }}</h2>
         <button class="btn small" type="button" :disabled="backingUp || (bk && !bk.enabled)" @click="backupNow"><Icon name="backup" />{{ backingUp ? t('common.working') : t('backup.now') }}</button>
       </div>
       <ErrorBox :error="bkError" />
@@ -86,12 +86,25 @@
           <template #cell-size="{ row }"><span class="mono">{{ fmtBytes(row.size) }}</span></template>
           <template #cell-sha256="{ row }"><HashText :value="row.sha256" :len="16" /></template>
           <template #cell-verify="{ row }">
-            <button class="btn small" type="button" :disabled="!!verifying[row.file]" @click="verifyBackup(row)"><Icon name="verify" />{{ t('backup.verify') }}</button>
+            <span class="bkacts">
+              <button class="btn small" type="button" :disabled="!!verifying[row.file]" @click="verifyBackup(row)"><Icon name="verify" />{{ t('backup.verify') }}</button>
+              <button class="btn small" type="button" :aria-expanded="dlRow === row.file ? 'true' : 'false'" @click="askDownload(row)"><Icon name="download" />{{ t('backup.download') }}</button>
+            </span>
+            <form v-if="dlRow === row.file" class="bkdl" @submit.prevent="download(row)">
+              <label :for="'bkdl-' + row.file" class="small">{{ t('backup.download_otp') }}</label>
+              <input :id="'bkdl-' + row.file" v-model.trim="dlCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="otp">
+              <button class="btn small primary" type="submit" :disabled="dlBusy || dlCode.length < 6"><Icon name="download" />{{ dlBusy ? t('common.working') : t('backup.download_go') }}</button>
+              <button class="btn small ghost" type="button" @click="dlRow = null"><Icon name="cancel" />{{ t('common.cancel') }}</button>
+            </form>
+            <span v-if="dlDone[row.file]" class="small" :class="dlDone[row.file].verified ? 'ok' : 'warn'">
+              <Icon :name="dlDone[row.file].verified ? 'check' : 'warning'" /> {{ dlDone[row.file].verified ? t('backup.downloaded') : t('backup.downloaded_unverified') }}
+              <span class="mono">SHA-256 {{ safeText(dlDone[row.file].sha, 64) }}</span></span>
             <template v-if="results[row.file]">
               <span class="badge" :class="results[row.file].ok ? 'b-ok' : 'b-blocked'">{{ results[row.file].ok ? t('backup.verified_ok') : t('backup.verified_bad') }}</span>
               <span v-if="!results[row.file].ok" class="small warn"> {{ t('backup.sha_ok', { v: results[row.file].sha256_ok ? t('common.yes') : t('common.no') }) }} · integrity_check: {{ safeText(results[row.file].integrity_check, 100) }}</span>
             </template>
             <span v-if="verifyErrors[row.file]" class="small warn"> {{ errText(verifyErrors[row.file]) }}</span>
+            <span v-if="dlErrors[row.file]" class="small warn"> {{ errText(dlErrors[row.file]) }}</span>
           </template>
         </DataTable>
         <p class="muted small">{{ t('backup.offsite', { days: bk.keep_days }) }}</p>
@@ -104,9 +117,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { get, post } from '../api.js'
+import { get, post, ApiError } from '../api.js'
+import { state } from '../store.js'
 import { t, tOr, errText } from '../i18n.js'
-import { safeText, fmtMinute, fmtBytes } from '../util.js'
+import { safeText, fmtMinute, fmtBytes, saveBlob } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import HashText from '../components/HashText.vue'
@@ -119,7 +133,8 @@ import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
 
 const BADGE = { ok: 'b-ok', warn: 'b-warn', fail: 'b-blocked', info: 'b-logged' }
-const TIME_KEYS = ['checked_at', 'last_at', 'last_read', 'last_error', 'last_outside_at']
+const TIME_KEYS = ['checked_at', 'last_at', 'last_read', 'last_error', 'last_outside_at', 'last_run', 'generated_at']
+const ORDER = { fail: 0, warn: 1, ok: 2, info: 3 }
 // shown by ChainResult instead of the generic list
 const HIDE = { audit_chain: ['ok', 'reason', 'bad_id', 'anchor_problems', 'last_anchor', 'checked_at'] }
 
@@ -134,6 +149,33 @@ const backingUp = ref(false)
 const verifying = reactive({})
 const results = reactive({})
 const verifyErrors = reactive({})
+// download a backup: it holds everything, so a fresh one-time code is asked each time (and audited)
+const dlRow = ref(null)
+const dlCode = ref('')
+const dlBusy = ref(false)
+const dlErrors = reactive({})
+const dlDone = reactive({})
+function askDownload(row) { dlRow.value = dlRow.value === row.file ? null : row.file; dlCode.value = ''; dlErrors[row.file] = null }
+async function download(row) {
+  dlBusy.value = true
+  dlErrors[row.file] = null
+  try {
+    const res = await fetch('/api/v1/backups/' + encodeURIComponent(row.file) + '/download', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/octet-stream', 'X-CSRF-Token': state.csrf || '' },
+      body: JSON.stringify({ totp: dlCode.value }),
+    })
+    if (!res.ok) {
+      let err = {}
+      try { err = (await res.json()).error || {} } catch { /* not JSON */ }
+      if (res.status === 401) { window.location.assign('/login'); return }
+      throw new ApiError(res.status, err.code, err.message, err.details)
+    }
+    saveBlob(row.file, await res.blob())
+    dlDone[row.file] = { sha: res.headers.get('X-Content-SHA256') || '', verified: res.headers.get('X-Backup-Verified') === 'yes' }
+    dlRow.value = null
+  } catch (e) { dlErrors[row.file] = e } finally { dlBusy.value = false; dlCode.value = '' }
+}
 
 const GUIDE_KEY = 'jtwaf.guide.syscheck'
 const showGuide = ref(readGuide())
@@ -204,10 +246,17 @@ const counts = computed(() => {
   return c
 })
 
+// what needs attention first; the server's order within the same status
+const sortedItems = computed(() => (data.value ? data.value.items.map((it, i) => ({ it, i }))
+  .sort((a, b) => (ORDER[a.it.status] ?? 9) - (ORDER[b.it.status] ?? 9) || a.i - b.i).map((x) => x.it) : []))
 function shownDetails(it) {
   const hide = HIDE[it.key] || []
   const out = {}
-  for (const [k, v] of Object.entries(it.details || {})) if (!hide.includes(k)) out[k] = v
+  for (const [k, v] of Object.entries(it.details || {})) {
+    if (hide.includes(k)) continue
+    if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)) continue    // nothing to say
+    out[k] = v
+  }
   return out
 }
 function isHash(v) { return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v) }
@@ -245,3 +294,9 @@ onMounted(() => {
   get('/settings').then((r) => { paths.value = r.paths || null }).catch(() => {})
 })
 </script>
+
+<style scoped>
+.bkacts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.bkdl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.bkdl .otp { width: 8em; letter-spacing: 2px; }
+</style>

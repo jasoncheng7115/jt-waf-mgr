@@ -15,6 +15,8 @@ from . import util
 from .config import ROLES
 
 USERNAME_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{1,31}$')
+# names the program itself acts under (audit actor, proposer): never an account or a token
+RESERVED_NAMES = ('analyst', 'system', 'cli')
 TOKEN_RE = re.compile(r'^jwm_([a-z0-9]{12})_([A-Za-z0-9_-]{32,64})$')
 SCOPES_P1 = ('status:read', 'events:read', 'rules:read', 'lookups:read', 'changes:read', 'changes:propose')
 LANGUAGES = ('en', 'zh-TW', 'ja')
@@ -131,6 +133,33 @@ class Auth:
         self._lock = threading.Lock()
 
     # --- users ---------------------------------------------------------------------------
+    STEP_UP_LIMIT = 5            # wrong one-time codes per user ...
+    STEP_UP_WINDOW = 600         # ... within this many seconds, then refused for the rest of the window
+
+    def step_up(self, username, code, purpose, src_ip=None):
+        """A fresh one-time code for a sensitive action (backup download, approving one's own loosening).
+        Wrong codes are counted (audit trail) and limited; a code is used at most once, also when two requests
+        race. Raises AuthError('too_many_attempts', 429) or AuthError('totp_required', 403)."""
+        since = time.time() - self.STEP_UP_WINDOW
+        n = self.db.one("SELECT COUNT(*) FROM audit WHERE action='auth.step_up_failed' AND actor=? AND ts>=?",
+                        (username, since))[0]
+        if n >= self.STEP_UP_LIMIT:
+            self.audit.log('auth.step_up_locked', username, src_ip=src_ip, result='failed', severity='crit',
+                           purpose=purpose, failures=n)
+            raise AuthError('too_many_attempts', 429, retry_after=self.STEP_UP_WINDOW)
+        u = self.user_row(username)
+        step = totp_match(u['totp_secret'], code or '') if u and u['totp_enabled'] else None
+        used = False
+        if step is not None:
+            cur = self.db.x('UPDATE users SET totp_last_step=? WHERE username=? AND (totp_last_step IS NULL OR totp_last_step<?)',
+                            (step, username, step))
+            used = cur.rowcount == 1
+        if not used:
+            self.audit.log('auth.step_up_failed', username, src_ip=src_ip, result='failed', purpose=purpose,
+                           failures=n + 1)
+            raise AuthError('totp_required', 403)
+        return step
+
     def user_row(self, username):
         return self.db.one('SELECT * FROM users WHERE username=?', (username,))
 
@@ -152,7 +181,7 @@ class Auth:
 
     def create_user(self, username, role, display_name='', password=None, expires_at=None):
         username = (username or '').strip().lower()
-        if not USERNAME_RE.match(username):
+        if not USERNAME_RE.match(username) or username in RESERVED_NAMES:
             raise AuthError('invalid_username', 400)
         if role not in ROLES:
             raise AuthError('invalid_role', 400)
@@ -431,7 +460,7 @@ class Auth:
     # --- API tokens ----------------------------------------------------------------------
     def create_token(self, name, scopes, allowed_cidrs, expires_at, created_by):
         name = (name or '').strip()
-        if not re.fullmatch(r'[\w .:@-]{1,64}', name):
+        if not re.fullmatch(r'[\w .:@-]{1,64}', name) or name.lower() in RESERVED_NAMES:
             raise AuthError('invalid_name', 400)
         if not scopes or any(s not in SCOPES_P1 for s in scopes):
             raise AuthError('invalid_scope', 400, allowed=list(SCOPES_P1))

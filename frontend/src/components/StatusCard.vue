@@ -1,7 +1,7 @@
 <!-- /status: collector health and versions. -->
 <template>
   <section class="card">
-    <h2>{{ t('status.title') }}</h2>
+    <h2><Icon name="info" /> {{ t('status.title') }}</h2>
     <ErrorBox :error="error" />
     <dl v-if="s" class="kv two">
       <dt>{{ t('status.version') }}</dt><dd class="mono">{{ safeText(s.version, 30) }}</dd>
@@ -25,6 +25,7 @@
 </template>
 
 <script setup>
+import Icon from './Icon.vue'
 import { ref, onMounted } from 'vue'
 import { get } from '../api.js'
 import { t } from '../i18n.js'

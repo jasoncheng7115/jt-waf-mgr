@@ -5,7 +5,7 @@
       <h1 class="authtitle">jt-waf-mgr</h1>
     </div>
     <FlowSteps v-if="forced" compact :title="t('guide.first.title')" :steps="firstSteps" />
-    <h2>{{ t('password.title') }}</h2>
+    <h2><Icon name="key" /> {{ t('password.title') }}</h2>
     <p v-if="forced" class="alert info">{{ t('password.must_change') }}</p>
     <ul v-if="policyLines.length" class="plainlist small muted policy">
       <li v-for="(l, i) in policyLines" :key="i">{{ l }}</li>

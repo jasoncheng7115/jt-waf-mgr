@@ -1,7 +1,7 @@
 #!/bin/sh
 # Release gate: browser end-to-end test of every page (3 languages, light / dark, controls, charts) against a
 # synthetic environment served by the code in this tree. Needs Playwright (JTWAF_NODE_MODULES).
-#   tools/e2e/run.sh [screenshot dir]
+#   tools/e2e/run.sh [screenshot dir]          (E2E_ONLY_SECURITY=1: only the security scan)
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd); TOP=$(cd "$HERE/../.." && pwd)
 W=$(mktemp -d "${TMPDIR:-/tmp}/jtwaf-e2e.XXXXXX"); SHOTS=${1:-$W/shots}; mkdir -p "$SHOTS"
@@ -50,4 +50,7 @@ cd "$TOP" && PYTHONDONTWRITEBYTECODE=1 python3 -m jtwafmgr --config "$W/config.t
 SRV=$!
 trap 'kill $SRV 2>/dev/null; rm -rf "$W"' EXIT
 sleep 2
-node "$HERE/e2e.cjs" "$W" "$SHOTS"
+if [ "${E2E_ONLY_SECURITY:-0}" != 1 ]; then node "$HERE/e2e.cjs" "$W" "$SHOTS"; fi
+# black-box security checks on the same environment (stdlib; tools/security_scan.py)
+python3 "$TOP/tools/security_scan.py" "$W"
+cp "$W/security-report.json" "$SHOTS/" 2>/dev/null || true

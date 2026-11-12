@@ -1,5 +1,11 @@
 # /etc/jt-waf-mgr/config.toml -- every key is optional; the values shown are the defaults.
 # Owned root:jtwaf, mode 0640.
+#
+# This file holds what the program needs to start (paths, listen address, node id) and the defaults.
+# Day-to-day settings -- GeoIP account and key, the local LLM server, the scheduled event analysis, focus
+# sites, known scanners, catch-all hosts, automation paths, login notice, password and lockout policy -- are
+# changed by an administrator in the web interface (Settings). Those are stored in the database, audited,
+# take effect at once and override the values here.
 
 [node]
 # Name of this WAF host (shown in the UI and in audit events).
@@ -132,8 +138,9 @@ level = ""
 
 [geoip]
 # Country / city / network owner (ASN) of external addresses, from MaxMind databases.
-# The free GeoLite2 databases need a MaxMind account: put the account number here and the license key,
-# alone, in license_key_file (the installer creates it: owner root, group jtwaf, mode 0640).
+# The free GeoLite2 databases need a MaxMind account. Enter the account ID and the license key in the web
+# interface (Settings > GeoIP account); that is the normal way. The values below are only defaults; a key
+# can also be put alone in license_key_file (the installer creates it: owner root, group jtwaf, mode 0640).
 # The web service only reads the files; the separate jt-waf-mgr-geoip.service downloads them (daily
 # check via jt-waf-mgr-geoip.timer, or "Update now" in Settings) and verifies MaxMind's SHA-256.
 # Internal addresses ([network] internal and private ranges) are never looked up.

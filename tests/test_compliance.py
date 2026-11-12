@@ -402,6 +402,131 @@ class TestMonitor(unittest.TestCase):
         row = self.app.db.one("SELECT * FROM audit WHERE action='config.changed'")
         self.assertEqual(row['result'], 'outside')
 
+    def test_adoption_is_not_an_outside_change(self):
+        """Adoption replaces the site's own rule files in main.conf: the old files leave the configuration as part
+        of jt-waf-mgr's change (it was recorded as outside on the first site)."""
+        import json as _j
+        mon, now = self.app.monitor, time.time()
+        mdir = self.env.cfg['managed']['dir'].rstrip('/') + '/'
+        main = self.app.site.load()[1].main_files[0]
+        old = '/etc/nginx/modsec/site-before.conf'
+        self.app.workflow.managed.disk_state = lambda: {'drift': False}
+        self.app.db.x("INSERT INTO versions(version, created_at, change_id, kind, files, hashes, state, result) "
+                      "VALUES (1, ?, 1, 'adopt', '{}', '{}', 'applied', '{}')", (now,))
+        ch = {'added': [mdir + 'before-crs.conf'], 'removed': [old], 'changed': [main]}
+        self.assertEqual(mon._cause({'ts': now - 60}, ch), 'outside')       # no adoption recorded yet
+        self.app.db.x("INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at) "
+                      "VALUES ('adopt', 'system', ?, 'neutral', 'applied', 'x', 'boss', ?, ?)",
+                      (_j.dumps({'sources': {'before': {'path': old, 'sha256': 'x'}}, 'items': 1}), now, now))
+        self.assertEqual(mon._cause({'ts': now - 60}, ch), 'jt-waf-mgr')
+        self.assertEqual(mon._cause({'ts': now - 60}, dict(ch, removed=[old, '/etc/nginx/other.conf'])), 'outside')
+
+    def test_backup_download_needs_a_fresh_code_and_is_audited(self):
+        from jtwafmgr import auth
+        from jtwafmgr.web import api
+        from jtwafmgr.web.server import ApiError
+        a = self.app.auth
+        a.create_user('boss2', 'admin', password='a long test password')
+        sec, _ = a.totp_setup('boss2')
+        a.totp_enable('boss2', auth.totp_code(sec, int(time.time() // 30) - 1))
+        r = self.app.monitor.backup(actor='test')
+        self.assertTrue(r['ok'], r)
+
+        class Req:
+            def __init__(self, name, body):
+                self.params, self._b, self.user, self.client_ip = {'name': name}, body, {'username': 'boss2', 'role': 'admin'}, '192.0.2.5'
+
+            def body(self):
+                return self._b
+        with self.assertRaises(ApiError) as cm:                       # no code
+            api.backup_download(self.app, Req(r['file'], {}))
+        self.assertEqual(cm.exception.code, 'totp_required')
+        with self.assertRaises(ApiError):                              # not a backup name
+            api.backup_download(self.app, Req('../../etc/passwd', {'totp': auth.totp_code(sec, int(time.time() // 30))}))
+        code = auth.totp_code(sec, int(time.time() // 30))
+        resp = api.backup_download(self.app, Req(r['file'], {'totp': code}))
+        self.assertEqual(resp.status, 200)
+        data = resp.stream.read()
+        resp.stream.close()
+        self.assertTrue(data.startswith(b'SQLite format 3'))
+        self.assertEqual(len(data), resp.length)
+        self.assertIn(('X-Backup-Verified', 'yes'), resp.headers)
+        with self.assertRaises(ApiError):                              # the same code twice: refused
+            api.backup_download(self.app, Req(r['file'], {'totp': code}))
+        acts = [x['action'] for x in self.app.db.q("SELECT action FROM audit WHERE action IN "
+                                                   "('backup.downloaded', 'auth.step_up_failed')")]
+        self.assertEqual(acts.count('backup.downloaded'), 1)
+        self.assertEqual(acts.count('auth.step_up_failed'), 2)   # no code, a code used twice
+
+    def test_daily_backup_schedule(self):
+        from jtwafmgr.compliance import Monitor
+        day = time.mktime((2026, 11, 12, 0, 0, 0, 0, 0, -1))
+        # 02:59 -> yesterday 03:00; 03:00 -> today 03:00
+        self.assertEqual(Monitor.last_scheduled(3, day + 2 * 3600 + 59 * 60), day - 21 * 3600)
+        self.assertEqual(Monitor.last_scheduled(3, day + 3 * 3600), day + 3 * 3600)
+        mon = self.app.monitor
+        made = []
+        mon.backup = lambda actor='system': made.append(1) or {'ok': True}
+        # a backup by hand at 23:31 the evening before does not skip the 03:00 backup
+        self.app.workflow.managed.set_setting('backup.last', {'ts': day - 29 * 60, 'ok': True}, 'test')
+        mon.last_scheduled = lambda hour, now=None: day + 3 * 3600
+        mon.maybe_backup()
+        self.assertEqual(made, [1])
+        self.app.workflow.managed.set_setting('backup.last', {'ts': day + 3 * 3600 + 5, 'ok': True}, 'test')
+        mon.maybe_backup()
+        self.assertEqual(made, [1])
+
+    def test_backup_retries_and_pruning_keep_good_copies(self):
+        mon, mg = self.app.monitor, self.app.workflow.managed
+        now = time.time()
+        made = []
+        real = mon.backup
+        mon.backup = lambda actor='system': made.append(1) or {'ok': True}
+        mon.last_scheduled = lambda hour, now=None: now_ - 7200
+        now_ = now
+        # failed 2 hours ago (after the scheduled time), first failure: retried
+        mg.set_setting('backup.last', {'ts': now - 3700, 'ok': False, 'fails': 1}, 'test')
+        mon.maybe_backup()
+        self.assertEqual(len(made), 1)
+        # failed three times: wait for the next night
+        mg.set_setting('backup.last', {'ts': now - 3700, 'ok': False, 'fails': 3}, 'test')
+        mon.maybe_backup()
+        self.assertEqual(len(made), 1)
+        # a last backup "in the future" (wrong clock) does not stop the nightly backup
+        mg.set_setting('backup.last', {'ts': now + 86400, 'ok': True}, 'test')
+        mon.maybe_backup()
+        self.assertEqual(len(made), 2)
+        mon.backup = real
+        # pruning: old copies go, but the newest three always stay
+        d = self.env.cfg['backup']['dir']
+        os.makedirs(d, exist_ok=True)
+        for i in range(5):
+            p = os.path.join(d, 'jt-waf-mgr-2026010%d-030000.db' % (i + 1))
+            open(p, 'w').write('x')
+            os.utime(p, (now - 90 * 86400, now - 90 * 86400))
+        mon._prune_backups()
+        self.assertEqual(len([f for f in os.listdir(d) if f.endswith('.db')]), 3)
+
+    def test_step_up_codes_are_limited_and_single_use(self):
+        from jtwafmgr import auth as auth_mod
+        from jtwafmgr.auth import AuthError
+        a = self.app.auth
+        a.create_user('boss3', 'admin', password='a long test password')
+        sec, _ = a.totp_setup('boss3')
+        a.totp_enable('boss3', auth_mod.totp_code(sec, int(time.time() // 30) - 1))
+        code = auth_mod.totp_code(sec, int(time.time() // 30))
+        a.step_up('boss3', code, 'test')
+        with self.assertRaises(AuthError) as cm:                  # the same code again
+            a.step_up('boss3', code, 'test')
+        self.assertEqual(cm.exception.code, 'totp_required')
+        for _ in range(4):
+            with self.assertRaises(AuthError):
+                a.step_up('boss3', '000000', 'test')
+        with self.assertRaises(AuthError) as cm:                  # five failures: locked for the window
+            a.step_up('boss3', auth_mod.totp_code(sec, int(time.time() // 30) + 1), 'test')
+        self.assertEqual((cm.exception.code, cm.exception.status), ('too_many_attempts', 429))
+        self.assertTrue(self.app.db.one("SELECT 1 FROM audit WHERE action='auth.step_up_locked'"))
+
     def test_system_check_and_controls(self):
         keys = {i['key'] for i in system_check(self.app)}
         for k in ('program_integrity', 'audit_chain', 'time_sync', 'backup', 'database', 'accounts', 'apply'):
@@ -502,6 +627,7 @@ class TestAuditCoverage(unittest.TestCase):
 
     # a route may also delegate to a Workflow method checked by test_workflow_actions_audited
     AUDITING_CALLS = ('audit.log', 'app.monitor.backup', '_wf(app).propose', '_wf(app).approve', '_wf(app).import_propose',
+                      'uisettings.set_many', 'alerts.handle(',
                       '_wf(app).reject', '_wf(app).cancel', '_wf(app).recheck', '_wf(app).rollback')
 
     def test_write_routes_audited(self):
@@ -520,10 +646,27 @@ class TestAuditCoverage(unittest.TestCase):
 
     def test_workflow_actions_audited(self):
         from jtwafmgr.changes import Workflow
-        for name in ('propose', 'propose_adoption', 'approve', 'reject', 'cancel', 'recheck', 'rollback'):
+        for name in ('_insert', 'propose_adoption', 'approve', 'reject', 'cancel', 'recheck', 'rollback'):
             src = inspect.getsource(getattr(Workflow, name))
             self.assertIn('audit.log', src, name)
+        # every way of proposing goes through the audited _insert
+        for name in ('propose', 'propose_bundle'):
+            self.assertIn('self._insert(', inspect.getsource(getattr(Workflow, name)), name)
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestParamBounds(unittest.TestCase):
+    def test_huge_numbers_are_a_400_not_a_500(self):
+        from jtwafmgr.web import api
+        from jtwafmgr.web.server import ApiError
+
+        class R:
+            query = {'cursor': '99999999999999999999'}
+        with self.assertRaises(ApiError) as cm:
+            api._int_param(R, 'cursor')
+        self.assertEqual(cm.exception.status, 400)
+        R.query = {'cursor': '42'}
+        self.assertEqual(api._int_param(R, 'cursor'), 42)

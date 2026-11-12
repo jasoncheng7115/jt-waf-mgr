@@ -162,7 +162,9 @@ fi
 # --- systemd -----------------------------------------------------------------------------
 mkdir -p "$UNIT_DIR/jt-waf-mgr.service.d"
 for u in jt-waf-mgr.service jt-waf-mgr-apply.service jt-waf-mgr-apply.path \
-         jt-waf-mgr-geoip.service jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.path; do
+         jt-waf-mgr-geoip.service jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.path \
+         jt-waf-mgr-analyst.service jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path \
+         jt-waf-mgr-notify.service jt-waf-mgr-notify.timer jt-waf-mgr-notify.path; do
     cp "$SRC/deploy/$u" "$UNIT_DIR/$u"
     chmod 644 "$UNIT_DIR/$u"
 done
@@ -212,8 +214,14 @@ fi
 systemctl daemon-reload
 systemctl enable jt-waf-mgr.service >/dev/null
 # GeoIP: a separate, sandboxed one-shot job (daily timer + "update now" from the UI); it does nothing
-# until [geoip] account_id and the license key file are filled in.
+# until an admin enters the MaxMind account and license key in Settings (web interface).
 systemctl enable --now jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.path >/dev/null
+# Event analysis with the local LLM: hourly wake-up + "run now" from the UI; it does nothing until
+# [analyst] and [llm] are enabled and configured in Settings, and it only ever proposes changes.
+systemctl enable --now jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path >/dev/null
+# Notifications: queued by the web service, sent by this one-shot job (request file + one-minute timer for
+# retries and reminders); it sends nothing until channels are set up in Settings > Notifications.
+systemctl enable --now jt-waf-mgr-notify.timer jt-waf-mgr-notify.path >/dev/null
 # The apply program writes nginx configuration: it is armed only on request (--enable-apply),
 # normally right before the adoption step.
 if [ "$ENABLE_APPLY" = 1 ]; then

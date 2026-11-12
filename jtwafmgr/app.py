@@ -15,6 +15,8 @@ class App:
     def __init__(self, cfg, start_collector=False):
         self.cfg = cfg
         self.db = Database(cfg['paths']['db'])
+        from .uisettings import apply as _apply_ui_settings
+        _apply_ui_settings(cfg, self.db)       # settings changed in the web interface override the file
         self.audit = Audit(self.db, cfg)
         self.auth = Auth(self.db, cfg, self.audit)
         self.site = Site(cfg)

@@ -50,6 +50,13 @@ def main():
                 if '<Icon' not in m.group(3):
                     line = tpl[:m.start()].count('\n') + 1
                     problems.append('%s (template line %d): button-style link without <Icon>' % (rel, line))
+            # every card title (h2) starts with an icon (user, 2026-11-12)
+            for m in re.finditer(r'<h2\b([^>]*)>(.*?)</h2>', tpl, re.S):
+                if 'np-head' in m.group(1):        # headings inside the navigation panel, not card titles
+                    continue
+                if '<Icon' not in m.group(2):
+                    line = tpl[:m.start()].count('\n') + 1
+                    problems.append('%s (template line %d): card title without <Icon>: %s' % (rel, line, ' '.join(m.group(0).split())[:100]))
             if name not in SELECT_EXEMPT and re.search(r'<select\b', tpl):
                 problems.append('%s: native <select>; use SelectBox' % rel)
             if re.search(r'<input\b[^>]*type="(date|datetime-local|time|month|week)"', tpl):

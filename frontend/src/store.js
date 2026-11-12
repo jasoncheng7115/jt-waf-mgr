@@ -44,3 +44,18 @@ export async function refreshPending(force) {
     pending.count = (r.items || []).length
   } catch { /* keep the last value */ }
 }
+
+// Open alerts (nav badge): same rhythm as the pending changes.
+export const alertCount = reactive({ open: 0, critical: 0, at: 0 })
+
+export async function refreshAlerts(force) {
+  if (!state.user || state.user.must_change_password || state.user.totp_setup_required) return
+  const now = Date.now()
+  if (!force && now - alertCount.at < 15000) return
+  alertCount.at = now
+  try {
+    const r = await get('/alerts/counts')
+    alertCount.open = r.open || 0
+    alertCount.critical = r.critical || 0
+  } catch { /* keep the last value */ }
+}

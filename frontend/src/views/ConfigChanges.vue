@@ -16,7 +16,7 @@
       <Loading v-if="!snap && !error" />
       <section v-if="snap" class="card">
         <div class="cardhead">
-          <h2>#{{ snap.id }} · {{ fmtMinute(snap.ts) }}</h2>
+          <h2><Icon name="history" /> #{{ snap.id }} · {{ fmtMinute(snap.ts) }}</h2>
           <span class="badge" :class="CAUSE[snap.cause] || 'b-logged'">{{ tOr('cfgchg.cause.' + snap.cause, snap.cause) }}</span>
         </div>
         <p class="small">{{ t('cfgchg.digest') }}: <HashText :value="snap.digest" :len="16" /></p>
@@ -36,13 +36,13 @@
     <template v-else>
       <Loading v-if="loading && !items.length" />
       <section v-if="items.length" class="card">
-        <h2>{{ t('chart.cfgchg.loaded', { n: fmtNum(items.length) }) }}</h2>
+        <h2><Icon name="chart" /> {{ t('chart.cfgchg.loaded', { n: fmtNum(items.length) }) }}</h2>
         <div class="chartgrid">
           <div><h3 class="charthead">{{ t('chart.cfgchg.causes') }}</h3><SegBar :parts="causeParts" :label="t('chart.cfgchg.causes')" /></div>
           <div><h3 class="charthead">{{ t('chart.cfgchg.per_day') }}</h3><HBars :items="perDay" :series="causeSeries" /></div>
         </div>
       </section>
-      <DataTable id="cfgchg-list" :columns="cols" :rows="items" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
+      <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="cfgchg-list" :columns="cols" :rows="items" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
                  :row-class="(c) => ({ hl: open === c.id })">
         <template #cell-id="{ row }"><RouterLink class="mono" :to="'/config-changes/' + row.id">{{ row.id }}</RouterLink></template>
         <template #cell-ts="{ row }">{{ fmtMinute(row.ts) }}</template>
@@ -52,11 +52,10 @@
                   :aria-pressed="open === row.id ? 'true' : 'false'" @click="open = open === row.id ? null : row.id">
             <Icon :name="open === row.id ? 'hide' : 'show'" />{{ open === row.id ? t('cfgchg.hide_paths') : t('cfgchg.show_paths') }}</button>
         </template>
-        <template #footer><LoadMore :cursor="cursor" :busy="loading" @more="load(false)" /></template>
       </DataTable>
       <section v-if="openItem" class="card">
         <div class="cardhead">
-          <h2>#{{ openItem.id }} · {{ fmtMinute(openItem.ts) }}</h2>
+          <h2><Icon name="history" /> #{{ openItem.id }} · {{ fmtMinute(openItem.ts) }}</h2>
           <button class="btn small ghost" type="button" @click="open = null"><Icon name="close" />{{ t('common.dismiss') }}</button>
         </div>
         <ChangedPaths :changes="openItem.changes" />
@@ -72,7 +71,6 @@ import { t, tOr } from '../i18n.js'
 import { safeText, fmtMinute, fmtNum, isoToDateInput } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
-import LoadMore from '../components/LoadMore.vue'
 import HashText from '../components/HashText.vue'
 import Icon from '../components/Icon.vue'
 import DataTable from '../components/DataTable.vue'
@@ -81,7 +79,7 @@ import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
 
 const props = defineProps({ id: { type: String, default: '' } })
-const CAUSE = { outside: 'b-warn', 'jt-waf-mgr': 'b-int', baseline: 'b-logged' }
+const CAUSE = { outside: 'b-warn', 'jt-waf-mgr': 'b-int', baseline: 'b-logged', automation: 'b-int' }
 
 // Lists of added / removed / changed paths (render functions: text nodes only).
 const ChangedPaths = defineComponent({
@@ -125,8 +123,8 @@ const flow = computed(() => [
   { key: 'warn', icon: 'warning', label: t('guide.cfgchg.warn'), desc: t('guide.cfgchg.warn_d') },
 ])
 
-const CAUSES = ['outside', 'jt-waf-mgr', 'baseline']
-const CAUSE_TONE = { outside: 's2', 'jt-waf-mgr': 's1', baseline: 'muted' }
+const CAUSES = ['outside', 'jt-waf-mgr', 'automation', 'baseline']
+const CAUSE_TONE = { outside: 's2', 'jt-waf-mgr': 's1', automation: 's3', baseline: 'muted' }
 const cols = computed(() => [
   { key: 'id', label: '#', align: 'num', required: true },
   { key: 'ts', label: t('event.time'), nowrap: true, text: (c) => fmtMinute(c.ts) },

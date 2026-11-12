@@ -45,5 +45,13 @@ for i in range(30):
     app.audit.log('test.action', 'admin', src_ip='192.0.2.10', n=i)
 a.create_token('wazuh-sync', ['events:read'], ['192.0.2.0/24'], None, 'admin')
 app.monitor.check_chain(); app.monitor.backup()
+# notifications and alerts (synthetic; nothing is sent: the notify unit does not run here)
+from jtwafmgr import alerts, uisettings
+uisettings.set_many(app, {'notify.enabled': True, 'notify.base_url': 'https://waf.example.com', 'notify.webhook_enabled': True,
+                          'notify.webhook_url': 'https://hooks.example.com/waf', 'notify.webhook_secret': 'e2e-signing-secret-0123456789'}, 'admin')
+alerts.raise_alert(app.db, app.audit, 'analyst', 'attack_passed', 'critical', 'attack_passed:/.env',
+                   {'path': '/.env', 'host': 'app.example.com', 'count': 3, 'reason': '<b>not markup</b> probe answered 200'}, link='/analysis')
+alerts.raise_alert(app.db, app.audit, 'analyst', 'false_positive', 'warning', 'false_positive:shop.example.com/api/notes',
+                   {'path': '/api/notes', 'host': 'shop.example.com', 'count': 12, 'reason': 'rich text editor content'}, link='/changes')
 json.dump(sec, open(R + '/totp.json', 'w'))
 print('events', app.db.one('SELECT COUNT(*) n FROM events')['n'])

@@ -28,9 +28,12 @@ def _int_param(req, name):
     if v in (None, ''):
         return None
     try:
-        return int(v)
+        n = int(v)
     except ValueError:
         raise ApiError(400, 'bad_request', '%s must be a number' % name)
+    if not -(2 ** 62) < n < 2 ** 62:          # beyond what SQLite stores: a 400, never a 500
+        raise ApiError(400, 'bad_request', '%s is out of range' % name)
+    return n
 
 
 def _time_param(req, name):
@@ -43,12 +46,26 @@ def _time_param(req, name):
         raise ApiError(400, 'bad_request', '%s must be RFC 3339' % name)
 
 
+CUSTOM_MAX_DAYS = 31
+
+
 def _range(req):
+    """(range, since, until): 24h, 7d, or custom with since / until (RFC 3339), 1 hour to 31 days."""
     r = req.query.get('range', '24h')
+    now = util.now()
+    if r == 'custom':
+        try:
+            since, until = _time_param(req, 'since'), _time_param(req, 'until') or now
+        except OverflowError:
+            raise ApiError(400, 'bad_request', 'since / until out of range')
+        if since is None or not 0 < since < until or until > now + 3600:
+            raise ApiError(400, 'bad_request', 'custom range: since before until, until not in the future')
+        if until - since < 3600 or until - since > CUSTOM_MAX_DAYS * 86400:
+            raise ApiError(400, 'bad_request', 'custom range: 1 hour to %d days' % CUSTOM_MAX_DAYS, max_days=CUSTOM_MAX_DAYS)
+        return r, since, until
     if r not in ('24h', '7d'):
-        raise ApiError(400, 'bad_request', 'range must be 24h or 7d')
-    until = util.now()
-    return r, until - (86400 if r == '24h' else 7 * 86400), until
+        raise ApiError(400, 'bad_request', 'range must be 24h, 7d or custom')
+    return r, now - (86400 if r == '24h' else 7 * 86400), now
 
 
 def _ids(s):
@@ -266,15 +283,7 @@ def overview(app, req):
         "SELECT COUNT(*) n, SUM(outcome='blocked') b, SUM(outcome='logged') l, SUM(origin='external') ext, "
         "SUM(origin='internal') int, SUM(decided_by IN ('confident','fallback')) bc, SUM(decided_by='score') bs "
         'FROM events WHERE ts>=? AND ts<?' + fw, (since, until) + fa)
-    buckets = {}
-    for r in app.db.q("SELECT CAST(ts/3600 AS INTEGER) h, SUM(outcome='blocked') b, SUM(outcome='logged') l, "
-                      "SUM(origin='external') e, SUM(origin='internal') i "
-                      'FROM events WHERE ts>=? AND ts<?' + fw + ' GROUP BY h', (since, until) + fa):
-        buckets[r['h']] = (r['b'] or 0, r['l'] or 0, r['e'] or 0, r['i'] or 0)
-    first, last = int(since // 3600) + 1, int(until // 3600)
-    z = (0, 0, 0, 0)
-    timeline = [{'t': util.iso(h * 3600), 'blocked': buckets.get(h, z)[0], 'logged': buckets.get(h, z)[1],
-                 'external': buckets.get(h, z)[2], 'internal': buckets.get(h, z)[3]} for h in range(first, last + 1)]
+    timeline, size = _timeline(app, since, until, fw, fa, rolling=rng != 'custom')
     # the same window just before, for the trend of each number
     span = until - since
     pv = app.db.one(
@@ -299,7 +308,8 @@ def overview(app, req):
         focus.append({'host': h, 'events': f['n'] or 0, 'blocked': f['b'] or 0, 'external': f['e'] or 0,
                       'external_not_blocked': f['enb'] or 0, 'recent': recent})
     return json_response(200, {
-        'range': rng, 'since': util.iso(since), 'until': util.iso(until),
+        'range': rng, 'since': util.iso(since), 'until': util.iso(until), 'bucket_seconds': size,
+        'max_days': CUSTOM_MAX_DAYS,
         'totals': {'events': t['n'] or 0, 'blocked': t['b'] or 0, 'logged': t['l'] or 0, 'external': t['ext'] or 0,
                    'internal': t['int'] or 0, 'blocked_confident': t['bc'] or 0, 'blocked_score': t['bs'] or 0},
         'filters': {k: req.query[k] for k in FILTER_KEYS if req.query.get(k)}, 'previous': previous,
@@ -310,6 +320,42 @@ def overview(app, req):
         'by_rule': _by_rule(app, since, until, fw=fw, fa=fa), 'score_only': score_only, 'focus': focus,
         'by_country': _by_geo(app, since, until, 'cc', fw=fw, fa=fa), 'by_asn': _by_geo(app, since, until, 'asn', fw=fw, fa=fa),
     })
+
+
+def _timeline(app, since, until, fw='', fa=(), rolling=False):
+    """Events per hour (up to a week) or per local day (beyond), blocked / logged / external / internal."""
+    buckets = {}
+    size = 3600 if until - since <= 7 * 86400 + 60 else 86400
+    off = time.localtime(until).tm_gmtoff if size == 86400 else 0
+    for r in app.db.q("SELECT CAST((ts + ?) / ? AS INTEGER) h, SUM(outcome='blocked') b, SUM(outcome='logged') l, "
+                      "SUM(origin='external') e, SUM(origin='internal') i "
+                      'FROM events WHERE ts>=? AND ts<?' + fw + ' GROUP BY h', (off, size, since, until) + tuple(fa)):
+        buckets[r['h']] = (r['b'] or 0, r['l'] or 0, r['e'] or 0, r['i'] or 0)
+    first, last = int((since + off) // size), int((until - 1 + off) // size)
+    if size == 3600 and rolling:
+        first += 1            # the rolling windows start with the first whole hour
+    z = (0, 0, 0, 0)
+    return [{'t': util.iso(h * size - off), 'blocked': buckets.get(h, z)[0], 'logged': buckets.get(h, z)[1],
+             'external': buckets.get(h, z)[2], 'internal': buckets.get(h, z)[3]} for h in range(first, last + 1)], size
+
+
+def events_timeline(app, req):
+    """The event list's timeline: the same filters; since / until (default the last 7 days, at most 31 days)."""
+    now = util.now()
+    until = _time_param(req, 'until') or now
+    since = _time_param(req, 'since')
+    until = min(until, now + 60)
+    clamped = False
+    if since is None or since >= until:
+        since = until - 7 * 86400
+    if until - since > CUSTOM_MAX_DAYS * 86400:
+        since, clamped = until - CUSTOM_MAX_DAYS * 86400, True
+    if until - since < 3600:
+        since = until - 3600
+    fwl, fa = _event_filters(req, with_time=False)
+    timeline, size = _timeline(app, since, until, ''.join(' AND ' + w for w in fwl), fa, rolling=False)
+    return json_response(200, {'since': util.iso(since), 'until': util.iso(until), 'bucket_seconds': size,
+                               'clamped': clamped, 'max_days': CUSTOM_MAX_DAYS, 'timeline': timeline})
 
 
 def _by_geo(app, since, until, field, top=15, fw='', fa=()):
@@ -459,8 +505,60 @@ def _hits(app, rid):
     return (r['d7'] or 0), (r['d30'] or 0), util.iso(r['last'])
 
 
+class _Provenance:
+    """Where a rule comes from and who keeps it up to date: OWASP CRS (and whether its updates are registered
+    automation), a CRS plugin, the ModSecurity base file, a vhost, a site file jt-waf-mgr does not manage, or
+    jt-waf-mgr's own files (imported at adoption, or a change by a person / an API token / the event analysis)."""
+
+    def __init__(self, app, m):
+        import fnmatch
+        self.fn = fnmatch.fnmatch
+        self.auto = app.cfg['integrity'].get('automation_paths') or []
+        try:
+            self.crs_version = m.crs_info().get('version')
+        except Exception:
+            self.crs_version = None
+        mg = app.workflow.managed if getattr(app, 'workflow', None) else None
+        self.mdir = os.path.realpath(mg.dir) + os.sep if mg else None
+        self.items = {it['rule_id']: it for it in mg.items()} if mg else {}
+        self.app = app
+        self._changes = {}
+
+    def _change(self, cid):
+        if cid not in self._changes:
+            r = self.app.db.one('SELECT id, proposed_by, proposed_via, state, created_at FROM changes WHERE id=?', (cid,))
+            self._changes[cid] = dict(r) if r else None
+        return self._changes[cid]
+
+    def of(self, d):
+        src, f = d['source'], d.get('file') or ''
+        auto = any(self.fn(f, pat) or self.fn(os.path.realpath(f), pat) for pat in self.auto)
+        if src == 'crs':
+            return {'channel': 'crs', 'version': self.crs_version, 'automation': auto}
+        if src == 'plugin':
+            m = re.search(r'/plugins/([^/]+?)(?:-(?:config|before|after))?\.conf$', f)
+            return {'channel': 'plugin', 'name': m.group(1) if m else os.path.basename(f), 'automation': auto}
+        if src == 'base':
+            return {'channel': 'base'}
+        if src == 'vhost_inline':
+            return {'channel': 'vhost'}
+        if self.mdir and os.path.realpath(f).startswith(self.mdir):
+            it = self.items.get(d.get('id'))
+            if not it:
+                return {'channel': 'managed'}
+            out = {'channel': 'adopted' if it['origin'] == 'imported' else 'change', 'change_id': it.get('change_id'),
+                   'by': it.get('created_by')}
+            c = self._change(it['change_id']) if it.get('change_id') else None
+            if c and it['origin'] != 'imported':
+                out['by'] = c['proposed_by']
+                out['channel'] = 'analyst' if c['proposed_by'] == 'analyst' else ('token' if c['proposed_via'] == 'api' else 'person')
+            return out
+        return {'channel': 'site_file', 'automation': auto}
+
+
 def rules(app, req):
     _, m = app.site.load()
+    prov = _Provenance(app, m)
     src = req.query.get('source', 'local')
     if src not in ('local', 'crs', 'plugin', 'vhost_inline', 'base', 'all'):
         raise ApiError(400, 'bad_request', 'unknown source')
@@ -479,9 +577,10 @@ def rules(app, req):
         out.append(d)
     out.sort(key=lambda d: (d['id'] is None, d['id'] or 0))
     limit = _limit(req, 1000, 5000)
-    start = _int_param(req, 'cursor') or 0
+    start = max(0, _int_param(req, 'cursor') or 0)
     page = out[start:start + limit]
     for d in page:
+        d['provenance'] = prov.of(d)
         if d['id'] is not None:
             d['hits_7d'], d['hits_30d'], d['last_hit'] = _hits(app, d['id'])
         else:
@@ -505,6 +604,7 @@ def rule(app, req):
         raise ApiError(404, 'not_found')
     _, m = app.site.load()
     d = m.rule_dict(r)
+    d['provenance'] = _Provenance(app, m).of(d)
     d['hits_7d'], d['hits_30d'], d['last_hit'] = _hits(app, rid)
     return json_response(200, d)
 
@@ -745,7 +845,7 @@ def _paths(app):
         'managed_rules': c['managed']['dir'], 'sandbox': c['managed']['sandbox_dir'],
         'modsecurity_audit_log': c['paths']['audit_log'], 'nginx_conf': c['paths']['nginx_conf'],
         'syslog': ('%s (facility %s)' % (c['syslog']['address'], c['syslog']['facility'])) if c['syslog']['enabled'] else None,
-        'service_log': 'journalctl -u jt-waf-mgr -u jt-waf-mgr-apply -u jt-waf-mgr-geoip',
+        'service_log': 'journalctl -u jt-waf-mgr -u jt-waf-mgr-apply -u jt-waf-mgr-geoip -u jt-waf-mgr-analyst -u jt-waf-mgr-notify',
     }
 
 
@@ -768,6 +868,7 @@ def register(router):
     R('GET', V + '/overview', overview, viewer('events:read'))
     R('GET', V + '/events', events, viewer('events:read'))
     R('GET', V + '/events/stats', event_stats, viewer('events:read'))
+    R('GET', V + '/events/timeline', events_timeline, viewer('events:read'))
     R('GET', V + '/events/export', event_export, viewer('events:read'))
     R('GET', V + '/events/{id}', event, viewer('events:read'))
     R('GET', V + '/rules', rules, viewer('rules:read'))
@@ -791,6 +892,9 @@ def register(router):
     R('GET', V + '/settings', settings, admin)
     register_p2(router)
     register_compliance(router)
+    from . import api_analyst, api_notify
+    api_analyst.register(router)
+    api_notify.register(router)
 
 
 # --- P2: managed files, changes, versions -----------------------------------------------------
@@ -878,11 +982,15 @@ def change_create(app, req):
     if via == 'user' and role == 'viewer':
         raise ApiError(403, 'forbidden')
     spec = b.get('spec') if isinstance(b.get('spec'), dict) else {}
+    tests = b.get('tests') if isinstance(b.get('tests'), list) else []
+    owner = req.token['created_by'] if via == 'api' else None
     try:
-        cid = _wf(app).propose(str(b.get('op') or 'add'), str(b.get('kind') or ''), spec, b.get('reason'), actor, via,
-                               item_id=b.get('item_id') if isinstance(b.get('item_id'), int) else None,
-                               tests=b.get('tests') if isinstance(b.get('tests'), list) else [], role=role,
-                               owner=req.token['created_by'] if via == 'api' else None)
+        if b.get('op') == 'bundle':
+            cid = _wf(app).propose_bundle(b.get('ops'), b.get('reason'), actor, via, tests=tests, role=role, owner=owner)
+        else:
+            cid = _wf(app).propose(str(b.get('op') or 'add'), str(b.get('kind') or ''), spec, b.get('reason'), actor, via,
+                                   item_id=b.get('item_id') if isinstance(b.get('item_id'), int) else None,
+                                   tests=tests, role=role, owner=owner)
     except ChangeError as e:
         raise _change_error(e)
     r = _wf(app).get(cid)
@@ -1104,7 +1212,7 @@ def managed_import(app, req):
     b = req.body()
     try:
         out = _wf(app).import_propose(str(b.get('placement') or ''), b.get('text'), b.get('reason'), req.user,
-                                      delete_missing=b.get('delete_missing') is True)
+                                      delete_missing=b.get('delete_missing') is True, as_one=b.get('as_one') is True)
     except ChangeError as e:
         raise _change_error(e)
     return json_response(201, out)
@@ -1217,6 +1325,49 @@ def backup_verify(app, req):
     return json_response(200, res)
 
 
+BACKUP_NAME_RE = re.compile(r'jt-waf-mgr-[0-9]{8}-[0-9]{6}\.db', re.ASCII)
+
+
+def backup_download(app, req):
+    """Admin: one backup file. It holds everything (accounts with password hashes and OTP secrets, the audit
+    trail), so a fresh one-time code is required every time (wrong codes limited), every download is audited,
+    and the file is checked against its stored SHA-256 first. Sent in pieces, never read into memory."""
+    from ..auth import AuthError
+    name = req.params['name']
+    if not BACKUP_NAME_RE.fullmatch(name):
+        raise ApiError(404, 'not_found')
+    path = os.path.join(app.cfg['backup']['dir'], name)
+    if not os.path.isfile(path) or os.path.islink(path):
+        raise ApiError(404, 'not_found')
+    b = req.body()
+    try:
+        app.auth.step_up(req.user['username'], str(b.get('totp') or ''), 'backup.download', req.client_ip)
+    except AuthError as e:
+        raise ApiError(e.status, e.code, e.code, **e.details)
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        raise ApiError(404, 'not_found')
+    fh = os.fdopen(fd, 'rb')
+    size = os.fstat(fh.fileno()).st_size
+    h = hashlib.sha256()
+    for chunk in iter(lambda: fh.read(1 << 20), b''):
+        h.update(chunk)
+    digest = h.hexdigest()
+    fh.seek(0)
+    try:
+        with open(path + '.sha256', encoding='ascii') as sf:
+            stored = sf.read().split()[0]
+    except (OSError, IndexError, UnicodeDecodeError):
+        stored = None
+    verified = stored == digest
+    app.audit.log('backup.downloaded', req.user['username'], src_ip=req.client_ip, severity='warning', file=name,
+                  size=size, sha256=digest, matches_stored_sha256=verified)
+    return Response(200, b'', 'application/octet-stream',
+                    [('Content-Disposition', 'attachment; filename="%s"' % name), ('X-Content-SHA256', digest),
+                     ('X-Backup-Verified', 'yes' if verified else 'no')], stream=fh, length=size)
+
+
 def geoip_status(app, req):
     return json_response(200, app.geoip.status())
 
@@ -1240,6 +1391,42 @@ def geoip_lookup(app, req):
     return json_response(200, {'ip': ip, 'geo': geo(ip), 'available': app.geoip.available()})
 
 
+def ui_settings(app, req):
+    from .. import uisettings
+    return json_response(200, {'settings': uisettings.public(app.cfg, app.db)})
+
+
+def ui_settings_patch(app, req):
+    from .. import uisettings
+    b = req.body()
+    if not isinstance(b, dict) or not b:
+        raise ApiError(400, 'bad_request', 'an object of settings')
+    try:
+        changed = uisettings.set_many(app, b, req.user['username'], src_ip=req.client_ip)
+    except uisettings.SettingError as e:
+        raise ApiError(400, e.code, e.code, **e.details)
+    return json_response(200, {'changed': changed, 'settings': uisettings.public(app.cfg, app.db)})
+
+
+def llm_test(app, req):
+    """Admin: ask the analysis unit (which may reach the LLM server; the web service may not) for a small
+    connection test. The result is read with GET /llm/test."""
+    from .. import analyst
+    try:
+        at = analyst.request_test(app.cfg)
+    except OSError as e:
+        raise ApiError(500, 'request_failed', 'request_failed', detail=str(e)[:200])
+    app.audit.log('llm.test_requested', req.user['username'], src_ip=req.client_ip)
+    return json_response(202, {'requested_at': at})
+
+
+def llm_test_result(app, req):
+    import os
+    from .. import analyst
+    return json_response(200, {'result': analyst.test_result(app.cfg),
+                               'pending': os.path.exists(analyst._state_path(app.cfg, analyst.TEST_REQUEST))})
+
+
 def register_compliance(router):
     R = router.add
     admin = ('admin',)
@@ -1252,8 +1439,13 @@ def register_compliance(router):
     R('GET', V + '/compliance', compliance_report, admin)
     R('GET', V + '/backups', backups, admin)
     R('GET', V + '/geoip', geoip_status, admin)
+    R('GET', V + '/settings/ui', ui_settings, admin)
+    R('PATCH', V + '/settings/ui', ui_settings_patch, admin)
+    R('POST', V + '/llm/test', llm_test, admin)
+    R('GET', V + '/llm/test', llm_test_result, admin)
     R('POST', V + '/geoip/update', geoip_update, admin)
     R('GET', V + '/geoip/{ip}', geoip_lookup, ('role', 'viewer', 'lookups:read'))
     R('POST', V + '/backups', backup_now, admin)
     R('POST', V + '/backups/{name}/verify', backup_verify, admin)
+    R('POST', V + '/backups/{name}/download', backup_download, admin)
 

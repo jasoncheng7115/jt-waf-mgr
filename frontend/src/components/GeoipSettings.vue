@@ -1,12 +1,13 @@
 <!-- GeoIP databases: what is installed, when it was built, the last update, and "update now".
      The web service only queues the request; a separate sandboxed unit downloads and verifies. -->
 <template>
+  <UiSettings :groups="['geoip']" @saved="(c) => { load(); emit('saved', c) }" />
   <section class="card">
     <h2><Icon name="globe" /> {{ t('geoip.title') }}</h2>
     <FlowSteps compact :steps="steps" :note="t('geoip.how_note')" />
     <ErrorBox :error="error" />
     <template v-if="st">
-      <p v-if="!st.configured" class="alert info">{{ t('geoip.not_configured', { file: '/etc/jt-waf-mgr/config.toml', key: '/etc/jt-waf-mgr/maxmind-license.key' }) }}</p>
+      <p v-if="!st.configured" class="alert info">{{ t('geoip.not_configured_ui') }}</p>
       <DataTable id="geoip-editions" :columns="cols" :rows="st.editions" row-key="edition" :toolbar="false">
         <template #cell-present="{ row }"><span class="badge" :class="row.present ? 'b-ok' : 'b-warn'">{{ row.present ? t('geoip.present') : t('geoip.missing') }}</span></template>
         <template #cell-size="{ row }">{{ row.size ? fmtBytes(row.size) : '—' }}</template>
@@ -15,7 +16,8 @@
       </DataTable>
       <p class="muted small">{{ t('geoip.last_run', { at: st.last_run ? fmtMinute(st.last_run) : '—', days: st.update_days }) }}
         <span v-if="st.last_ok === false" class="badge b-blocked">{{ t('geoip.last_failed') }}</span>
-        <span v-if="st.requested" class="badge b-warn">{{ t('geoip.queued') }}</span></p>
+        <span v-if="st.requested" class="badge b-warn">{{ t('geoip.queued') }}</span>
+        <span v-if="!st.enabled" class="badge b-warn">{{ t('geoip.disabled') }}</span></p>
       <div class="actions">
         <button type="button" class="btn small" :disabled="busy || !st.configured || st.requested" @click="update"><Icon name="download" />{{ t('geoip.update_now') }}</button>
         <button type="button" class="btn small ghost" :disabled="busy" @click="load"><Icon name="refresh" />{{ t('common.refresh') }}</button>
@@ -33,7 +35,9 @@ import Icon from './Icon.vue'
 import ErrorBox from './ErrorBox.vue'
 import DataTable from './DataTable.vue'
 import FlowSteps from './FlowSteps.vue'
+import UiSettings from './UiSettings.vue'
 
+const emit = defineEmits(['saved'])
 const st = ref(null)
 const error = ref(null)
 const busy = ref(false)

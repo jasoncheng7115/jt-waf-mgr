@@ -35,7 +35,7 @@
       </section>
       <div class="cols2">
         <section class="card">
-          <h2>{{ t('crs.engine') }}</h2>
+          <h2><Icon name="settings" /> {{ t('crs.engine') }}</h2>
           <dl class="kv">
             <dt>{{ t('crs.path') }}</dt><dd class="mono breakall">{{ safeText(crs.path, 300) }}</dd>
             <dt>{{ t('crs.setup_file') }}</dt><dd class="mono breakall">{{ safeText(crs.setup_file, 300) }}</dd>
@@ -46,7 +46,7 @@
           </dl>
         </section>
         <section class="card">
-          <h2>{{ t('crs.audit') }}</h2>
+          <h2><Icon name="page" /> {{ t('crs.audit') }}</h2>
           <dl v-if="crs.audit" class="kv">
             <dt>{{ t('crs.audit_engine') }}</dt><dd class="mono">{{ safeText(crs.audit.engine, 30) || '—' }}</dd>
             <dt>{{ t('crs.audit_parts') }}</dt><dd class="mono">{{ safeText(crs.audit.parts, 30) || '—' }}</dd>
@@ -57,7 +57,7 @@
         </section>
       </div>
       <section class="card">
-        <h2>{{ t('crs.plugins') }} <span class="count">{{ (crs.plugins || []).length }}</span></h2>
+        <h2><Icon name="tool" /> {{ t('crs.plugins') }} <span class="count">{{ (crs.plugins || []).length }}</span></h2>
         <ul class="plainlist">
           <li v-for="p in crs.plugins || []" :key="p.name">
             <span class="mono">{{ safeText(p.name, 120) }}</span>

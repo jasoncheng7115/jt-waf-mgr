@@ -63,7 +63,7 @@ async function setLang(page, lang) {
 
 const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
-  '/admin/system', '/admin/compliance', '/admin/settings', '/waf', '/nope'];
+  '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/nope'];
 
 async function audit(page, where) {
   const r = await page.evaluate(() => {
@@ -98,15 +98,27 @@ async function audit(page, where) {
   await setLang(page, 'zh-TW');
   // theme switch to dark via the UI
   await page.goto(base + '/', { waitUntil: 'networkidle' });
-  await page.click('.themeswitch button[aria-label="深色"]');
+  await page.click('.themeswitch .im-btn'); await page.click('.themeswitch .im-item:has-text("深色")');
   ok(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'theme switch sets dark');
-  for (const p of ['/', '/events', '/guide', '/admin/system', '/admin/compliance', '/changes', '/lookup/203.0.113.9', '/admin/settings']) {
+  for (const p of ['/', '/events', '/guide', '/admin/system', '/admin/compliance', '/changes', '/lookup/203.0.113.9', '/admin/settings', '/admin/notify', '/alerts', '/analysis']) {
     await page.goto(base + p, { waitUntil: 'networkidle' });
     await page.waitForTimeout(250);
     await page.screenshot({ path: SHOTS + '/dark' + p.replace(/\//g, '_') + '.png', fullPage: true });
   }
   ok(await page.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'theme persists across pages');
-  await page.click('.themeswitch button[aria-label="淺色"]');
+  // every card title band folds, the state is remembered per page
+  await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(300);
+  const heads = await page.evaluate(() => [document.querySelectorAll('.card > h2:first-child, .card > .cardhead:first-child').length,
+    document.querySelectorAll('.card > .foldable > .cardfold').length]);
+  ok(heads[0] > 5 && heads[0] === heads[1], 'every card title has a fold button (' + heads.join('/') + ')');
+  await page.locator('.card > .foldable > .cardfold').first().click();
+  ok(await page.evaluate(() => { const c = document.querySelector('.card.folded'); return !!c && [...c.children].slice(1).every((x) => getComputedStyle(x).display === 'none'); }), 'fold hides the card body');
+  await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(300);
+  ok(await page.evaluate(() => document.querySelectorAll('.card.folded').length) === 1, 'folded card remembered after reload');
+  await page.locator('.card.folded > .foldable > .cardfold').click();
+  ok(await page.evaluate(() => document.querySelectorAll('.card.folded').length) === 0, 'unfold');
+  await page.click('.themeswitch .im-btn'); await page.click('.themeswitch .im-item:has-text("淺色")');
   // DataTable on events: sort, filter, column picker, paging
   await page.goto(base + '/events', { waitUntil: 'networkidle' });
   const firstBefore = await page.locator('.datatable tbody tr').first().innerText();

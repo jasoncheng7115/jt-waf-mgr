@@ -24,6 +24,18 @@
         <span v-if="ev.skipped" class="muted">{{ t('checks.skipped') }}: {{ safeText(ev.skipped, 200) }}</span>
         <span v-if="ev.error" class="muted">{{ safeText(ev.error, 200) }}</span>
       </div>
+      <div v-if="ev && ev.bundle" class="checkbody">
+        <p class="muted small">{{ t('bundle.evidence_note') }}</p>
+        <DataTable id="bundle-evidence" :columns="bundleEvCols" :rows="ev.bundle" :row-key="(r) => ev.bundle.indexOf(r)" :toolbar="false">
+          <template #cell-ok="{ row }"><span class="badge" :class="okCls(row)">{{ okText(row) }}</span></template>
+          <template #cell-what="{ row }">{{ t('op.' + row.op) }} · {{ t('kind.' + row.kind) }}</template>
+          <template #cell-detail="{ row }"><span v-if="row.skipped" class="muted small">{{ safeText(row.skipped, 160) }}</span>
+            <span v-else-if="row.scanned !== undefined" class="small">{{ t('evidence.external_success') }} {{ fmtNum(row.external_success) }} · {{ t('evidence.internal_other') }} {{ fmtNum(row.internal_other) }}</span>
+            <span v-else-if="row.hits !== undefined" class="small">{{ t('evidence.rule_hits') }} {{ fmtNum(row.hits) }}</span>
+            <span v-else-if="row.affected_events !== undefined" class="small">{{ t('evidence.affected_events') }} {{ fmtNum(row.affected_events) }}</span>
+            <span v-if="row.error" class="muted small">{{ safeText(row.error, 160) }}</span></template>
+        </DataTable>
+      </div>
       <div v-if="ev && ev.scanned !== undefined" class="checkbody">
         <div class="minitiles">
           <span>{{ t('evidence.scanned') }} <b>{{ fmtNum(ev.scanned) }}</b></span>
@@ -113,6 +125,12 @@ import OriginBadge from './OriginBadge.vue'
 import SampleTable from './SampleTable.vue'
 import DataTable from './DataTable.vue'
 import SegBar from './charts/SegBar.vue'
+const bundleEvCols = computed(() => [
+  { key: 'rule_id', label: t('wizard.rule_id'), align: 'num' },
+  { key: 'what', label: t('change.what'), value: (r) => r.op + ' ' + r.kind },
+  { key: 'ok', label: t('checks.evidence'), value: (r) => (r.ok ? 1 : 0) },
+  { key: 'detail', label: t('bundle.detail'), sortable: false },
+])
 
 const props = defineProps({ checks: { type: Object, default: null } })
 const ev = computed(() => props.checks && props.checks.evidence)

@@ -11,7 +11,14 @@
       <div class="seg" role="group" :aria-label="t('overview.range')">
         <button type="button" :class="{ on: range === '24h' }" :aria-pressed="range === '24h' ? 'true' : 'false'" @click="setQuery({ range: '24h' })"><Icon name="timer" />{{ t('overview.range_24h') }}</button>
         <button type="button" :class="{ on: range === '7d' }" :aria-pressed="range === '7d' ? 'true' : 'false'" @click="setQuery({ range: '7d' })"><Icon name="calendar" />{{ t('overview.range_7d') }}</button>
+        <button type="button" :class="{ on: range === 'custom' || showCustom }" :aria-pressed="range === 'custom' ? 'true' : 'false'"
+                :aria-expanded="showCustom ? 'true' : 'false'" @click="openCustom"><Icon name="history" />{{ t('overview.range_custom') }}</button>
       </div>
+      <span v-if="range === 'custom' && data" class="fchip">
+        <span class="fchip-k">{{ t('overview.range') }}</span>
+        <span class="fchip-v">{{ fmtShortTime(data.since) }} – {{ fmtShortTime(data.until) }}</span>
+        <button type="button" class="fchip-x" :aria-label="t('overview.range_clear')" :title="t('overview.range_clear')" @click="setQuery({ range: '24h' })"><Icon name="close" /></button>
+      </span>
       <div class="seg" role="group" :aria-label="t('event.origin')">
         <button v-for="o in originOpts" :key="o.value" type="button" :class="{ on: (filters.origin || '') === o.value }" :aria-pressed="(filters.origin || '') === o.value ? 'true' : 'false'"
                 @click="setQuery({ origin: o.value })"><Icon :name="o.icon" />{{ o.label }}</button>
@@ -30,6 +37,18 @@
       <span v-if="!chips.length" class="muted small fhint"><Icon name="info" /> {{ t('overview.filter.hint') }}</span>
       <button v-if="hasFilters" type="button" class="btn small ghost" @click="clearAll"><Icon name="clear" />{{ t('overview.filter.clear_all') }}</button>
     </div>
+    <div v-if="showCustom" class="card custompanel" role="group" :aria-label="t('overview.range_custom')">
+      <div class="field"><label for="ov-since">{{ t('filter.since') }}</label>
+        <DatePicker id="ov-since" v-model="cust.since" mode="datetime" :presets="sincePresets" /></div>
+      <div class="field"><label for="ov-until">{{ t('filter.until') }}</label>
+        <DatePicker id="ov-until" v-model="cust.until" mode="datetime" :presets="untilPresets" /></div>
+      <div class="actions">
+        <button type="button" class="btn primary small" @click="applyCustom"><Icon name="check" />{{ t('overview.range_apply') }}</button>
+        <button type="button" class="btn ghost small" @click="showCustom = false"><Icon name="cancel" />{{ t('common.cancel') }}</button>
+      </div>
+      <p v-if="custError" class="alert warn small">{{ custError }}</p>
+      <p class="muted small">{{ t('overview.range_custom_hint', { days: 31 }) }}</p>
+    </div>
     <div v-if="integrityFails.length" class="alert error integritybanner" role="alert">
       <strong>{{ t('overview.integrity_problem') }}</strong>
       {{ integrityFails.map((k) => tOr('syscheck.k.' + k, k)).join(', ') }}
@@ -46,13 +65,11 @@
       </div>
       <div class="tiles">
         <div v-for="st in statTiles" :key="st.key" class="tile stat" :class="st.cls">
-          <div class="tl">{{ st.label }}</div>
-          <div class="stat-row">
-            <div class="tv">{{ fmtNum(st.value) }}</div>
-            <Sparkline class="stat-spark" :values="st.series" :tone="st.tone" :label="st.label" />
-          </div>
+          <div class="tl"><Icon :name="st.icon" />{{ st.label }}</div>
+          <div class="tv">{{ fmtNum(st.value) }}</div>
           <div class="ts"><span v-if="st.delta" class="delta" :class="st.delta.dir">{{ st.delta.text }}</span>
-            <span v-if="st.sub"> · {{ st.sub }}</span></div>
+            <span v-if="st.sub" class="tsub">{{ st.sub }}</span></div>
+          <Sparkline class="stat-spark" :values="st.series" :tone="st.tone" :label="st.label" />
         </div>
       </div>
 
@@ -63,13 +80,15 @@
           <div><h3 class="charthead">{{ t('chart.origin_split') }}</h3><SegBar :parts="originParts" :label="t('chart.origin_split')" pickable @pick="(p) => toggleFilter('origin', p.key)" /></div>
         </div>
         <h3 class="charthead">{{ t('overview.timeline') }}</h3>
-        <TimeBars :data="data.timeline || []" :series="outcomeSeries" :label="t('chart.timeline')" />
+        <TimeBars :data="data.timeline || []" :series="outcomeSeries" :label="t('chart.timeline')" selectable
+                  :bucket-seconds="data.bucket_seconds || 3600" @select="(r) => setQuery({ range: 'custom', since: r.since, until: r.until })" />
+        <p class="muted small brushhint"><Icon name="info" /> {{ t('overview.brush_hint') }}</p>
       </section>
 
       <section class="card attention">
         <div class="cardhead">
-          <h2>{{ t('overview.score_only') }} <span class="count">{{ data.score_only.length }}</span></h2>
-          <RouterLink class="btn small ghost" :to="{ path: '/events', query: { ...filters, outcome: 'blocked', decided_by: 'score', origin: 'external', since: data.since } }"><Icon name="list" />{{ t('common.view_all') }}</RouterLink>
+          <h2><Icon name="alert" /> {{ t('overview.score_only') }} <span class="count">{{ data.score_only.length }}</span></h2>
+          <RouterLink class="btn small ghost" :to="{ path: '/events', query: { ...filters, outcome: 'blocked', decided_by: 'score', origin: 'external', ...timeQ } }"><Icon name="list" />{{ t('common.view_all') }}</RouterLink>
         </div>
         <p class="muted small">{{ t('overview.score_only_hint') }}</p>
         <EventTable table-id="overview-score-only" :items="data.score_only" :page-size="10" :empty-text="t('overview.score_only_none')" filterable @filter="toggleFilter" />
@@ -77,11 +96,15 @@
 
       <h2 v-if="data.focus && data.focus.length" class="sectionhead"><Icon name="shield" /> {{ t('overview.focus_title') }}
         <span class="muted small">{{ t('overview.focus_hint', { n: data.focus.length }) }}</span></h2>
-      <section v-if="data.focus && data.focus.length" class="focusgrid">
-        <div v-for="f in data.focus" :key="f.host" class="card focus">
+      <section v-if="focusQuiet.length" class="card focusquiet">
+        <h2><Icon name="check" /> {{ t('overview.focus_quiet', { n: focusQuiet.length }) }}</h2>
+        <div class="chips"><RouterLink v-for="f in focusQuiet" :key="f.host" class="chip host" :to="{ path: '/events', query: { host: f.host } }">{{ safeText(f.host, 80) }}</RouterLink></div>
+      </section>
+      <section v-if="focusBusy.length" class="focuslist">
+        <div v-for="f in focusBusy" :key="f.host" class="card focus">
           <div class="cardhead">
-            <h2><TruncText :text="f.host" :max="80" /></h2>
-            <RouterLink class="btn small ghost" :to="{ path: '/events', query: { ...filters, host: f.host, since: data.since } }"><Icon name="list" />{{ t('common.view_all') }}</RouterLink>
+            <h2><Icon name="globe" /> <TruncText :text="f.host" :max="80" /></h2>
+            <RouterLink class="btn small ghost" :to="{ path: '/events', query: { ...filters, host: f.host, ...timeQ } }"><Icon name="list" />{{ t('common.view_all') }}</RouterLink>
           </div>
           <div class="minitiles">
             <span>{{ t('overview.events') }} <b>{{ fmtNum(f.events) }}</b></span>
@@ -90,21 +113,21 @@
             <span :class="{ warn: f.external_not_blocked > 0 }">{{ t('overview.external_not_blocked') }} <b>{{ fmtNum(f.external_not_blocked) }}</b></span>
           </div>
           <SegBar thin :parts="focusParts(f)" :label="f.host" />
-          <EventTable table-id="overview-focus" :items="f.recent || []" hide-host :page-size="10" :toolbar="false" filterable @filter="toggleFilter" />
+          <EventTable table-id="overview-focus" :items="f.recent || []" hide-host :page-size="5" :toolbar="false" filterable @filter="toggleFilter" />
         </div>
       </section>
 
       <div class="cols2">
         <section class="card">
-          <h2>{{ t('overview.by_host') }}</h2>
+          <h2><Icon name="server" /> {{ t('overview.by_host') }}</h2>
           <CountList :items="data.by_host" pickable :active-key="filters.host" :open-label="t('filter.open_events')" :link-for="(it) => eventsLink('host', it.key)" @pick="(it) => toggleFilter('host', it.key)" />
         </section>
         <section class="card">
-          <h2>{{ t('overview.by_family') }}</h2>
+          <h2><Icon name="shield" /> {{ t('overview.by_family') }}</h2>
           <CountList :items="data.by_family" :label-for="(it) => t('family.' + it.key)" pickable :active-key="filters.family" :open-label="t('filter.open_events')" :link-for="(it) => eventsLink('family', it.key)" @pick="(it) => toggleFilter('family', it.key)" />
         </section>
         <section class="card">
-          <h2>{{ t('overview.by_src') }}</h2>
+          <h2><Icon name="network" /> {{ t('overview.by_src') }}</h2>
           <CountList :items="data.by_src" mono pickable :active-key="filters.src_ip" :open-label="t('filter.open_lookup')" :link-for="(it) => ({ path: '/lookup/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('src_ip', it.key)" />
         </section>
         <section v-if="(data.by_country || []).length" class="card">
@@ -115,9 +138,9 @@
           <h2><Icon name="network" /> {{ t('overview.by_asn') }}</h2>
           <HBars :items="asnItems" :series="outcomeSeries" />
         </section>
-        <section class="card">
-          <h2>{{ t('overview.by_rule') }}</h2>
-          <CountList :items="data.by_rule" mono pickable :label-for="(it) => it.key + (it.family ? ' · ' + tOr('family.' + it.family, it.family) : '')" :active-key="filters.rule_id" :open-label="t('filter.open_rule')" :link-for="(it) => ({ path: '/rules/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('rule_id', it.key)" />
+        <section class="card span2">
+          <h2><Icon name="shield" /> {{ t('overview.by_rule') }}</h2>
+          <CountList :items="ruleItems" pickable :label-for="(it) => it.key + (it.family ? ' · ' + tOr('family.' + it.family, it.family) : '')" :active-key="filters.rule_id" :open-label="t('filter.open_rule')" :link-for="(it) => ({ path: '/rules/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('rule_id', it.key)" />
         </section>
       </div>
       <p class="muted small">{{ t('overview.period', { since: fmtTime(data.since), until: fmtTime(data.until) }) }}</p>
@@ -126,12 +149,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { get } from '../api.js'
 import { t, tOr } from '../i18n.js'
 import { hasRole } from '../store.js'
-import { fmtNum, fmtTime, safeText } from '../util.js'
+import { fmtNum, fmtTime, fmtShortTime, safeText } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import Icon from '../components/Icon.vue'
@@ -145,6 +168,7 @@ import TruncText from '../components/TruncText.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import TimeBars from '../components/charts/TimeBars.vue'
+import DatePicker from '../components/DatePicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -154,7 +178,42 @@ const data = ref(null)
 const FILTER_KEYS = ['origin', 'outcome', 'decided_by', 'host', 'src_ip', 'rule_id', 'family', 'path_prefix', 'q']
 const CHIP_LABEL = { decided_by: 'event.decided_by', host: 'event.host', src_ip: 'event.source', rule_id: 'filter.rule_id',
   family: 'event.family', path_prefix: 'filter.path_prefix', q: 'filter.q' }
-const range = computed(() => (route.query.range === '7d' ? '7d' : '24h'))
+const range = computed(() => (route.query.range === '7d' ? '7d'
+  : route.query.range === 'custom' && typeof route.query.since === 'string' && route.query.since ? 'custom' : '24h'))
+// a time window of one's own: the date pickers, or a drag across the timeline
+const showCustom = ref(false)
+const cust = reactive({ since: '', until: '' })
+const custError = ref('')
+const p2 = (n) => String(n).padStart(2, '0')
+function toLocalInput(iso) {
+  const d = new Date(iso)
+  if (!iso || isNaN(d)) return ''
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds())
+}
+function ago(ms) { return toLocalInput(new Date(Date.now() - ms).toISOString()) }
+const sincePresets = computed(() => [
+  { key: '1h', label: t('events.preset_1h'), value: () => ago(3600e3) },
+  { key: '24h', label: t('events.preset_24h'), value: () => ago(86400e3) },
+  { key: '7d', label: t('events.preset_7d'), value: () => ago(7 * 86400e3) },
+  { key: '30d', label: t('events.preset_30d'), value: () => ago(30 * 86400e3) },
+])
+const untilPresets = computed(() => [{ key: 'now', label: t('date.now'), value: () => ago(0) }])
+function openCustom() {
+  showCustom.value = !showCustom.value
+  custError.value = ''
+  if (showCustom.value) {
+    cust.since = toLocalInput(data.value?.since) || ago(86400e3)
+    cust.until = toLocalInput(data.value?.until) || ago(0)
+  }
+}
+function applyCustom() {
+  const a = new Date(cust.since), b = cust.until ? new Date(cust.until) : new Date()
+  if (isNaN(a) || isNaN(b) || b - a < 3600e3) { custError.value = t('overview.range_bad'); return }
+  if (b - a > 31 * 86400e3) { custError.value = t('overview.range_too_long', { days: 31 }); return }
+  showCustom.value = false
+  setQuery({ range: 'custom', since: a.toISOString(), until: b.toISOString() })
+}
+const timeQ = computed(() => (data.value ? { since: data.value.since, ...(data.value.range === 'custom' ? { until: data.value.until } : {}) } : {}))
 const filters = computed(() => {
   const o = {}
   for (const k of FILTER_KEYS) { const v = route.query[k]; if (typeof v === 'string' && v) o[k] = v }
@@ -179,6 +238,7 @@ const outcomeOpts = computed(() => [
 function setQuery(patch) {
   const q = { ...route.query, ...patch }
   for (const k of Object.keys(q)) if (q[k] === '' || q[k] == null) delete q[k]
+  if (q.range !== 'custom') { delete q.since; delete q.until }
   if (q.range === '24h') delete q.range      // the default
   const same = Object.keys(q).length === Object.keys(route.query).length && Object.keys(q).every((k) => route.query[k] === q[k])
   if (!same) router.push({ query: q })
@@ -187,8 +247,12 @@ function toggleFilter(key, value) {
   const v = String(value ?? '')
   setQuery({ [key]: filters.value[key] === v ? '' : v })
 }
-function clearAll() { router.push({ query: route.query.range ? { range: route.query.range } : {} }) }
-function eventsLink(key, value) { return { path: '/events', query: { ...filters.value, [key]: value, since: data.value?.since } } }
+function clearAll() {
+  const q = {}
+  for (const k of ['range', 'since', 'until']) if (route.query[k]) q[k] = route.query[k]
+  router.push({ query: q })
+}
+function eventsLink(key, value) { return { path: '/events', query: { ...filters.value, [key]: value, ...timeQ.value } } }
 const countryItems = computed(() => (data.value?.by_country || []).map((c) => ({
   key: c.key, label: c.key === '?' ? t('overview.geo_unknown') : countryName(c.key, lang.value) + ' (' + c.key + ')',
   sub: t('overview.geo_sources', { n: c.sources }), values: { blocked: c.blocked, logged: c.logged } })))
@@ -226,7 +290,8 @@ function delta(cur, prev) {
   if (p === 0) return { dir: 'flat', text: t('overview.trend_same', { range: rangeLabel.value }) }
   return { dir: p > 0 ? 'up' : 'down', text: (p > 0 ? '▲ ' : '▼ ') + Math.abs(p) + '% ' + t('overview.trend_vs', { range: rangeLabel.value }) }
 }
-const rangeLabel = computed(() => (data.value && data.value.range === '7d' ? t('overview.prev_7d') : t('overview.prev_24h')))
+const rangeLabel = computed(() => (data.value && data.value.range === '7d' ? t('overview.prev_7d')
+  : data.value && data.value.range === 'custom' ? t('overview.prev_custom') : t('overview.prev_24h')))
 const statTiles = computed(() => {
   const d = data.value
   if (!d) return []
@@ -235,12 +300,12 @@ const statTiles = computed(() => {
   const pv = d.previous || {}
   const T = d.totals
   return [
-    { key: 'events', cls: 't-events', label: t('overview.events'), value: T.events, tone: 's1', series: ser((b) => (b.blocked || 0) + (b.logged || 0)), delta: delta(T.events, pv.events) },
-    { key: 'blocked', cls: 't-blocked', label: t('outcome.blocked'), value: T.blocked, tone: 'blocked', series: ser((b) => b.blocked || 0), delta: delta(T.blocked, pv.blocked),
+    { key: 'events', cls: 't-events', icon: 'list', label: t('overview.events'), value: T.events, tone: 's1', series: ser((b) => (b.blocked || 0) + (b.logged || 0)), delta: delta(T.events, pv.events) },
+    { key: 'blocked', cls: 't-blocked', icon: 'block', label: t('outcome.blocked'), value: T.blocked, tone: 'blocked', series: ser((b) => b.blocked || 0), delta: delta(T.blocked, pv.blocked),
       sub: t('decided.confident') + ' ' + fmtNum(T.blocked_confident) + ' · ' + t('decided.score') + ' ' + fmtNum(T.blocked_score) },
-    { key: 'logged', cls: 't-logged', label: t('outcome.logged'), value: T.logged, tone: 'logged', series: ser((b) => b.logged || 0), delta: delta(T.logged, pv.logged) },
-    { key: 'external', cls: 't-ext', label: t('origin.external'), value: T.external, tone: 'ext', series: ser((b) => b.external || 0), delta: delta(T.external, pv.external) },
-    { key: 'internal', cls: 't-int', label: t('origin.internal'), value: T.internal, tone: 'int', series: ser((b) => b.internal || 0), delta: delta(T.internal, pv.internal) },
+    { key: 'logged', cls: 't-logged', icon: 'page', label: t('outcome.logged'), value: T.logged, tone: 'logged', series: ser((b) => b.logged || 0), delta: delta(T.logged, pv.logged) },
+    { key: 'external', cls: 't-ext', icon: 'globe', label: t('origin.external'), value: T.external, tone: 'ext', series: ser((b) => b.external || 0), delta: delta(T.external, pv.external) },
+    { key: 'internal', cls: 't-int', icon: 'network', label: t('origin.internal'), value: T.internal, tone: 'int', series: ser((b) => b.internal || 0), delta: delta(T.internal, pv.internal) },
   ]
 })
 const outcomeSeries = computed(() => [
@@ -266,6 +331,11 @@ const originParts = computed(() => [
   { key: 'external', label: t('origin.external'), value: data.value.totals.external, tone: 's1', active: filters.value.origin === 'external' },
   { key: 'internal', label: t('origin.internal'), value: data.value.totals.internal, tone: 's2', active: filters.value.origin === 'internal' },
 ])
+// focus sites with events get a card each (full width); the quiet ones share one line of chips
+const focusBusy = computed(() => (data.value && data.value.focus || []).filter((f) => f.events > 0))
+const focusQuiet = computed(() => (data.value && data.value.focus || []).filter((f) => !f.events))
+// rule messages without the generic prefix of the site's own rules
+const ruleItems = computed(() => (data.value && data.value.by_rule || []).map((it) => ({ ...it, msg: String(it.msg || '').replace(/^jt confident block:\s*/i, '') })))
 function focusParts(f) {
   return [
     { key: 'blocked', label: t('outcome.blocked'), value: f.blocked, tone: 'blocked' },
@@ -281,7 +351,8 @@ async function load(changed) {
   if (changed === true) dimmed.value = true
   error.value = null
   try {
-    const r = await get('/overview', { range: range.value, ...filters.value })
+    const tq = range.value === 'custom' ? { since: route.query.since, until: route.query.until || undefined } : {}
+    const r = await get('/overview', { range: range.value, ...tq, ...filters.value })
     if (my === seq) data.value = r
   } catch (e) {
     if (my === seq) error.value = e
@@ -306,6 +377,10 @@ onUnmounted(() => clearInterval(timer))
 </script>
 
 <style scoped>
+.custompanel { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 0 0 12px; }
+.custompanel .field { margin: 0; }
+.custompanel p { flex-basis: 100%; margin: 0; }
+.brushhint { margin: 4px 0 0; display: flex; gap: 5px; align-items: center; }
 .ovfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; }
 .fhint { display: inline-flex; align-items: center; gap: 4px; }

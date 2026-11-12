@@ -7,13 +7,14 @@
     </div>
     <FlowSteps v-if="showGuide" :title="t('guide.rule.title')" :steps="flow" :note="t('guide.rule.note')" />
     <form class="filters" @submit.prevent="apply">
-      <div class="field"><label for="rules-f-source">{{ t('rules.source') }}</label>
+      <div class="field" :class="fieldClass('source')"><label for="rules-f-source">{{ t('rules.source') }}</label>
         <SelectBox id="rules-f-source" v-model="f.source" :options="sourceOpts" /></div>
-      <div class="field"><label for="rules-f-category">{{ t('rules.category') }}</label>
+      <div class="field" :class="fieldClass('category')"><label for="rules-f-category">{{ t('rules.category') }}</label>
         <SelectBox id="rules-f-category" v-model="f.category" :options="categoryOpts" /></div>
-      <label class="field grow"><span>{{ t('rules.search') }}</span><input v-model.trim="f.q" maxlength="200" :placeholder="t('rules.search_hint')"></label>
+      <label class="field grow" :class="fieldClass('q')"><span>{{ t('rules.search') }}</span><input v-model.trim="f.q" maxlength="200" :placeholder="t('rules.search_hint')"></label>
       <div class="actions filteractions">
-        <button type="submit" class="btn primary"><Icon name="filter" />{{ t('filter.apply') }}</button>
+        <button type="submit" class="btn primary" :class="{ 'needs-apply': dirty }"><Icon name="filter" />{{ t('filter.apply') }}</button>
+        <span v-if="dirty" class="applyhint" role="status"><Icon name="warning" />{{ t('filter.not_applied') }}</span>
       </div>
     </form>
     <ErrorBox :error="error" />
@@ -25,7 +26,7 @@
       <h3 class="charthead">{{ t('chart.hits_per_rule', { n: hitBars.length }) }}</h3>
       <HBars :items="hitBars" :series="hitSeries" mono />
     </section>
-    <DataTable id="rules" :columns="cols" :rows="items" :row-key="(r) => r.id + ':' + r.file + ':' + r.line" :page-size="50">
+    <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="rules" :columns="cols" :rows="items" :row-key="(r) => r.id + ':' + r.file + ':' + r.line" :page-size="50">
       <template #cell-id="{ row }"><RouterLink class="mono" :to="'/rules/' + row.id">{{ row.id }}</RouterLink>
         <span v-if="!row.managed" class="chip tag" :title="t('rules.unmanaged_hint')">{{ t('rules.unmanaged') }}</span></template>
       <template #cell-phase="{ row }"><span class="mono">{{ row.phase ?? '—' }}</span></template>
@@ -35,14 +36,14 @@
         <div class="sub mono" :title="safeText(row.file, 500)">{{ shortFile(row.file) }}:{{ row.line }}</div>
       </template>
       <template #cell-hosts="{ row }"><span v-for="h in row.hosts || []" :key="h" class="chip host"><TruncText :text="h" :max="60" /></span><span v-if="!(row.hosts || []).length" class="muted">{{ t('rules.global') }}</span></template>
+      <template #cell-provenance="{ row }"><ProvenanceTag :p="row.provenance" /></template>
       <template #cell-hits_7d="{ row }"><span class="mono">{{ fmtNum(row.hits_7d) }}</span></template>
       <template #cell-hits_30d="{ row }"><span class="mono">{{ fmtNum(row.hits_30d) }}</span></template>
       <template #cell-last_hit="{ row }">{{ row.last_hit ? fmtShortTime(row.last_hit) : '—' }}</template>
     </DataTable>
-    <LoadMore :cursor="cursor" :busy="loading" @more="load(false)" />
 
     <section class="card">
-      <h2>{{ t('rules.removals') }} <span class="count">{{ removals.length }}</span></h2>
+      <h2><Icon name="delete" /> {{ t('rules.removals') }} <span class="count">{{ removals.length }}</span></h2>
       <p class="muted small">{{ t('rules.removals_hint') }}</p>
       <DataTable id="rules-removals" :columns="removalCols" :rows="removals" row-key="_row">
         <template #cell-directive="{ row }"><span class="mono">{{ safeText(row.directive, 40) }}</span></template>
@@ -58,12 +59,13 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useFilterState } from '../filterState.js'
 import { get } from '../api.js'
-import { t } from '../i18n.js'
+import ProvenanceTag from '../components/ProvenanceTag.vue'
+import { t, tOr } from '../i18n.js'
 import { safeText, fmtNum, fmtShortTime } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
-import LoadMore from '../components/LoadMore.vue'
 import TruncText from '../components/TruncText.vue'
 import Icon from '../components/Icon.vue'
 import SelectBox from '../components/SelectBox.vue'
@@ -108,6 +110,7 @@ const cols = computed(() => [
   { key: 'disruptive', label: t('rule.action') },
   { key: 'msg', label: t('rule.description'), value: (r) => r.msg || r.comment || r.directive || '', text: (r) => [r.msg, r.comment, r.directive, r.file].filter(Boolean).join(' ') },
   { key: 'hosts', label: t('rule.hosts'), text: (r) => ((r.hosts || []).length ? r.hosts.join(' ') : t('rules.global')) },
+  { key: 'provenance', label: t('prov.title'), value: (r) => (r.provenance ? tOr('prov.' + r.provenance.channel, r.provenance.channel) : '') },
   { key: 'hits_7d', label: t('rule.hits_7d'), align: 'num' },
   { key: 'hits_30d', label: t('rule.hits_30d'), align: 'num' },
   { key: 'last_hit', label: t('rule.last_hit'), nowrap: true, text: (r) => (r.last_hit ? fmtShortTime(r.last_hit) : '') },
@@ -143,6 +146,11 @@ function shortFile(p) {
   return safeText(i >= 0 ? s.slice(i + 1) : s, 120)
 }
 
+const { dirty, fieldClass } = useFilterState(f, () => {
+  const q = route.query
+  return { source: SOURCES.includes(q.source) ? q.source : 'local', category: typeof q.category === 'string' ? q.category : '',
+    q: typeof q.q === 'string' ? q.q : '' }
+}, { source: 'local' })
 function fromQuery() {
   const q = route.query
   f.source = SOURCES.includes(q.source) ? q.source : 'local'

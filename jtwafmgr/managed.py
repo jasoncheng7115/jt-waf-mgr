@@ -172,6 +172,12 @@ class Managed:
             ids.update(r.id for r in m.rules if r.id is not None)
         ids.update(r[0] for r in self.db.q('SELECT rule_id FROM managed_rules WHERE rule_id IS NOT NULL'))
         ids.update(r[0] for r in self.db.q('SELECT rule_id FROM changes WHERE rule_id IS NOT NULL'))
+        # a bundle keeps the ids of its operations in its spec: reserved the same way, never handed out again
+        for (spec,) in self.db.q("SELECT spec FROM changes WHERE op='bundle'"):
+            try:
+                ids.update(b['rule_id'] for b in json.loads(spec).get('ops', []) if isinstance(b.get('rule_id'), int))
+            except (ValueError, AttributeError, TypeError):
+                continue
         return ids
 
     def range_for(self, kind):
@@ -182,9 +188,9 @@ class Managed:
             return w['system_range']
         return w['exclusion_range']
 
-    def next_rule_id(self, kind):
+    def next_rule_id(self, kind, extra=()):
         lo, hi = self.range_for(kind)
-        used = [i for i in self.occupied_ids() if lo <= i <= hi]
+        used = [i for i in list(self.occupied_ids()) + list(extra or ()) if lo <= i <= hi]
         n = (max(used) + 1) if used else lo   # never reuse an id, not even a deleted one
         if n > hi:
             raise ValueError('id_range_full')
@@ -254,16 +260,32 @@ class Managed:
                            actor, t, t, change_id))
 
     # --- applying an operation to the item list -------------------------------------------
-    def with_op(self, op, item_id=None, new_item=None):
-        """Current items with one operation applied (nothing saved). Returns (items, touched item)."""
-        items = self.items(include_deleted=True)
+    def with_op(self, op, item_id=None, new_item=None, items=None):
+        """Current items (or the given list) with one operation applied (nothing saved).
+        Returns (items, touched item)."""
+        items = self.items(include_deleted=True) if items is None else items
         if op == 'add':
             pl = new_item['placement']
-            pos = max([x['position'] for x in items if x['placement'] == pl] or [0.0]) + 1.0
+            same = [x for x in items if x['placement'] == pl]
+            pos = max([x['position'] for x in same] or [0.0]) + 1.0
+            before = (new_item.get('spec') or {}).get('before_rule_id')
+            if before:
+                anchor = next((x for x in same if x.get('rule_id') == before and not x.get('deleted')), None)
+                if anchor is None:
+                    raise ValueError('anchor_not_found')
+                prev = max([x['position'] for x in same if x['position'] < anchor['position']] or [anchor['position'] - 1.0])
+                pos = (prev + anchor['position']) / 2.0
+                if not prev < pos < anchor['position']:
+                    # many inserts before the same rule used up the float gap: renumber this file 1, 2, 3 ...
+                    # (positions are saved for every touched row; the order is what matters)
+                    for n, x in enumerate(sorted(same, key=lambda y: y['position']), 1):
+                        x['position'] = float(n * 1024)
+                    prev = max([x['position'] for x in same if x['position'] < anchor['position']] or [anchor['position'] - 1024.0])
+                    pos = (prev + anchor['position']) / 2.0
             it = dict(new_item, position=pos, enabled=1, deleted=0)
             items.append(it)
             return items, it
-        target = next((x for x in items if x['id'] == item_id), None)
+        target = next((x for x in items if x.get('id') is not None and x.get('id') == item_id), None)
         if target is None or target['deleted']:
             raise ValueError('item_not_found')
         if op == 'modify':

@@ -34,7 +34,7 @@
       </div>
       <button v-if="quick || activeFilters" type="button" class="btn small ghost" @click="clearFilters"><Icon name="clear" />{{ t('table.clear_filters') }}</button>
       <slot name="toolbar" />
-      <span class="dt-count">{{ t('table.rows', { n: fmtNum(filtered.length) }) }}<template v-if="filtered.length !== rows.length"> / {{ fmtNum(rows.length) }}</template></span>
+      <span class="dt-count">{{ t(hasMore ? 'table.rows_more' : 'table.rows', { n: fmtNum(filtered.length) }) }}<template v-if="filtered.length !== rows.length"> / {{ fmtNum(rows.length) }}</template></span>
     </div>
     <div ref="wrap" class="tablewrap" @scroll="syncFromWrap">
       <table class="grid">
@@ -72,12 +72,12 @@
     <div v-show="floatBar" ref="fbar" class="dt-floatbar" :style="floatStyle" aria-hidden="true" @scroll="syncFromBar">
       <div :style="{ width: scrollW + 'px', height: '1px' }"></div>
     </div>
-    <div v-if="filtered.length > pageSize || pageSize !== defaultPageSize" class="dt-pager">
-      <span class="dt-range">{{ t('table.range', { from: fmtNum(from + 1), to: fmtNum(Math.min(from + pageSize, filtered.length)), total: fmtNum(filtered.length) }) }}</span>
+    <div v-if="filtered.length > pageSize || pageSize !== defaultPageSize || hasMore" class="dt-pager">
+      <span class="dt-range">{{ t(hasMore ? 'table.range_more' : 'table.range', { from: fmtNum(from + 1), to: fmtNum(Math.min(from + pageSize, filtered.length)), total: fmtNum(filtered.length) }) }}</span>
       <button type="button" class="btn small ghost" :disabled="page === 0" :aria-label="t('table.first')" @click="page = 0"><Icon name="prev" /><Icon name="prev" /></button>
       <button type="button" class="btn small ghost" :disabled="page === 0" @click="page--"><Icon name="prev" />{{ t('table.prev') }}</button>
-      <span class="dt-page">{{ t('table.page', { n: page + 1, of: pages }) }}</span>
-      <button type="button" class="btn small ghost" :disabled="page >= pages - 1" @click="page++">{{ t('table.next') }}<Icon name="next" /></button>
+      <span class="dt-page">{{ t(hasMore ? 'table.page_more' : 'table.page', { n: page + 1, of: pages }) }}</span>
+      <button type="button" class="btn small ghost" :disabled="(page >= pages - 1 && !hasMore) || loadingMore" @click="next">{{ loadingMore ? t('common.loading') : t('table.next') }}<Icon name="next" /></button>
       <button type="button" class="btn small ghost" :disabled="page >= pages - 1" :aria-label="t('table.last')" @click="page = pages - 1"><Icon name="next" /><Icon name="next" /></button>
       <SelectBox v-model="pageSize" small :options="sizeOptions" :aria-label="t('table.page_size')" />
     </div>
@@ -94,6 +94,8 @@ import SelectBox from './SelectBox.vue'
 
 const props = defineProps({
   id: { type: String, required: true },              // remembers columns / page size / sort per table
+  hasMore: Boolean,         // the server has more rows: "next" on the last loaded page asks for them (emits more)
+  loadingMore: Boolean,
   columns: { type: Array, required: true },
   rows: { type: Array, default: () => [] },
   rowKey: { type: [String, Function], default: 'id' },
@@ -104,7 +106,7 @@ const props = defineProps({
   toolbar: { type: Boolean, default: true },
   clickable: Boolean,
 })
-defineEmits(['row-click'])
+const emit = defineEmits(['row-click', 'more'])
 
 const STORE = 'jtwaf.table.' + props.id
 function load() {
@@ -121,6 +123,14 @@ const colFilter = reactive({})
 const showFilters = ref(false)
 const colsOpen = ref(false)
 const page = ref(0)
+// one way to move through a long list: "next" past the loaded rows loads the next batch and goes on
+let wantNext = false
+function next() {
+  if (page.value < pages.value - 1) { page.value++; return }
+  if (props.hasMore && !props.loadingMore) { wantNext = true; emit('more') }
+}
+watch(() => props.rows.length, () => { if (wantNext) { wantNext = false; nextTick(() => { if (page.value < pages.value - 1) page.value++ }) } })
+watch(() => props.loadingMore, (v) => { if (!v && wantNext && !props.hasMore) wantNext = false })
 const colBtn = ref(null), colPop = ref(null)
 
 function persist() {

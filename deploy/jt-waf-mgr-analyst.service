@@ -1,0 +1,51 @@
+[Unit]
+Description=jt-waf-mgr: analyse recent WAF events with the local LLM and propose confident blocks
+Documentation=file:///usr/lib/jt-waf-mgr/README.md
+After=network-online.target
+Wants=network-online.target
+# A short-lived job: reads the event history, asks the configured local LLM server for a verdict per
+# candidate path and proposes ordinary confident-block changes (checked, sandboxed, approved by a person).
+# It never approves anything and never writes the nginx configuration. It decides itself whether
+# [analyst] interval_hours has passed; the timer only wakes it up every hour.
+
+[Service]
+Type=oneshot
+User=jtwaf
+Group=jtwaf
+Environment=PYTHONPATH=/usr/lib/jt-waf-mgr
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -P -m jtwafmgr --config /etc/jt-waf-mgr/config.toml analyst-run
+TimeoutStartSec=30min
+NoNewPrivileges=yes
+ProtectSystem=strict
+# the database (runs, proposals, audit rows) and the "run now" request file
+ReadWritePaths=/var/lib/jt-waf-mgr
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+# The LLM server is local: only the loopback and the private ranges are reachable. An LLM server
+# elsewhere needs a drop-in (systemctl edit jt-waf-mgr-analyst.service) with its own IPAddressAllow=.
+IPAddressDeny=any
+IPAddressAllow=localhost 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+MemoryMax=512M
+CPUQuota=50%

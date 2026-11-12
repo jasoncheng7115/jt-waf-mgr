@@ -42,8 +42,19 @@ class Sandbox:
         self.site = site
         self.nginx = cfg['paths']['nginx_bin']
         self.base = cfg['managed']['sandbox_dir']
-        nets = [n for n in cfg.internal_networks if n.version == 4 and n.num_addresses > 256]
-        self.internal_ip = str(nets[0].network_address + 50) if nets else '10.0.0.50'
+
+    @property
+    def internal_ip(self):
+        """An address inside the internal networks that is not a known scanner (computed each time: both
+        lists can change in Settings)."""
+        for n in sorted((n for n in self.cfg.internal_networks if n.version == 4), key=lambda n: -n.num_addresses):
+            for off in (50, 51, 77, 100, 150, 200, 2, 1):
+                if off >= n.num_addresses:
+                    continue
+                ip = n.network_address + off
+                if not any(ip in s for s in self.cfg.known_scanners if s.version == 4):
+                    return str(ip)
+        return '10.0.0.50'
 
     def available(self):
         if not (os.path.isfile(self.nginx) and os.access(self.nginx, os.X_OK)):
@@ -277,26 +288,51 @@ http {
             out[a] = files['after']
         return out
 
+    @staticmethod
+    def _blocks(r):
+        """The confident blocks a change adds or changes: [spec]."""
+        spec = r['spec']
+        spec = json.loads(spec) if isinstance(spec, str) else spec
+        if r['op'] == 'bundle':
+            return [b['spec'] for b in spec.get('ops', []) if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify')]
+        return [spec] if r['kind'] == 'confident_block' and r['op'] in ('add', 'modify') else []
+
     def cases_for(self, r, user_tests, samples):
         cases = []
+        blocks = self._blocks(r)
+        sources = {(b.get('source') or 'external') for b in blocks}
         for t in user_tests:
             cases.append(dict(t, origin='test'))
             # path blocks must survive encoding / case / slash tricks (LESSONS 14)
-            if r['kind'] == 'confident_block' and t.get('expect') == 403 and t.get('source') == 'external':
+            if blocks and t.get('expect') == 403 and t.get('source') == 'external':
                 p, _, q = t['path'].partition('?')
                 variants = {p.upper(), p.replace('/', '//', 1), re.sub(r'[a-z]', lambda x: '%%%02x' % ord(x.group(0)), p, 1)}
                 for v in sorted(variants - {p}):
                     cases.append(dict(t, path=v + ('?' + q if q else ''), origin='variant'))
-                cases.append(dict(t, source='internal', expect=200, origin='internal-same'))
-        if r['direction'] == 'tighten' or r['kind'] == 'raw':
+                # the same request from inside: let through by an external-only block, refused by one that
+                # also covers internal sources (a bundle mixing both cannot tell which rule a test is for)
+                if sources == {'external'}:
+                    cases.append(dict(t, source='internal', expect=200, origin='internal-same'))
+                elif sources == {'all'}:
+                    cases.append(dict(t, source='internal', expect=403, origin='internal-same'))
+        if r['direction'] == 'tighten' or r['kind'] in ('raw', 'bundle'):
             for s in samples:
                 cases.append({'host': s['host'], 'method': s['method'], 'path': s['path'], 'source': 'external',
                               'expect': 'not403', 'origin': 'regression'})
         return cases
 
     def run_change(self, r, files, user_tests, managed, samples=None):
-        if r['kind'] == 'confident_block' and r['op'] == 'add' and not any(
-                t.get('expect') == 403 for t in user_tests):
+        adds = r['op'] == 'add' and r['kind'] == 'confident_block' or r['op'] == 'bundle' and any(
+            b['op'] == 'add' and b['kind'] == 'confident_block' for b in json.loads(r['spec']).get('ops', []))
+        if r['op'] == 'bundle':
+            # each confident block of a bundle needs its own 403 test (one rule's test must not vouch for another)
+            for b in json.loads(r['spec']).get('ops', []):
+                if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify') and not any(
+                        t.get('expect') == 403 and t.get('source', 'external') == 'external' and _test_hits(b['spec'], t)
+                        for t in user_tests):
+                    return {'ok': False, 'error': 'test_per_block', 'rule_id': b.get('rule_id'),
+                            'message': 'rule %s: no external test expecting 403 that it matches' % b.get('rule_id')}
+        if adds and not any(t.get('expect') == 403 for t in user_tests):
             return {'ok': False, 'error': 'test_required', 'message': 'a confident block needs at least one test case expecting 403'}
         cases = self.cases_for(r, user_tests, samples or [])
         if not cases:
@@ -320,6 +356,20 @@ http {
                 diffs.append({'request': _case_view(c), 'before': [a['status'], a['rules']], 'after': [b['status'], b['rules']]})
         blocked = sum(1 for a in old if a['status'] == 403)
         return {'ok': not diffs, 'requests': len(requests), 'blocked_before': blocked, 'differences': diffs[:50]}
+
+
+def _test_hits(spec, t):
+    """Whether a confident block's own condition matches a test request (host / path / User-Agent)."""
+    from .evidence import Evidence, _Rx
+    view = Evidence.rule_view(spec)
+    if view is None:          # a header the test case may not carry: the sandbox run decides
+        return True
+    hdr = {k.lower(): v for k, v in (t.get('headers') or {}).items()}
+    d = {'uri': t.get('path') or '/', 'esc': False, 'ua': hdr.get('user-agent', ''), 'host': t.get('host') or ''}
+    try:
+        return bool(_Rx(spec['regex']).search(view(d)))
+    except Exception:
+        return False
 
 
 def evaluate(cases, res, cfg):

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jt-waf-mgr — web manager for nginx + ModSecurity + OWASP CRS</title>
+<meta name="description" content="Self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4: events, evidence-checked and sandboxed rule changes with approval, self-hosted LLM analysis, alerts and notifications, hash-chained audit trail.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+:root { --bg: #e9edf2; --panel: #fff; --panel-2: #f2f4f8; --text: #1c2330; --muted: #5e6878; --border: #d3d9e1;
+  --accent: #1f5fbf; --accent-2: #2a78d6; --head: #f2f5f9; --guide: #edf3fb; --blocked: #c0362c; --ok: #1d7a46;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08); }
+@media (prefers-color-scheme: dark) { :root { --bg: #11161d; --panel: #171e27; --panel-2: #1d2530; --text: #e3e8ef; --muted: #9aa5b4;
+  --border: #2b3542; --accent: #5b9bf0; --accent-2: #6aa8f5; --head: #1b232d; --guide: #18233a; --blocked: #ef6f64; --ok: #4cc283;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); } }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "Noto Sans JP", sans-serif; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+header.top { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--border); }
+header.top .wrap { display: flex; align-items: center; gap: 18px; height: 58px; }
+.brand { display: flex; align-items: center; gap: 9px; font: 700 19px ui-monospace, Menlo, Consolas, monospace; color: var(--text); }
+.brand img { width: 28px; height: 28px; }
+nav.links { display: flex; gap: 16px; flex: 1; overflow-x: auto; white-space: nowrap; }
+nav.links a { color: var(--muted); font-size: 15px; } nav.links a:hover { color: var(--accent); text-decoration: none; }
+.langs { display: flex; gap: 4px; }
+.langs button { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; font-size: 13.5px; }
+.langs button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.hero { padding: 64px 0 40px; background: linear-gradient(180deg, var(--guide), var(--bg)); border-bottom: 1px solid var(--border); }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 40px; align-items: center; }
+.hero h1 { font: 700 40px/1.2 ui-monospace, Menlo, Consolas, monospace; margin: 0 0 6px; }
+.hero .ver { font: 600 14px system-ui; color: var(--accent); border: 1px solid var(--accent); border-radius: 12px; padding: 1px 9px; vertical-align: middle; margin-left: 8px; }
+.hero p.lead { font-size: 19px; color: var(--muted); margin: 14px 0 22px; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:hover { text-decoration: none; filter: brightness(1.05); }
+.hero img.shot { width: 100%; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(16, 24, 40, .18); }
+section { padding: 52px 0; } section.alt { background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+h2 { font-size: 27px; margin: 0 0 8px; } h2 + p.sub { color: var(--muted); margin: 0 0 26px; font-size: 17px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 18px 14px; box-shadow: var(--shadow); }
+section.alt .card { background: var(--panel-2); }
+.card h3 { margin: 0 0 6px; font-size: 17px; display: flex; gap: 8px; align-items: center; }
+.card h3 .ic { width: 28px; height: 28px; border-radius: 7px; background: var(--guide); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+ol.flow { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: s; }
+ol.flow li { counter-increment: s; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; position: relative; }
+section.alt ol.flow li { background: var(--panel-2); }
+ol.flow li::before { content: counter(s); display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; align-items: center; justify-content: center; margin-bottom: 6px; }
+ol.flow li b { display: block; } ol.flow li span { color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.chip { border: 1px solid var(--border); background: var(--panel); border-radius: 16px; padding: 3px 12px; font-size: 14px; }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.shots figure { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+.shots img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+.shots figcaption { padding: 9px 13px; font-size: 14px; color: var(--muted); }
+pre { background: #0f1620; color: #dce6f2; border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-size: 14px; line-height: 1.55; }
+pre .c { color: #7f8ea3; }
+ul.ticks { padding-left: 0; list-style: none; } ul.ticks li { padding-left: 26px; position: relative; margin: 6px 0; }
+ul.ticks li::before { content: "✓"; position: absolute; left: 4px; color: var(--ok); font-weight: 700; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); }
+@media (max-width: 860px) { .hero .wrap, .two { grid-template-columns: minmax(0, 1fr); } .hero h1 { font-size: 32px; } nav.links { display: none; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#"><img src="logo-mark.svg" alt="">jt-waf-mgr</a>
+  <nav class="links">
+    <a href="#features" data-t="nav_features"></a><a href="#flow" data-t="nav_flow"></a><a href="#ai" data-t="nav_ai"></a>
+    <a href="#notify" data-t="nav_notify"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
+    <a href="#install" data-t="nav_install"></a>
+  </nav>
+  <div class="langs" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="zh-TW">繁中</button><button type="button" data-lang="ja">日本語</button>
+  </div>
+</div></header>
+
+<div class="hero"><div class="wrap">
+  <div>
+    <h1>jt-waf-mgr <span class="ver">v0.4.0</span></h1>
+    <p class="lead" data-t="lead"></p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
+      <a class="btn" href="https://github.com/jasoncheng7115/jt-waf-mgr/releases" data-t="releases"></a>
+      <a class="btn" href="#install" data-t="get_started"></a>
+    </div>
+    <div class="chips"><span class="chip">nginx</span><span class="chip">libmodsecurity v3</span><span class="chip">OWASP CRS 4</span>
+      <span class="chip">Python 3.11+ stdlib</span><span class="chip">Vue 3</span><span class="chip">AGPL-3.0</span></div>
+  </div>
+  <img class="shot" src="shots/overview.png" alt="jt-waf-mgr overview">
+</div></div>
+
+<section id="features"><div class="wrap">
+  <h2 data-t="features_h"></h2><p class="sub" data-t="features_sub"></p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">◉</span><span data-t="f1_h"></span></h3><p data-t="f1"></p></div>
+    <div class="card"><h3><span class="ic">⇄</span><span data-t="f2_h"></span></h3><p data-t="f2"></p></div>
+    <div class="card"><h3><span class="ic">◈</span><span data-t="f3_h"></span></h3><p data-t="f3"></p></div>
+    <div class="card"><h3><span class="ic">✦</span><span data-t="f4_h"></span></h3><p data-t="f4"></p></div>
+    <div class="card"><h3><span class="ic">!</span><span data-t="f5_h"></span></h3><p data-t="f5"></p></div>
+    <div class="card"><h3><span class="ic">✉</span><span data-t="f6_h"></span></h3><p data-t="f6"></p></div>
+    <div class="card"><h3><span class="ic">⛓</span><span data-t="f7_h"></span></h3><p data-t="f7"></p></div>
+    <div class="card"><h3><span class="ic">◐</span><span data-t="f8_h"></span></h3><p data-t="f8"></p></div>
+  </div>
+</div></section>
+
+<section id="flow" class="alt"><div class="wrap">
+  <h2 data-t="flow_h"></h2><p class="sub" data-t="flow_sub"></p>
+  <ol class="flow">
+    <li><b data-t="s1"></b><span data-t="s1d"></span></li><li><b data-t="s2"></b><span data-t="s2d"></span></li>
+    <li><b data-t="s3"></b><span data-t="s3d"></span></li><li><b data-t="s4"></b><span data-t="s4d"></span></li>
+    <li><b data-t="s5"></b><span data-t="s5d"></span></li><li><b data-t="s6"></b><span data-t="s6d"></span></li>
+  </ol>
+</div></section>
+
+<section id="ai"><div class="wrap two">
+  <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
+    <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul></div>
+  <img class="shot" src="shots/analysis.png" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
+</div></section>
+
+<section id="notify" class="alt"><div class="wrap two">
+  <img src="shots/notifications.png" alt="" style="width:100%;border-radius:10px;border:1px solid var(--border)">
+  <div><h2 data-t="n_h"></h2><p class="sub" data-t="n_sub"></p>
+    <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
+      <span class="chip">Discord</span><span class="chip">Zulip</span><span class="chip">Nextcloud Talk</span><span class="chip">Webhook (HMAC)</span></div>
+    <ul class="ticks"><li data-t="n1"></li><li data-t="n2"></li><li data-t="n3"></li></ul></div>
+</div></section>
+
+<section id="security"><div class="wrap">
+  <h2 data-t="sec_h"></h2><p class="sub" data-t="sec_sub"></p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">⚿</span><span data-t="sec1_h"></span></h3><p data-t="sec1"></p></div>
+    <div class="card"><h3><span class="ic">⛨</span><span data-t="sec2_h"></span></h3><p data-t="sec2"></p></div>
+    <div class="card"><h3><span class="ic">✓</span><span data-t="sec3_h"></span></h3><p data-t="sec3"></p></div>
+    <div class="card"><h3><span class="ic">≡</span><span data-t="sec4_h"></span></h3><p data-t="sec4"></p></div>
+  </div>
+</div></section>
+
+<section id="screens" class="alt"><div class="wrap">
+  <h2 data-t="sc_h"></h2><p class="sub" data-t="sc_sub"></p>
+  <div class="shots">
+    <figure><img src="shots/events.png" alt="" loading="lazy"><figcaption data-t="sc_events"></figcaption></figure>
+    <figure><img src="shots/waf-model.png" alt="" loading="lazy"><figcaption data-t="sc_waf"></figcaption></figure>
+    <figure><img src="shots/changes.png" alt="" loading="lazy"><figcaption data-t="sc_changes"></figcaption></figure>
+    <figure><img src="shots/rules.png" alt="" loading="lazy"><figcaption data-t="sc_rules"></figcaption></figure>
+    <figure><img src="shots/alerts.png" alt="" loading="lazy"><figcaption data-t="sc_alerts"></figcaption></figure>
+    <figure><img src="shots/system-check.png" alt="" loading="lazy"><figcaption data-t="sc_system"></figcaption></figure>
+    <figure><img src="shots/overview-dark.png" alt="" loading="lazy"><figcaption data-t="sc_dark"></figcaption></figure>
+  </div>
+</div></section>
+
+<section id="install"><div class="wrap">
+  <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
+<pre><span class="c"># verify, unpack, install</span>
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.0.tar.gz.sig jt-waf-mgr-0.4.0.tar.gz
+tar xzf jt-waf-mgr-0.4.0.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.0
+sudo ./install.sh
+sudo jt-waf-mgr check
+sudo jt-waf-mgr user add alice --role admin
+
+<span class="c"># later: upgrade with backup and automatic rollback</span>
+sudo ./upgrade.sh --check &amp;&amp; sudo ./upgrade.sh</pre>
+  <p data-t="in_more"></p>
+</div></section>
+
+<footer><div class="wrap">
+  jt-waf-mgr · AGPL-3.0 · <a href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a> ·
+  <a href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/SECURITY.md" data-t="sec_policy"></a> · Jason Tools Co., Ltd.
+</div></footer>
+
+<script>
+const T = {
+ en: {
+  nav_features: 'Features', nav_flow: 'Change workflow', nav_ai: 'Event analysis', nav_notify: 'Notifications', nav_security: 'Security', nav_screens: 'Screenshots', nav_install: 'Install',
+  lead: 'A self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4. Read what the WAF did, tune it through an evidence-checked, sandbox-tested and approved workflow, let your own LLM review the events, and get told what needs a person.',
+  releases: 'Releases', get_started: 'Get started',
+  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one, without touching nginx until you adopt your rule files.',
+  f1_h: 'Events you can read', f1: 'Blocked and logged requests by site, attack type, source country and network, rule and time. "Blocked only by the CRS score" first: the likely false positives.',
+  f2_h: 'Safe rule changes', f2: 'Exclusions, confident blocks, redactions, plugin toggles and expert rules, checked against the access logs and a sandbox, approved, applied by a small root program that restores on failure.',
+  f3_h: 'WAF model', f3: 'How a request is decided on your sites, drawn from the live configuration: engine per site, scoring, thresholds, exclusions and blocks.',
+  f4_h: 'Self-hosted LLM analysis', f4: 'Your own OpenAI-compatible LLM server reviews recent events on a schedule and proposes narrow blocks and exclusions. The program decides, a person approves.',
+  f5_h: 'Alerts to follow up', f5: 'An attack the site may have answered, users hit by a false positive, outside configuration changes, integrity problems: open until handled, reminded until then.',
+  f6_h: 'Notifications', f6: 'E-mail, Telegram, Teams, Slack, Discord, Zulip, Nextcloud Talk and a signed webhook, with a matrix of events and channels and a test per channel.',
+  f7_h: 'A trail you can trust', f7: 'Hash-chained, append-only audit trail anchored outside the database and in syslog; signed releases; fingerprints of every nginx, ModSecurity and CRS file.',
+  f8_h: 'Made to run anywhere', f8: 'Python standard library only: installs offline, no pip, no Docker. English, Traditional Chinese and Japanese; light and dark; phones and tablets.',
+  flow_h: 'A change you can trust', flow_sub: 'Every rule change follows the same path, whether it comes from a person, an API token or the event analysis.',
+  s1: 'Propose', s1d: 'From a template, an event, an uploaded rule file or the analysis', s2: 'Static checks', s2d: 'Allowed directives, regex sanity, ReDoS shape and runtime',
+  s3: 'Evidence', s3d: 'Access logs: would it block anything external that succeeded, or anyone internal?', s4: 'Sandbox', s4d: 'A throwaway nginx with production configuration, test cases and regression samples',
+  s5: 'Approve', s5d: 'Never by the proposer; loosening always by a person, with a fresh one-time code when needed', s6: 'Apply', s6d: 'Root program: nginx -t, reload, health check, automatic restore; one-click rollback',
+  ai_h: 'Let a model help, never decide alone', ai_sub: 'A scheduled analysis with your own LLM server. Request data is attacker-controlled: the model only judges, the program validates everything.',
+  ai1: 'Candidates grouped by the path a rule sees; schema-constrained answers in batches', ai2: 'Blocks only as narrow anchored regexes, never matching common paths, regression samples or paths your own people use',
+  ai3: 'False positives get the narrowest exclusion: one exact path, specific rules and request parts; approving it needs a one-time code', ai4: 'Alerts when an attack may have been answered or users are being blocked',
+  ai5: 'A summary of every run: events analysed, time taken, verdicts, proposals and alerts',
+  n_h: 'Hear about what needs a person', n_sub: 'The web service only queues messages; a separate sandboxed unit sends them, retries and reminds open alerts.',
+  n1: 'A matrix of events and channels, messages in English, Traditional Chinese or Japanese with a link back', n2: 'Values from requests are never markup, links or mentions; secrets are write-only',
+  n3: 'Generic webhook with an HMAC-SHA256 signature over timestamp and body',
+  sec_h: 'Security is the product', sec_sub: 'A WAF manager must not become the way into the WAF.',
+  sec1_h: 'Least privilege', sec1: 'The web service listens on loopback, runs unprivileged and never connects out; only the apply program runs as root and writes only the managed files.',
+  sec2_h: 'OWASP Top 10:2025', sec2: 'Strict CSP without unsafe-inline, attacker data rendered as text, scrypt and TOTP, lockout, scoped API tokens that can never approve.',
+  sec3_h: 'Tested every release', sec3: 'Unit tests, a browser test of every page, a security scan of every route, an OWASP ZAP active scan, an independent review, upgrade and rollback tests.',
+  sec4_h: 'Compliance views', sec4: 'Mapped to ISO/IEC 27001:2022, Taiwan\'s Cyber Security Management Act baseline and OWASP Top 10:2025, with a system check page.',
+  sc_h: 'Screenshots', sc_sub: 'From a synthetic test environment (example.com and documentation addresses).',
+  sc_events: 'Events with a timeline you can drag', sc_waf: 'How a request is decided', sc_changes: 'Change workflow', sc_rules: 'Rules and where they come from',
+  sc_alerts: 'Alerts to follow up', sc_system: 'System check', sc_dark: 'Dark theme',
+  in_h: 'Install', in_sub: 'Debian 12 / 13 or Ubuntu 22.04 / 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
+  in_more: 'Then add the management vhost (internal networks only), sign in, change the password and set up two-factor authentication. See the README for adoption, upgrades and rollback.',
+  sec_policy: 'Security policy',
+ },
+ 'zh-TW': {
+  nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
+  lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
+  releases: '下載發行版', get_started: '開始使用',
+  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它，而且在你收編規則檔之前完全不動 nginx。',
+  f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
+  f2_h: '安全的規則變更', f2: '排除、確定阻擋、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
+  f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
+  f4_h: '地端 LLM 分析', f4: '你自己的 OpenAI 相容 LLM 伺服器定期檢視事件，提出很窄的封鎖與排除。由程式決定，由人核准。',
+  f5_h: '待處理警示', f5: '可能沒被封鎖的攻擊、影響使用者的誤判、設定被外部修改、完整性問題：處理前一直開著，並定期提醒。',
+  f6_h: '通知', f6: 'Email、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk 與簽章 webhook；事件 × 管道矩陣，每個管道都能測試。',
+  f7_h: '可信任的記錄', f7: '雜湊鏈、只能追加的稽核記錄，錨點在資料庫外與 syslog；發行檔簽章；每個 nginx、ModSecurity、CRS 檔案都有指紋。',
+  f8_h: '到哪裡都能裝', f8: '只用 Python 標準函式庫：離線安裝，不需要 pip、不需要 Docker。英文、繁體中文、日文；淺色與深色；手機與平板。',
+  flow_h: '可以信任的變更', flow_sub: '不論變更來自人員、API 權杖或事件分析，都走同一條路。',
+  s1: '提出', s1d: '從範本、事件、上傳的規則檔或分析結果', s2: '靜態檢查', s2d: '允許的指令、正規表示式、ReDoS 形狀與實測',
+  s3: '證據', s3d: '存取記錄：會不會擋到外部成功的請求，或任何內部使用者？', s4: '沙箱', s4d: '用正式設定、測試案例與回歸樣本的拋棄式 nginx',
+  s5: '核准', s5d: '提出者不能核准；放寬一律由人核准，必要時要重新輸入一次性驗證碼', s6: '套用', s6d: 'root 程式：nginx -t、reload、健康檢查、失敗自動還原；一鍵退回',
+  ai_h: '讓模型幫忙，但不讓它自己決定', ai_sub: '用你自己的 LLM 伺服器排程分析。請求內容是攻擊者可控的：模型只負責判斷，一切由程式驗證。',
+  ai1: '依規則看到的路徑分組候選；分批送出、以 schema 限制回答格式', ai2: '封鎖只用錨定且很窄的正規表示式，不可符合常見路徑、回歸樣本或組織自己在用的路徑',
+  ai3: '誤判只提出範圍最小的排除：單一精確路徑、特定規則與欄位；核准要一次性驗證碼', ai4: '攻擊可能沒被封鎖、使用者被誤擋時發出警示',
+  ai5: '每次執行都有摘要：分析事件數、耗時、判斷、提案與警示',
+  n_h: '需要有人處理時就通知你', n_sub: '網頁服務只把通知排入佇列，由獨立的受限程序發送、重試，並提醒待處理警示。',
+  n1: '事件 × 管道矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結', n2: '來自請求的內容永遠不會變成格式、連結或提及；金鑰只能寫入',
+  n3: '通用 webhook 以 HMAC-SHA256 對時間戳與內容簽章',
+  sec_h: '安全就是產品本身', sec_sub: 'WAF 管理工具不能變成攻進 WAF 的入口。',
+  sec1_h: '最小權限', sec1: '網頁服務只聽 loopback、以非特權執行、不對外連線；只有套用程式是 root，而且只寫受管理的檔案。',
+  sec2_h: 'OWASP Top 10:2025', sec2: '不允許 unsafe-inline 的嚴格 CSP、攻擊者資料一律純文字、scrypt 與 TOTP、鎖定、永遠不能核准的範圍化 API 權杖。',
+  sec3_h: '每次發版都測', sec3: '單元測試、每一頁的瀏覽器測試、每個路由的安全檢測、OWASP ZAP 主動掃描、獨立審查、升級與還原測試。',
+  sec4_h: '合規對照', sec4: '對照 ISO/IEC 27001:2022、資通安全管理法防護基準與 OWASP Top 10:2025，並有系統檢查頁。',
+  sc_h: '截圖', sc_sub: '來自合成測試環境（example.com 與文件用位址）。',
+  sc_events: '事件與可拖曳的時間軸', sc_waf: '請求怎麼被判定', sc_changes: '變更流程', sc_rules: '規則與來源',
+  sc_alerts: '待處理警示', sc_system: '系統檢查', sc_dark: '深色主題',
+  in_h: '安裝', in_sub: 'Debian 12 / 13 或 Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  in_more: '接著加上管理介面的 vhost（只允許內部網路），登入後改密碼並設定雙因素驗證。收編、升級與退回請見 README。',
+  sec_policy: '安全政策',
+ },
+ ja: {
+  nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
+  lead: 'nginx + libmodsecurity v3 + OWASP CRS 4 のためのセルフホスト型 Web 管理ツール。WAF が何をしたかを読み取り、証拠確認・サンドボックス試験・承認を経るフローで調整し、自前の LLM にイベントを確認させ、人の対応が必要なことを知らせます。',
+  releases: 'リリース', get_started: 'はじめる',
+  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補い、ルールファイルを取り込むまで nginx には一切触れません。',
+  f1_h: '読めるイベント', f1: 'ブロック・記録のみのリクエストを、サイト、攻撃の種類、送信元の国とネットワーク、ルール、時間ごとに表示。「CRS スコアだけでブロック」を先頭に：誤検知の可能性が高いものです。',
+  f2_h: '安全なルール変更', f2: '除外、確定ブロック、マスク、プラグイン切替、エキスパートルールを、アクセスログとサンドボックスで確認し、承認後、失敗時に復元する小さな root プログラムが適用。',
+  f3_h: 'WAF 判定フロー', f3: '現在の設定から、サイトでリクエストがどう判定されるか（サイトごとのエンジン、スコア、しきい値、除外、ブロック）を図示。',
+  f4_h: 'オンプレミス LLM 分析', f4: '自前の OpenAI 互換 LLM サーバーが定期的にイベントを確認し、狭いブロックと除外を提案。決めるのはプログラム、承認するのは人。',
+  f5_h: '対応待ちアラート', f5: '防がれていない可能性のある攻撃、利用者に影響する誤検知、設定の外部変更、完全性の問題：対応されるまで開いたまま、定期的に再通知。',
+  f6_h: '通知', f6: 'メール、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk、署名付き webhook。イベント × チャネルのマトリクスとチャネルごとのテスト送信。',
+  f7_h: '信頼できる記録', f7: 'ハッシュチェーンの追記専用監査記録（アンカーはデータベース外と syslog）、署名付きリリース、すべての nginx・ModSecurity・CRS ファイルの指紋。',
+  f8_h: 'どこでも動く', f8: 'Python 標準ライブラリのみ：オフラインでインストール、pip も Docker も不要。英語・繁体字中国語・日本語、ライト / ダーク、スマートフォンとタブレット。',
+  flow_h: '信頼できる変更', flow_sub: '人、API トークン、イベント分析のどこから来た変更も、同じ道を通ります。',
+  s1: '提案', s1d: 'テンプレート、イベント、アップロードしたルールファイル、分析結果から', s2: '静的検査', s2d: '許可されたディレクティブ、正規表現、ReDoS の形と実測',
+  s3: '証拠', s3d: 'アクセスログ：成功した外部リクエストや内部の利用者をブロックしないか', s4: 'サンドボックス', s4d: '本番設定・テストケース・回帰サンプルによる使い捨ての nginx',
+  s5: '承認', s5d: '提案者は承認不可。緩和は必ず人が承認し、必要に応じてワンタイムコードを再入力', s6: '適用', s6d: 'root プログラム：nginx -t、reload、ヘルスチェック、失敗時は自動復元。ワンクリックでロールバック',
+  ai_h: 'モデルは手伝うが、単独では決めない', ai_sub: '自前の LLM サーバーによる定期分析。リクエストデータは攻撃者が制御できるもの：モデルは判定するだけで、すべてプログラムが検証します。',
+  ai1: 'ルールが見るパスで候補をまとめ、スキーマで形式を制約した回答をバッチで取得', ai2: 'ブロックはアンカー付きの狭い正規表現のみ。一般的なパス、回帰サンプル、組織自身が使うパスには一致しない',
+  ai3: '誤検知には最小の除外：一つの完全一致パスと特定のルール・項目のみ。承認にはワンタイムコードが必要', ai4: '攻撃が防がれていない可能性や利用者がブロックされているときにアラート',
+  ai5: '実行ごとの要約：分析したイベント数、所要時間、判定、提案、アラート',
+  n_h: '人の対応が必要なことを知らせる', n_sub: 'Web サービスはメッセージをキューに入れるだけ。送信・再送・対応待ちアラートの再通知は別の制限付きユニットが行います。',
+  n1: 'イベント × チャネルのマトリクス。メッセージは英語・繁体字中国語・日本語で、ページへのリンク付き', n2: 'リクエスト由来の値が書式・リンク・メンションになることはなく、シークレットは書き込み専用',
+  n3: '汎用 webhook はタイムスタンプと本文に対する HMAC-SHA256 署名付き',
+  sec_h: 'セキュリティこそが製品', sec_sub: 'WAF の管理ツールが WAF への入口になってはいけません。',
+  sec1_h: '最小権限', sec1: 'Web サービスは loopback のみで待ち受け、非特権で動作し、外部に接続しません。root で動くのは適用プログラムだけで、管理対象のファイルだけを書き込みます。',
+  sec2_h: 'OWASP Top 10:2025', sec2: 'unsafe-inline を許可しない厳格な CSP、攻撃者データはテキスト表示、scrypt と TOTP、ロックアウト、決して承認できないスコープ付き API トークン。',
+  sec3_h: 'リリースごとに試験', sec3: '単体テスト、全ページのブラウザ試験、全ルートのセキュリティ検査、OWASP ZAP のアクティブスキャン、独立レビュー、アップグレードとロールバックの試験。',
+  sec4_h: 'コンプライアンス対照', sec4: 'ISO/IEC 27001:2022、台湾の資通安全管理法の防護基準、OWASP Top 10:2025 との対照とシステムチェック画面。',
+  sc_h: 'スクリーンショット', sc_sub: '合成テスト環境（example.com とドキュメント用アドレス）より。',
+  sc_events: 'ドラッグできるタイムライン付きのイベント', sc_waf: 'リクエストの判定方法', sc_changes: '変更フロー', sc_rules: 'ルールとその出所',
+  sc_alerts: '対応待ちアラート', sc_system: 'システムチェック', sc_dark: 'ダークテーマ',
+  in_h: 'インストール', in_sub: 'Debian 12 / 13 または Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  in_more: '続いて管理画面の vhost（内部ネットワークのみ）を追加し、サインインしてパスワード変更と二要素認証を設定します。取り込み、アップグレード、ロールバックは README を参照してください。',
+  sec_policy: 'セキュリティポリシー',
+ },
+}
+function pick() {
+  const q = new URLSearchParams(location.search).get('lang')
+  if (T[q]) return q
+  const n = (navigator.language || 'en').toLowerCase()
+  return n.startsWith('zh') ? 'zh-TW' : n.startsWith('ja') ? 'ja' : 'en'
+}
+function apply(lang) {
+  const d = T[lang]
+  document.documentElement.lang = lang
+  for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
+  for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
+  const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
+}
+for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))
+apply(pick())
+</script>
+</body>
+</html>

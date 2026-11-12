@@ -1,7 +1,7 @@
 <template>
   <section class="card form">
     <div class="cardhead">
-      <h2>{{ t('regr.title') }} <span class="count">{{ items.length }}</span></h2>
+      <h2><Icon name="test" /> {{ t('regr.title') }} <span class="count">{{ items.length }}</span></h2>
       <button v-if="isAdmin" type="button" class="btn small" :disabled="busy" @click="collect"><Icon name="refresh" />{{ t('regr.collect') }}</button>
     </div>
     <p class="muted small">{{ t('regr.intro') }} <template v-if="collectedAt">{{ t('regr.collected_at') }} {{ fmtTime(collectedAt) }}</template></p>

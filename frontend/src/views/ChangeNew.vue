@@ -20,7 +20,7 @@
       <RouterLink :to="'/events/' + fromEvent.id">#{{ fromEvent.id }}</RouterLink></div>
 
     <section v-if="!item" class="card">
-      <h2>{{ t('wizard.kind') }}</h2>
+      <h2><Icon name="list" /> {{ t('wizard.kind') }}</h2>
       <div class="kindpick">
         <label v-for="k in kinds" :key="k" class="kindopt" :class="{ on: kind === k }">
           <input v-model="kind" type="radio" name="kind" :value="k">
@@ -33,7 +33,7 @@
     <form v-if="!blocked" class="page" @submit.prevent="submit">
       <!-- exclusion -->
       <section v-if="kind === 'exclusion'" class="card form">
-        <h2>{{ t('kind.exclusion') }}</h2>
+        <h2><Icon name="unlock" /> {{ t('kind.exclusion') }}</h2>
         <p class="muted small">{{ t('wizard.exclusion_intro') }}</p>
         <ScopeInput v-model="ex.host" :label="t('wizard.host')" placeholder="app.example.com" />
         <FieldErr :err="err('host')" />
@@ -67,7 +67,7 @@
 
       <!-- confident block -->
       <section v-if="kind === 'confident_block'" class="card form">
-        <h2>{{ t('kind.confident_block') }}</h2>
+        <h2><Icon name="block" /> {{ t('kind.confident_block') }}</h2>
         <p class="muted small">{{ t('wizard.block_intro') }}</p>
         <div class="filters inline">
           <div class="field"><span><label for="bl-target">{{ t('wizard.target') }}</label></span>
@@ -90,12 +90,16 @@
           <label class="field grow"><span>{{ t('wizard.reference') }}</span><input v-model="bl.reference" maxlength="200" placeholder="CVE-2026-0000"></label>
         </div>
         <FieldErr :err="err('msg') || err('reference')" />
-        <p class="muted small">{{ t('wizard.external_only') }}</p>
+        <div class="field"><span><label for="bl-source">{{ t('wizard.block_source') }}</label></span>
+          <SelectBox id="bl-source" v-model="bl.source" :options="blockSourceOptions" /></div>
+        <FieldErr :err="err('source')" />
+        <p v-if="bl.source === 'all'" class="alert warn">{{ t('wizard.block_source_all_note') }}</p>
+        <p v-else class="muted small">{{ t('wizard.external_only') }}</p>
       </section>
 
       <!-- redaction -->
       <section v-if="kind === 'redaction'" class="card form">
-        <h2>{{ t('kind.redaction') }}</h2>
+        <h2><Icon name="hide" /> {{ t('kind.redaction') }}</h2>
         <p class="muted small">{{ t('wizard.redaction_intro') }}</p>
         <label class="field"><span>{{ t('wizard.fields') }}</span><input v-model="rd.fields" class="mono" maxlength="1000" placeholder="password, otp"></label>
         <FieldErr :err="err('fields')" />
@@ -106,7 +110,7 @@
 
       <!-- plugin -->
       <section v-if="kind === 'plugin'" class="card form">
-        <h2>{{ t('kind.plugin') }}</h2>
+        <h2><Icon name="tool" /> {{ t('kind.plugin') }}</h2>
         <p class="muted small">{{ t('wizard.plugin_intro') }}</p>
         <label class="field"><span>{{ t('wizard.plugin') }}</span><input v-model.trim="pl.plugin" class="mono" maxlength="64" placeholder="wordpress-rule-exclusions"></label>
         <FieldErr :err="err('plugin')" />
@@ -116,10 +120,14 @@
 
       <!-- raw -->
       <section v-if="kind === 'raw'" class="card form">
-        <h2>{{ t('kind.raw') }}</h2>
+        <h2><Icon name="code" /> {{ t('kind.raw') }}</h2>
         <div class="alert warn">{{ t('wizard.raw_warning') }}</div>
         <div class="field"><span><label for="rw-placement">{{ t('wizard.placement') }}</label></span>
           <SelectBox id="rw-placement" v-model="rw.placement" :options="placementOptions" /></div>
+        <label v-if="!item" class="field"><span>{{ t('wizard.before_rule_id') }}</span>
+          <input v-model.number="rw.before_rule_id" type="number" min="1" class="mono" placeholder="10299">
+          <span class="sub">{{ t('wizard.before_rule_id_hint') }}</span></label>
+        <FieldErr :err="err('before_rule_id')" />
         <label class="field"><span>{{ t('wizard.raw_text') }}</span>
           <textarea v-model="rw.text" rows="8" class="mono" maxlength="20000" spellcheck="false"></textarea></label>
         <FieldErr :err="err('text') || err('placement')" />
@@ -128,7 +136,7 @@
       <!-- preview -->
       <section class="card">
         <div class="cardhead">
-          <h2>{{ t('wizard.preview') }}</h2>
+          <h2><Icon name="show" /> {{ t('wizard.preview') }}</h2>
           <span v-if="previewing" class="muted small">{{ t('common.working') }}</span>
         </div>
         <template v-if="preview && preview.ok">
@@ -137,7 +145,7 @@
             <span class="muted small">{{ t('wizard.rule_id') }} <b class="mono">{{ shownRuleId }}</b> · {{ t('placement.' + preview.placement) }}</span>
           </div>
           <p v-if="preview.direction !== 'tighten'" class="alert warn">{{ t('wizard.loosen_note') }}</p>
-          <pre class="code">{{ safeMultiline(shownRuleText) }}</pre>
+          <RuleText :text="shownRuleText" />
         </template>
         <div v-else-if="preview && !preview.ok" class="alert error">{{ previewErrText }}</div>
         <div v-else class="muted">{{ t('wizard.preview_empty') }}</div>
@@ -145,7 +153,7 @@
 
       <!-- tests -->
       <section class="card">
-        <h2>{{ t('wizard.tests') }}</h2>
+        <h2><Icon name="test" /> {{ t('wizard.tests') }}</h2>
         <p class="muted small">{{ t('wizard.tests_hint.' + (kind === 'confident_block' ? 'block' : 'other')) }}</p>
         <TestCases v-model="tests" :default-host="defaultHost" />
       </section>
@@ -170,7 +178,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { get, post } from '../api.js'
 import { t, tOr } from '../i18n.js'
 import { hasRole, refreshPending } from '../store.js'
-import { safeMultiline, escapeRegex, targetsOf, SCORING_RULES } from '../util.js'
+import { escapeRegex, targetsOf, SCORING_RULES } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import ScopeInput from '../components/ScopeInput.vue'
 import TestCases from '../components/TestCases.vue'
@@ -178,6 +186,7 @@ import DirectionBadge from '../components/DirectionBadge.vue'
 import Icon from '../components/Icon.vue'
 import SelectBox from '../components/SelectBox.vue'
 import FlowSteps from '../components/FlowSteps.vue'
+import RuleText from '../components/RuleText.vue'
 
 // Field error line (render function: no template compiler needed at runtime).
 const FieldErr = (props) => (props.err ? h('div', { class: 'fielderr' }, props.err) : null)
@@ -206,10 +215,11 @@ const kinds = computed(() => ['exclusion', 'confident_block', 'redaction', 'plug
 const kind = ref(['exclusion', 'confident_block', 'redaction', 'plugin', 'raw'].includes(route.query.kind) ? route.query.kind : 'exclusion')
 const ex = reactive({ host: { mode: 'exact', value: '' }, path: { mode: 'any', value: '' }, method: '', source: 'all',
   action: 'remove_target_by_id', rule_ids: '', targets: '', tag: 'OWASP_CRS', confirm_tag: false, body_processor: 'JSON' })
-const bl = reactive({ target: 'path', header: '', regex: '', exceptions: '', host: { mode: 'any', value: '' }, msg: '', reference: '' })
+const bl = reactive({ target: 'path', header: '', regex: '', exceptions: '', host: { mode: 'any', value: '' }, msg: '', reference: '', source: 'external' })
+const blockSourceOptions = computed(() => ['external', 'all'].map((x) => ({ value: x, label: t('wizard.block_source.' + x) })))
 const rd = reactive({ fields: 'password', host: { mode: 'any', value: '' }, path: { mode: 'any', value: '' } })
 const pl = reactive({ plugin: '', host: { mode: 'exact', value: '' } })
-const rw = reactive({ text: '', placement: 'before' })
+const rw = reactive({ text: '', placement: 'before', before_rule_id: '' })
 const tests = ref([])
 const reason = ref('')
 const item = ref(null)
@@ -230,10 +240,11 @@ const spec = computed(() => {
     case 'exclusion': return { host: ex.host, path: ex.path, method: ex.method, source: ex.source, action: ex.action,
       rule_ids: ids(ex.rule_ids), targets: list(ex.targets), tag: ex.tag, confirm_tag: ex.confirm_tag, body_processor: ex.body_processor }
     case 'confident_block': return { target: bl.target, header: bl.header, regex: bl.regex, exceptions: lines(bl.exceptions),
-      host: bl.host, msg: bl.msg, reference: bl.reference }
+      host: bl.host, msg: bl.msg, reference: bl.reference, source: bl.source }
     case 'redaction': return { fields: list(rd.fields), host: rd.host, path: rd.path }
     case 'plugin': return { plugin: pl.plugin, host: pl.host }
-    default: return { text: rw.text, placement: rw.placement }
+    default: return Object.assign({ text: rw.text, placement: rw.placement },
+      !item.value && Number.isInteger(rw.before_rule_id) && rw.before_rule_id > 0 ? { before_rule_id: rw.before_rule_id } : {})
   }
 })
 const defaultHost = computed(() => (ex.host.mode === 'exact' && kind.value === 'exclusion' ? ex.host.value : (bl.host.mode === 'exact' ? bl.host.value : '')))
@@ -299,10 +310,10 @@ function fillFromSpec(k, s) {
     action: s.action || 'remove_target_by_id', rule_ids: (s.rule_ids || []).join(', '), targets: (s.targets || []).join(', '),
     tag: s.tag || 'OWASP_CRS', confirm_tag: !!s.confirm_tag, body_processor: s.body_processor || 'JSON' })
   else if (k === 'confident_block') Object.assign(bl, { target: s.target || 'path', header: s.header || '', regex: s.regex || '',
-    exceptions: (s.exceptions || []).join('\n'), host: scopeFrom(s.host), msg: s.msg || '', reference: s.reference || '' })
+    exceptions: (s.exceptions || []).join('\n'), host: scopeFrom(s.host), msg: s.msg || '', reference: s.reference || '', source: s.source || 'external' })
   else if (k === 'redaction') Object.assign(rd, { fields: (s.fields || []).join(', '), host: scopeFrom(s.host), path: scopeFrom(s.path) })
   else if (k === 'plugin') Object.assign(pl, { plugin: s.plugin || '', host: scopeFrom(s.host) })
-  else Object.assign(rw, { text: s.text || '', placement: s.placement || 'before' })
+  else Object.assign(rw, { text: s.text || '', placement: s.placement || 'before', before_rule_id: s.before_rule_id || '' })
 }
 
 async function prefillEvent(id, mode) {

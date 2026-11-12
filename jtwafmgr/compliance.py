@@ -9,6 +9,7 @@
   Taiwan's Cyber Security Management Act protection baseline, OWASP Top 10:2025) and a status
   computed from the live configuration. Only what the code actually does is claimed.
 """
+import fnmatch
 import glob
 import json
 import os
@@ -33,13 +34,16 @@ class Monitor:
         self._verified = None      # (last_id, last_hash) verified so far
         self._anchored = (None, 0.0)   # ((id, hash), time) of the last anchor written
         self._due = {}
+        self._backup_lock = threading.Lock()
         self._alerted = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
 
     # --- scheduling ---------------------------------------------------------------------------
+    KEEP_ALWAYS = 3
+
     def _is_due(self, name, every):
-        t = time.time()
+        t = time.monotonic()             # a wall clock set back (NTP after a wrong date) must not stop the checks
         if t >= self._due.get(name, 0):
             self._due[name] = t + every
             return True
@@ -169,7 +173,7 @@ class Monitor:
         cur = self.db.x('INSERT INTO config_snapshots(ts, digest, files, changes, cause) VALUES (?,?,?,?,?)',
                         (t, digest, json.dumps(files), json.dumps(changes), cause))
         if last:
-            self.audit.log('config.changed', 'system', 'system', None, 'ok' if cause == 'jt-waf-mgr' else 'outside',
+            self.audit.log('config.changed', 'system', 'system', None, 'ok' if cause in ('jt-waf-mgr', 'automation') else 'outside',
                            snapshot=cur.lastrowid, cause=cause, **{k: v[:30] for k, v in changes.items()})
         self.state['config'] = {'checked_at': util.iso(time.time()), 'files': len(files), 'changed': bool(last),
                                 'last_change_id': cur.lastrowid, 'cause': cause}
@@ -194,8 +198,21 @@ class Monitor:
             main = set(m.main_files)
         except Exception:
             pass
-        if applied and not drift and all(p.startswith(mdir) or p in main for p in touched):
+        # an adoption also takes the site's old rule files out of the configuration (main.conf now includes the
+        # managed files instead): those files are part of jt-waf-mgr's own change, not an outside one
+        adopted_src = set()
+        for (spec,) in self.db.q("SELECT spec FROM changes WHERE op='adopt' AND state='applied' AND updated_at >= ?",
+                                 (last['ts'] - 1800,)):
+            try:
+                adopted_src.update(v.get('path') for v in (json.loads(spec).get('sources') or {}).values()
+                                   if isinstance(v, dict) and v.get('path'))
+            except (ValueError, AttributeError):
+                continue
+        if applied and not drift and all(p.startswith(mdir) or p in main or p in adopted_src for p in touched):
             return 'jt-waf-mgr'
+        auto = self.cfg['integrity'].get('automation_paths') or []
+        if touched and auto and all(any(fnmatch.fnmatch(p, a) or p.startswith(a.rstrip('*')) for a in auto) for p in touched):
+            return 'automation'      # e.g. the CRS updater or the country lists: known, still recorded
         return 'outside'
 
     def config_changes(self, limit=50, before=None):
@@ -232,22 +249,46 @@ class Monitor:
         if not b['enabled']:
             return None
         last = self.app.workflow.managed.setting('backup.last') or {}
-        t = time.time()
-        lt = time.localtime(t)
-        last_at = last.get('ts', 0)
-        if t - last_at < 20 * 3600 or (lt.tm_hour < b['hour'] and t - last_at < 48 * 3600):
-            return None
+        lts = last.get('ts', 0)
+        if lts > time.time() + 300:
+            # the last backup is "in the future": the clock was wrong then (or is now) -- do not wait for it
+            self.audit.notice('backup_clock', level=4, last=util.iso(lts))
+        elif self.last_scheduled(b['hour']) <= lts:
+            # done since the scheduled time -- unless it failed: then once an hour, three times at most
+            if last.get('ok', True) or last.get('fails', 0) >= 3 or time.time() - lts < 3600:
+                return None
         return self.backup()
+
+    @staticmethod
+    def last_scheduled(hour, now=None):
+        """The most recent scheduled backup time (today at `hour`, or yesterday before that hour). A backup is
+        due when none was made since then -- also one made by hand earlier does not skip the night's backup."""
+        t = time.time() if now is None else now
+        lt = time.localtime(t)
+        sched = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hour, 0, 0, 0, 0, -1))
+        if sched > t:
+            sched = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday - 1, hour, 0, 0, 0, 0, -1))
+        return sched
 
     def backup(self, actor='system'):
         """SQLite online backup -> integrity_check on the copy -> SHA-256 file; old copies removed."""
         b = self.cfg['backup']
         os.makedirs(b['dir'], mode=0o700, exist_ok=True)
+        with self._backup_lock:          # the nightly backup and "back up now" never write the same file
+            return self._backup(b, actor)
+
+    def _backup(self, b, actor):
         name = 'jt-waf-mgr-%s.db' % time.strftime('%Y%m%d-%H%M%S')
         path = os.path.join(b['dir'], name)
         tmp = path + '.part'
         res = {'ts': time.time(), 'at': util.iso(time.time()), 'file': name, 'ok': False}
+        for old in glob.glob(os.path.join(b['dir'], 'jt-waf-mgr-*.db.part')):   # left by an interrupted backup
+            try:
+                os.unlink(old)
+            except OSError:
+                pass
         try:
+            os.close(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
             dst = sqlite3.connect(tmp)
             try:
                 self.db.conn().backup(dst)
@@ -269,7 +310,10 @@ class Monitor:
                 os.unlink(tmp)
             except OSError:
                 pass
-        removed = self._prune_backups()
+        removed = self._prune_backups() if res['ok'] else 0      # a failing backup never removes good ones
+        if not res['ok']:
+            prev = self.app.workflow.managed.setting('backup.last') or {}
+            res['fails'] = (prev.get('fails', 0) if not prev.get('ok', True) else 0) + 1
         self.app.workflow.managed.set_setting('backup.last', res)
         self.state['backup'] = res
         self.audit.log('backup.created' if res['ok'] else 'backup.failed', actor, 'system' if actor == 'system' else 'user',
@@ -281,7 +325,9 @@ class Monitor:
         b = self.cfg['backup']
         cutoff = time.time() - 86400 * b['keep_days']
         removed = 0
-        for p in glob.glob(os.path.join(b['dir'], 'jt-waf-mgr-*.db')):
+        # the newest KEEP_ALWAYS copies stay whatever their age (a clock jump or days of failures must not
+        # leave no backup at all)
+        for p in sorted(glob.glob(os.path.join(b['dir'], 'jt-waf-mgr-*.db')), reverse=True)[self.KEEP_ALWAYS:]:
             try:
                 if os.path.getmtime(p) < cutoff:
                     os.unlink(p)
@@ -355,6 +401,22 @@ def system_check(app):
                      enabled=sl['enabled'], address=sl['address'], errors=app.audit.syslog_errors,
                      last_error=util.iso(app.audit.syslog_last_error[0]) if app.audit.syslog_last_error else None))
 
+    try:
+        n = cfg['notify']
+        now = util.now()
+        failed = app.db.one("SELECT COUNT(*) FROM notifications WHERE status='failed' AND test=0 AND created_at>?",
+                            (now - 86400,))[0]
+        stuck = app.db.one("SELECT COUNT(*) FROM notifications WHERE status IN ('pending', 'sending') AND created_at<?",
+                           (now - 1800,))[0]
+        from . import alerts as _alerts, notify as _notify
+        active = [c for c in _notify.CHANNELS if _notify.active(n, c)]
+        level = 'info' if not n['enabled'] else ('warn' if failed or stuck or not active or app.audit.__dict__.get('notify_errors') else 'ok')
+        out.append(_item('notify', level, enabled=n['enabled'], channels=active, failed_24h=failed, stuck=stuck,
+                         last_run=app.db.get_meta('notify.last_run'), open_alerts=_alerts.counts(app.db)['open'],
+                         queue_errors=app.audit.__dict__.get('notify_errors', 0)))
+    except Exception as e:
+        out.append(_item('notify', 'warn', error=type(e).__name__))
+
     ts = integrity.time_sync()
     out.append(_item('time_sync', 'ok' if ts['synced'] else ('warn' if ts['synced'] is None else 'fail'), **ts))
 
@@ -389,7 +451,7 @@ def system_check(app):
         out.append(_item('backup', 'warn', enabled=False))
     else:
         age = time.time() - last['ts'] if last.get('ts') else None
-        good = last.get('ok') and age is not None and age < 30 * 3600
+        good = last.get('ok') and age is not None and -300 < age < 30 * 3600     # a future time is a wrong clock
         out.append(_item('backup', 'ok' if good else 'warn', enabled=True, dir=cfg['backup']['dir'],
                          keep_days=cfg['backup']['keep_days'], last_at=last.get('at'), last_ok=last.get('ok'),
                          error=last.get('error'), copies=len(mon.backups())))

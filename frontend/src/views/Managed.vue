@@ -35,7 +35,7 @@
 
       <!-- not adopted -->
       <section v-if="!m.adopted" class="card form">
-        <h2>{{ t('managed.not_adopted_title') }}</h2>
+        <h2><Icon name="adopt" /> {{ t('managed.not_adopted_title') }}</h2>
         <p>{{ t('managed.not_adopted_intro', { dir: m.dir }) }}</p>
         <div v-if="m.import && m.import.error" class="alert error">{{ safeText(m.import.error, 300) }}</div>
         <template v-if="m.import && m.import.sources">
@@ -99,7 +99,7 @@
           <template #cell-rule_id="{ row }"><span class="mono nowrap"><RouterLink v-if="row.rule_id" :to="'/rules/' + row.rule_id">{{ row.rule_id }}</RouterLink><span v-else class="muted">—</span></span>
             <div class="sub">{{ t('placement.' + row.placement) }}</div></template>
           <template #cell-description="{ row }"><TruncText :text="row.msg || firstComment(row) || firstLine(row.text)" :max="200" />
-            <details class="sub"><summary>{{ t('rule.text') }}</summary><pre class="code small">{{ safeMultiline((row.comment ? row.comment + '\n' : '') + row.text) }}</pre></details></template>
+            <details class="sub"><summary>{{ t('rule.text') }}</summary><RuleText :text="(row.comment ? row.comment + '\n' : '') + row.text" /></details></template>
           <template #cell-hosts="{ row }"><span v-for="hh in row.hosts || []" :key="hh" class="chip host"><TruncText :text="hh" :max="60" /></span><span v-if="!(row.hosts || []).length" class="muted">{{ t('rules.global') }}</span></template>
           <template #cell-origin="{ row }">{{ t('managed.origin_' + row.origin) }}<div v-if="row.change_id" class="sub"><RouterLink :to="'/changes/' + row.change_id">#{{ row.change_id }}</RouterLink></div></template>
           <template #cell-status="{ row }"><span class="badge" :class="row.enabled ? 'b-ok' : 'b-logged'">{{ row.enabled ? t('managed.enabled') : t('managed.disabled') }}</span></template>
@@ -122,7 +122,7 @@ import { useRouter } from 'vue-router'
 import { get, post } from '../api.js'
 import { t } from '../i18n.js'
 import { hasRole, refreshPending } from '../store.js'
-import { safeText, safeMultiline } from '../util.js'
+import { safeText } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import TruncText from '../components/TruncText.vue'
@@ -132,6 +132,7 @@ import Icon from '../components/Icon.vue'
 import SelectBox from '../components/SelectBox.vue'
 import DataTable from '../components/DataTable.vue'
 import FlowSteps from '../components/FlowSteps.vue'
+import RuleText from '../components/RuleText.vue'
 import HBars from '../components/charts/HBars.vue'
 import SegBar from '../components/charts/SegBar.vue'
 

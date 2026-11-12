@@ -29,20 +29,21 @@
           <dt>{{ t('change.base_version') }}</dt><dd class="mono">{{ c.base_version ?? '—' }}</dd>
           <dt>{{ t('change.applied_version') }}</dt><dd class="mono"><RouterLink v-if="c.applied_version" to="/versions">{{ c.applied_version }}</RouterLink><template v-else>—</template></dd>
         </dl>
-        <h2>{{ t('change.reason') }}</h2>
+        <h2><Icon name="info" /> {{ t('change.reason') }}</h2>
         <pre class="code">{{ safeMultiline(c.reason) }}</pre>
         <div v-if="c.evidence_override" class="alert warn">{{ t('change.evidence_override') }}: {{ safeText(c.evidence_override, 2000) }}</div>
       </section>
 
       <!-- actions -->
       <section v-if="canApprove || canReject || canCancel || canRecheck" class="card form">
-        <h2>{{ t('change.actions') }}</h2>
+        <h2><Icon name="approve" /> {{ t('change.actions') }}</h2>
         <p v-if="c.direction === 'loosen' && c.state === 'pending_approval'" class="muted small">{{ t('wizard.loosen_note') }}</p>
         <p v-if="own && canApprove" class="alert info">{{ t('change.own_note') }}</p>
+        <p v-if="fromAnalyst && c.direction !== 'tighten' && canApprove" class="alert warn">{{ t('change.analyst_loosen_note') }}</p>
         <div class="filters inline">
           <label class="field grow"><span>{{ t('change.note') }}</span>
             <input v-model="note" maxlength="2000" :placeholder="t('change.note_ph')"></label>
-          <label v-if="canApprove && own && c.direction !== 'tighten'" class="field"><span>{{ t('change.totp') }}</span>
+          <label v-if="canApprove && (own || fromAnalyst) && c.direction !== 'tighten'" class="field"><span>{{ t('change.totp') }}</span>
             <input v-model.trim="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="mono" placeholder="123456"></label>
         </div>
         <label v-if="canRecheck" class="field"><span>{{ t('change.override') }}</span>
@@ -56,13 +57,25 @@
         </div>
       </section>
 
+      <section v-if="c.op === 'bundle'" class="card">
+        <h2><Icon name="list" /> {{ t('bundle.ops_title', { n: (c.spec.ops || []).length }) }}</h2>
+        <p class="muted small">{{ t('bundle.ops_note') }}</p>
+        <DataTable id="bundle-ops" :columns="bundleCols" :rows="c.spec.ops || []" :row-key="(r) => c.spec.ops.indexOf(r)" :default-sort="null">
+          <template #cell-n="{ row }">{{ c.spec.ops.indexOf(row) + 1 }}</template>
+          <template #cell-what="{ row }">{{ t('op.' + row.op) }} · {{ t('kind.' + row.kind) }}</template>
+          <template #cell-rule_id="{ row }"><RouterLink v-if="row.rule_id" :to="'/rules/' + row.rule_id" class="mono">{{ row.rule_id }}</RouterLink><template v-else>—</template></template>
+          <template #cell-direction="{ row }"><DirectionBadge :direction="row.direction" /></template>
+          <template #cell-where="{ row }"><span class="small">{{ row.spec && row.spec.before_rule_id ? t('bundle.before', { id: row.spec.before_rule_id }) : '' }}</span>
+            <span v-if="row.spec && row.spec.source === 'all'" class="badge b-warn">{{ t('wizard.block_source.all') }}</span></template>
+        </DataTable>
+      </section>
       <section v-if="c.rule_text" class="card">
-        <h2>{{ t('rule.text') }}</h2>
-        <pre class="code">{{ safeMultiline(c.rule_text) }}</pre>
+        <h2><Icon name="code" /> {{ t('rule.text') }}</h2>
+        <RuleText :text="c.rule_text" line-numbers />
       </section>
 
       <section v-if="c.diff && Object.keys(c.diff).length" class="card">
-        <h2>{{ t('change.diff') }}</h2>
+        <h2><Icon name="change" /> {{ t('change.diff') }}</h2>
         <div v-for="(d, f) in c.diff" :key="f" class="diffblock">
           <div class="sub">{{ t('placement.' + f) }}</div>
           <DiffView :text="d" />
@@ -70,17 +83,17 @@
       </section>
 
       <section class="card">
-        <h2>{{ t('change.checks') }}</h2>
+        <h2><Icon name="verify" /> {{ t('change.checks') }}</h2>
         <ChangeChecks :checks="c.checks" />
       </section>
 
       <section v-if="(c.tests || []).length" class="card">
-        <h2>{{ t('wizard.tests') }}</h2>
+        <h2><Icon name="test" /> {{ t('wizard.tests') }}</h2>
         <TestCases :model-value="c.tests" disabled />
       </section>
 
       <section class="card">
-        <h2>{{ t('change.timeline') }}</h2>
+        <h2><Icon name="history" /> {{ t('change.timeline') }}</h2>
         <ul class="timeline">
           <li v-for="(l, i) in c.log || []" :key="i">
             <span class="ts">{{ fmtTime(l.ts) }}</span>
@@ -105,13 +118,22 @@ import Loading from '../components/Loading.vue'
 import StateBadge from '../components/StateBadge.vue'
 import DirectionBadge from '../components/DirectionBadge.vue'
 import DiffView from '../components/DiffView.vue'
+import RuleText from '../components/RuleText.vue'
 import ChangeChecks from '../components/ChangeChecks.vue'
 import TestCases from '../components/TestCases.vue'
 import Icon from '../components/Icon.vue'
 import FlowSteps from '../components/FlowSteps.vue'
+import DataTable from '../components/DataTable.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const c = ref(null)
+const bundleCols = computed(() => [
+  { key: 'n', label: '#', align: 'num', value: (r) => c.value.spec.ops.indexOf(r) },
+  { key: 'what', label: t('change.what'), value: (r) => r.op + ' ' + r.kind },
+  { key: 'rule_id', label: t('wizard.rule_id'), align: 'num' },
+  { key: 'direction', label: t('bundle.direction'), value: (r) => r.direction },
+  { key: 'where', label: t('bundle.detail'), sortable: false },
+])
 const error = ref(null)
 const actionError = ref(null)
 const busy = ref(false)
@@ -123,6 +145,7 @@ let timer = null
 
 const own = computed(() => c.value && state.user && c.value.proposed_by === state.user.username && c.value.proposed_via === 'user')
 const ownOrAdmin = computed(() => own.value || hasRole('admin'))
+const fromAnalyst = computed(() => !!c.value && c.value.proposed_by === 'analyst')
 const canApprove = computed(() => c.value && c.value.state === 'pending_approval' && hasRole('approver') &&
   (c.value.op !== 'adopt' || hasRole('admin')))
 const canReject = computed(() => c.value && c.value.state === 'pending_approval' && hasRole('approver'))

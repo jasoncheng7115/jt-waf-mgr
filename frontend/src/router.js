@@ -1,6 +1,6 @@
 import Guide from './views/Guide.vue'
 import { createRouter, createWebHistory } from 'vue-router'
-import { state, hasRole, refreshPending } from './store.js'
+import { state, hasRole, refreshPending, refreshAlerts } from './store.js'
 
 import Login from './views/Login.vue'
 import ChangePassword from './views/ChangePassword.vue'
@@ -19,6 +19,8 @@ import AdminUsers from './views/AdminUsers.vue'
 import AdminTokens from './views/AdminTokens.vue'
 import AdminAudit from './views/AdminAudit.vue'
 import AdminSettings from './views/AdminSettings.vue'
+import Notifications from './views/Notifications.vue'
+import Alerts from './views/Alerts.vue'
 import NotFound from './views/NotFound.vue'
 import Changes from './views/Changes.vue'
 import ChangeNew from './views/ChangeNew.vue'
@@ -29,6 +31,7 @@ import UsersReview from './views/UsersReview.vue'
 import SystemCheck from './views/SystemCheck.vue'
 import ConfigChanges from './views/ConfigChanges.vue'
 import Compliance from './views/Compliance.vue'
+import Analysis from './views/Analysis.vue'
 
 const routes = [
   { path: '/login', name: 'login', component: Login, meta: { public: true, bare: true } },
@@ -55,11 +58,15 @@ const routes = [
   { path: '/admin/users/review', name: 'users-review', component: UsersReview, meta: { role: 'admin' } },
   { path: '/admin/system', name: 'admin-system', component: SystemCheck, meta: { role: 'admin' } },
   { path: '/admin/compliance', name: 'admin-compliance', component: Compliance, meta: { role: 'admin' } },
+  { path: '/analysis', name: 'analysis', component: Analysis },
+  { path: '/analysis/:id(\\d+)', name: 'analysis-run', component: Analysis, props: true },
   { path: '/config-changes', name: 'config-changes', component: ConfigChanges, meta: { role: 'approver' } },
   { path: '/config-changes/:id(\\d+)', name: 'config-change', component: ConfigChanges, props: true, meta: { role: 'approver' } },
   { path: '/admin/tokens', name: 'admin-tokens', component: AdminTokens, meta: { role: 'admin' } },
   { path: '/admin/audit', name: 'admin-audit', component: AdminAudit, meta: { role: 'admin' } },
   { path: '/admin/settings', name: 'admin-settings', component: AdminSettings, meta: { role: 'admin' } },
+  { path: '/admin/notify', name: 'admin-notify', component: Notifications, meta: { role: 'admin' } },
+  { path: '/alerts', name: 'alerts', component: Alerts },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound },
 ]
 
@@ -95,6 +102,7 @@ router.beforeEach((to) => {
 
 router.afterEach((to, from) => {
   refreshPending(false)
+  refreshAlerts(false)
   // the last sign-in notice stays for the landing page and one more navigation
   if (state.lastLogin && to.fullPath !== from.fullPath && !to.meta.bare) {
     state.lastLogin.navs = (state.lastLogin.navs || 0) + 1

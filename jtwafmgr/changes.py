@@ -11,6 +11,7 @@ production configuration plus the change). Loosening always needs a person's app
 can propose but never approve. Applying is done by the separate root program (apply.py): this
 side only writes a request into the spool directory and reads the result back.
 """
+import collections
 import datetime
 import json
 import os
@@ -27,6 +28,7 @@ DEFAULT_SETTINGS = {
     'approval.single_admin_mode': False,        # proposer may approve own change (audited, OTP for loosening)
     'apply.auto_tighten': False,                # tightening that passed every check applies without approval
     'apply.auto_tighten_daily_limit': 10,
+    'apply.auto_tighten_analyst': False,        # the event analysis' confident blocks too (same conditions)
     'sandbox.required': True,
     'health.urls': [],                          # ["https://app.example.com/", ...] checked before/after apply
     'apply.wait_old_workers_seconds': 120,
@@ -121,16 +123,13 @@ class Workflow:
                   [state, util.now(), error] + list(cols.values()) + [cid])
 
     # --- proposing ------------------------------------------------------------------------
-    def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None, owner=None):
+    def _build_op(self, op, kind, spec, item_id, via, role, taken=None):
+        """Validate one rule operation and build its rule text. Returns a dict (nothing saved).
+        taken: rule ids already handed out (by earlier operations of the same bundle)."""
         if op not in OPS:
             raise ChangeError('invalid_op')
-        reason = (reason or '').strip()
-        if not reason or len(reason) > 2000:
-            raise ChangeError('reason_required')
-        if not self.managed.adopted():
-            raise ChangeError('not_adopted', 409)
-        tests = tests or []
-        _check_tests(tests)
+        spec = spec if isinstance(spec, dict) else {}
+        taken = set(taken or ())
         item = None
         if op != 'add':
             item = self.managed.item(item_id) if item_id else None
@@ -150,20 +149,47 @@ class Workflow:
                 if kind == 'raw':
                     ids = rulegen.check_raw_text(spec.get('text') or '', cfg=self.cfg)
                     rule_id = ids[0] if ids else None
-                    if rule_id is not None and rule_id in self.managed.occupied_ids():
+                    if rule_id is not None and (rule_id in self.managed.occupied_ids() or rule_id in taken):
                         raise ChangeError('rule_id_in_use', 409, rule_id=rule_id)
                 else:
                     try:
-                        rule_id = self.managed.next_rule_id(kind)
+                        rule_id = self.managed.next_rule_id(kind, extra=taken)
                     except ValueError:
                         raise ChangeError('id_range_full', 409)
             try:
                 spec, text, _ = rulegen.build(kind, spec, rule_id, self.cfg)
             except rulegen.SpecError as e:
                 raise ChangeError('invalid_spec', 422, field=e.field, reason=e.code, **e.details)
+            if op == 'add' and spec.get('before_rule_id'):
+                pl = spec.get('placement', 'before')
+                if not any(it['rule_id'] == spec['before_rule_id'] and it['placement'] == pl
+                           for it in self.managed.items()) and spec['before_rule_id'] not in taken:
+                    raise ChangeError('invalid_spec', 422, field='before_rule_id', reason='anchor_not_found',
+                                      rule_id=spec['before_rule_id'])
         else:
             spec = json.loads(item['spec'])
-        direction = rulegen.direction(op, kind, text)
+        return {'op': op, 'kind': kind, 'item_id': item_id if op != 'add' else None, 'rule_id': rule_id, 'spec': spec,
+                'text': text, 'direction': rulegen.direction(op, kind, text)}
+
+    def _start(self, reason, tests):
+        reason = (reason or '').strip()
+        if not reason or len(reason) > 2000:
+            raise ChangeError('reason_required')
+        if not self.managed.adopted():
+            raise ChangeError('not_adopted', 409)
+        tests = tests or []
+        _check_tests(tests)
+        return reason, tests
+
+    def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None, owner=None):
+        if op not in OPS:
+            raise ChangeError('invalid_op')
+        reason, tests = self._start(reason, tests)
+        b = self._build_op(op, kind, spec, item_id, via, role)
+        return self._insert(b['op'], b['kind'], b['item_id'], b['rule_id'], b['spec'], b['direction'], reason, actor, via,
+                            b['text'], tests, owner)
+
+    def _insert(self, op, kind, item_id, rule_id, spec, direction, reason, actor, via, text, tests, owner):
         t = util.now()
         with self.db.tx() as c:
             cur = c.execute('INSERT INTO changes(op, kind, item_id, rule_id, spec, direction, state, reason, proposed_by, '
@@ -177,6 +203,45 @@ class Workflow:
                            direction=direction, kind=kind, op=op, rule_id=rule_id)
         self._wake.set()
         return cid
+
+    # --- several operations as one change ------------------------------------------------------
+    BUNDLE_MAX = 100
+    BUNDLE_MAX_BLOCKS = 20       # confident blocks per bundle (each one is checked against the logs and in the sandbox)
+
+    def propose_bundle(self, ops, reason, actor, via='user', tests=None, role=None, owner=None):
+        """Several rule operations as ONE change: checked (static, evidence for each, sandbox for the
+        result), approved and applied together -- one version, one reload, one rollback.
+        ops: [{'op', 'kind'?, 'spec'?, 'item_id'?}]. Tightening only when every operation tightens."""
+        reason, tests = self._start(reason, tests)
+        if not isinstance(ops, list) or not 1 <= len(ops) <= self.BUNDLE_MAX:
+            raise ChangeError('invalid_bundle', 422, limit=self.BUNDLE_MAX)
+        built, taken, items = [], set(), set()
+        for i, o in enumerate(ops):
+            if not isinstance(o, dict):
+                raise ChangeError('invalid_bundle', 422, index=i)
+            iid = o.get('item_id')
+            if iid is not None and (not isinstance(iid, int) or isinstance(iid, bool)):
+                raise ChangeError('invalid_bundle', 422, index=i, reason='item_id')
+            try:
+                b = self._build_op(str(o.get('op') or 'add'), str(o.get('kind') or ''), o.get('spec'), o.get('item_id'),
+                                   via, role, taken)
+            except ChangeError as e:
+                e.details = dict(e.details or {}, index=i)
+                raise
+            if b['item_id'] is not None:
+                if b['item_id'] in items:
+                    raise ChangeError('invalid_bundle', 422, index=i, reason='item_twice')
+                items.add(b['item_id'])
+            if b['op'] == 'add' and b['rule_id'] is not None:
+                taken.add(b['rule_id'])
+            built.append(b)
+        if sum(1 for b in built if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify', 'enable')) > self.BUNDLE_MAX_BLOCKS:
+            raise ChangeError('invalid_bundle', 422, reason='too_many_blocks', limit=self.BUNDLE_MAX_BLOCKS)
+        direction = 'tighten' if all(b['direction'] == 'tighten' for b in built) else 'loosen'
+        text = '\n\n'.join('# %s %s %s\n%s' % (b['op'], b['kind'], b['rule_id'] or '', b['text'] or '')
+                            for b in built)[:200000]
+        spec = {'ops': [{k: b[k] for k in ('op', 'kind', 'item_id', 'rule_id', 'spec', 'direction')} for b in built]}
+        return self._insert('bundle', 'bundle', None, None, spec, direction, reason, actor, via, text, tests, owner)
 
     # --- rules file upload: a batch of ordinary proposals, never a direct write ---------------
     MAX_UPLOAD_ITEMS = 500
@@ -232,12 +297,40 @@ class Workflow:
                              'kind': cur['kind'], 'status': 'missing', 'error': None})
         return rows
 
-    def import_propose(self, placement, text, reason, user, delete_missing=False):
-        """One ordinary change per difference; each is checked, sandboxed and approved on its own."""
+    def import_propose(self, placement, text, reason, user, delete_missing=False, as_one=False):
+        """One ordinary change per difference, each checked, sandboxed and approved on its own -- or, with
+        as_one, all differences as one change (one approval, one apply). New rules keep their place in the
+        uploaded file: each goes right before the next rule of the file that already exists."""
         rows = self.import_diff(placement, text)
         reason = (reason or '').strip()
         if not reason:
             raise ChangeError('reason_required')
+        if as_one:
+            ops, existing_after = [], {}
+            nxt = None
+            for r in reversed(rows):                    # the next existing rule (file order) of each new rule
+                if r['status'] == 'new':
+                    existing_after[id(r)] = nxt
+                elif r['status'] in ('same', 'changed') and r['rule_id']:
+                    nxt = r['rule_id']
+            for r in rows:
+                if r['status'] == 'new':
+                    sp = {'text': r['text'], 'placement': placement}
+                    if existing_after.get(id(r)):
+                        sp['before_rule_id'] = existing_after[id(r)]
+                    ops.append({'op': 'add', 'kind': 'raw', 'spec': sp})
+                elif r['status'] == 'changed':
+                    ops.append({'op': 'modify', 'kind': 'raw', 'item_id': r['item_id'],
+                                'spec': {'text': r['text'], 'placement': placement}})
+                elif r['status'] == 'missing' and delete_missing:
+                    ops.append({'op': 'delete', 'kind': r['kind'], 'item_id': r['item_id']})
+            if not ops:
+                raise ChangeError('nothing_to_import', 409)
+            cid = self.propose_bundle(ops, reason, user['username'], role=user['role'])
+            self.app.audit.log('managed.import_proposed', user['username'], 'user', None, 'ok', placement=placement,
+                               changes=[cid], operations=len(ops), as_one=True)
+            return {'changes': [{'rule_id': None, 'status': 'bundle', 'change_id': cid, 'operations': len(ops)}],
+                    'skipped': []}
         made, skipped = [], []
         for r in rows:
             try:
@@ -286,6 +379,17 @@ class Workflow:
         if r['op'] == 'adopt':
             items, _ = self.managed.import_preview()
             return items, None
+        if r['op'] == 'bundle':
+            items, touched = self.managed.items(include_deleted=True), []
+            for b in spec['ops']:
+                new = None
+                if b['op'] in ('add', 'modify'):
+                    _, text, placement = rulegen.build(b['kind'], b['spec'], b['rule_id'], self.cfg)
+                    new = {'rule_id': b['rule_id'], 'kind': b['kind'], 'placement': placement, 'spec': b['spec'],
+                           'text': text, 'comment': _comment(r), 'origin': 'created'}
+                items, it = self.managed.with_op(b['op'], b['item_id'], new, items=items)
+                touched.append(it)
+            return items, touched
         new = None
         if r['op'] in ('add', 'modify'):
             _, text, placement = rulegen.build(r['kind'], spec, r['rule_id'], self.cfg)
@@ -327,6 +431,7 @@ class Workflow:
                 raise ChangeError('duplicate_rule_ids', ids=dup)
             old = Managed.render(self.managed.items(include_deleted=True), base) if r['op'] != 'adopt' else {}
             checks['diff'] = _diff(old, files)
+            checks['rules_sha256'] = _rules_hash(items)
             checks['static'] = {'ok': True}
         except (rulegen.SpecError, ChangeError, ValueError) as e:
             checks['static'] = {'ok': False, 'error': getattr(e, 'code', str(e)), 'details': getattr(e, 'details', {})}
@@ -372,12 +477,16 @@ class Workflow:
 
     def _maybe_auto_apply(self, cid):
         r = self.get(cid)
-        if r['direction'] != 'tighten' or not self.setting('apply.auto_tighten') or r['evidence_override']:
+        analyst = r['proposed_by'] == 'analyst'
+        on = self.setting('apply.auto_tighten_analyst' if analyst else 'apply.auto_tighten')
+        if r['direction'] != 'tighten' or not on or r['evidence_override']:
             return
         if r['op'] != 'add' or r['kind'] != 'confident_block':
             return
         spec = json.loads(r['spec'])
         if spec.get('target') not in ('path', 'uri', 'ua', 'host', 'header'):
+            return
+        if (spec.get('source') or 'external') != 'external':     # blocking internal sources always needs a person
             return
         ev = json.loads(r['checks']).get('evidence', {})
         if not ev.get('ok') or ev.get('external_success', 1) or ev.get('internal_other', 1):
@@ -422,14 +531,23 @@ class Workflow:
                 raise ChangeError('own_change', 403)
             if r['direction'] != 'tighten':
                 # single admin approving their own loosening: fresh OTP and a written reason
-                from .auth import totp_match
-                step = totp_match(user['totp_secret'], totp or '') if user['totp_enabled'] else None
-                fresh = self.db.one('SELECT totp_last_step FROM users WHERE username=?', (user['username'],))
-                if step is None or (fresh and step <= fresh[0]):
-                    raise ChangeError('totp_required', 403)
-                self.db.x('UPDATE users SET totp_last_step=? WHERE username=?', (step, user['username']))
+                from .auth import AuthError
+                try:
+                    self.app.auth.step_up(user['username'], totp or '', 'change.approve_own')
+                except AuthError as e:
+                    raise ChangeError(e.code, e.status)
                 if len((note or '').strip()) < 10:
                     raise ChangeError('note_required')
+        elif r['proposed_by'] == 'analyst' and r['direction'] != 'tighten':
+            # loosening suggested by the language model (from request data an outsider can shape): fresh OTP and a
+            # written reason, like approving one's own loosening
+            from .auth import AuthError
+            try:
+                self.app.auth.step_up(user['username'], totp or '', 'change.approve_analyst_loosen')
+            except AuthError as e:
+                raise ChangeError(e.code, e.status)
+            if len((note or '').strip()) < 10:
+                raise ChangeError('note_required')
         self.log(cid, user['username'], 'approved', note or '')
         self.app.audit.log('change.approved', user['username'], 'user', None, 'ok', change_id=cid,
                            direction=r['direction'], own=own)
@@ -517,6 +635,14 @@ class Workflow:
                                    change_id=cid, files=bad)
                 return
         items, files, _ = self.build_files(r, version)
+        approved = json.loads(r['checks'] or '{}').get('rules_sha256')
+        if r['op'] != 'adopt' and approved and approved != _rules_hash(items):
+            # the rules would differ from what was checked and approved (e.g. the known scanners written into a
+            # rule were changed in Settings meanwhile): check again, approve again
+            self._state(cid, 'checking')
+            self.log(cid, 'system', 'stale', 'the rules to apply differ from the checked ones; checking again')
+            self._wake.set()
+            return
         req = {'request_id': 'v%d-c%d' % (version, cid), 'action': 'apply', 'version': version, 'change_id': cid,
                'dir': self.managed.dir, 'files': files, 'sha256': {p: sha256(t) for p, t in files.items()},
                'expected_disk': ({p: None for p in files} if r['op'] == 'adopt' else self._expected_disk(cur, files)),
@@ -633,7 +759,10 @@ class Workflow:
                             c.execute('UPDATE managed_rules SET deleted=1 WHERE id=?', (row[0],))
                     self.managed.save_items(c, data['items'], r['proposed_by'], cid)
                 else:
-                    touched = [it for it in data['items'] if _touched(it, r)]
+                    # the touched rows, and any row whose position moved (a file renumbered to make room)
+                    pos = {x[0]: x[1] for x in c.execute('SELECT id, position FROM managed_rules').fetchall()}
+                    touched = [it for it in data['items'] if _touched(it, r) or
+                               (it.get('id') in pos and pos[it['id']] != it.get('position'))]
                     self.managed.save_items(c, touched, r['proposed_by'], cid)
                 # the snapshot keeps the database ids, so that a later rollback updates rows instead of duplicating them
                 rows = [dict(x) for x in c.execute("SELECT * FROM managed_rules ORDER BY CASE placement WHEN 'before' THEN 0 ELSE 1 END, position").fetchall()]
@@ -686,9 +815,22 @@ class Workflow:
 
 
 def _touched(it, r):
+    if r['op'] == 'bundle':
+        ops = json.loads(r['spec'])['ops']
+        if it.get('id') is None:
+            return it.get('rule_id') in {b['rule_id'] for b in ops if b['op'] == 'add'}
+        return it.get('id') in {b['item_id'] for b in ops if b['op'] != 'add'}
     if r['op'] == 'add':
         return it.get('id') is None and it.get('rule_id') == r['rule_id']
     return it.get('id') == r['item_id']
+
+
+def _rules_hash(items):
+    """What the rules of a set of items say (order, text, on/off), without the comments and version header."""
+    rows = sorted((it for it in items if not it.get('deleted') and it.get('kind') != 'comment'),
+                  key=lambda it: (0 if it.get('placement') == 'before' else 1, it.get('position') or 0))
+    return sha256('\n\x00'.join('%s|%s|%s' % (it.get('placement'), 1 if it.get('enabled', 1) else 0, (it.get('text') or '').strip())
+                                  for it in rows))
 
 
 def _plain(items):
@@ -703,7 +845,8 @@ def _plain(items):
 
 
 def _comment(r):
-    reason = ' '.join(r['reason'].split())[:300]
+    # one line, and no backslash: a trailing one could join the rule's first line to the comment
+    reason = ' '.join(r['reason'].replace('\\', '/').split())[:300]
     when = datetime.date.today().isoformat()
     return '# %s jt-waf-mgr change %d (%s): %s' % (when, r['id'], r['proposed_by'], reason.replace('\n', ' '))
 
@@ -758,6 +901,11 @@ def summarize(kind, spec, op):
         return 'adopt %d existing items' % spec.get('items', 0)
     if op == 'rollback':
         return 'restore version %s' % spec.get('to_version')
+    if op == 'bundle':
+        ops = spec.get('ops') or []
+        n = collections.Counter(b['op'] for b in ops)
+        ids = ','.join(str(b['rule_id']) for b in ops if b.get('rule_id'))
+        return ('%d operations (%s): %s' % (len(ops), ', '.join('%s %d' % kv for kv in sorted(n.items())), ids))[:200]
     if kind == 'confident_block':
         return '%s ~ %s' % (spec.get('target'), spec.get('regex', ''))[:200]
     if kind == 'exclusion':

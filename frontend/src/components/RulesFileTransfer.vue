@@ -31,6 +31,9 @@
         </DataTable>
         <label class="checkline"><input v-model="deleteMissing" type="checkbox" :disabled="!counts.missing" />
           {{ t('rulesfile.delete_missing', { n: counts.missing || 0 }) }}</label>
+        <label class="checkline"><input v-model="asOne" type="checkbox" :disabled="toPropose < 2" />
+          {{ t('rulesfile.as_one', { n: toPropose }) }}</label>
+        <p class="muted small">{{ t('rulesfile.as_one_hint') }}</p>
         <div class="field"><label :for="id + '-reason'">{{ t('change.reason') }}</label>
           <input :id="id + '-reason'" v-model="reason" maxlength="2000" /></div>
         <div class="actions">
@@ -68,6 +71,7 @@ const rows = ref(null)
 const counts = ref({})
 const reason = ref('')
 const deleteMissing = ref(false)
+const asOne = ref(true)
 const busy = ref(false)
 const error = ref(null)
 const done = ref(null)
@@ -123,7 +127,7 @@ async function submit() {
   busy.value = true
   error.value = null
   try {
-    done.value = await post('/managed/import', { placement: placement.value, text: text.value, reason: reason.value.trim(), delete_missing: deleteMissing.value })
+    done.value = await post('/managed/import', { placement: placement.value, text: text.value, reason: reason.value.trim(), delete_missing: deleteMissing.value, as_one: asOne.value && toPropose.value > 1 })
     rows.value = null
   } catch (e) { error.value = e } finally { busy.value = false }
 }

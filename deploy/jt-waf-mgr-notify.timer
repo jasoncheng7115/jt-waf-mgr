@@ -1,0 +1,10 @@
+[Unit]
+Description=jt-waf-mgr: retry notifications and remind open alerts every minute
+
+[Timer]
+OnCalendar=*:*:00
+AccuracySec=10s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

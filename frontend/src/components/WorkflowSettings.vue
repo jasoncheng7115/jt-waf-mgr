@@ -1,6 +1,6 @@
 <template>
   <section class="card form">
-    <h2>{{ t('wfs.title') }}</h2>
+    <h2><Icon name="settings" /> {{ t('wfs.title') }}</h2>
     <ErrorBox :error="error" />
     <template v-if="s">
       <div class="alert" :class="sandboxAvailable ? 'success' : 'warn'">{{ sandboxAvailable ? t('wfs.sandbox_available') : t('wfs.sandbox_unavailable') }}</div>
@@ -8,6 +8,8 @@
       <p class="muted small">{{ t('wfs.single_admin_mode_hint') }}</p>
       <label class="check"><input v-model="s['apply.auto_tighten']" type="checkbox"> <b>{{ t('wfs.auto_tighten') }}</b></label>
       <p class="muted small">{{ t('wfs.auto_tighten_hint') }}</p>
+      <label class="check"><input v-model="s['apply.auto_tighten_analyst']" type="checkbox"> <b>{{ t('wfs.auto_tighten_analyst') }}</b></label>
+      <p class="muted small">{{ t('wfs.auto_tighten_analyst_hint') }}</p>
       <div class="filters inline">
         <label class="field"><span>{{ t('wfs.auto_tighten_daily_limit') }}</span>
           <input v-model.number="s['apply.auto_tighten_daily_limit']" type="number" min="0" max="10000"></label>

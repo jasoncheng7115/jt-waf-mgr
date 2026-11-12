@@ -7,29 +7,33 @@
     </div>
     <FlowSteps v-if="showGuide" :title="t('guide.ev.title')" :steps="flow" :note="t('guide.ev.note')" />
     <form class="filters" @submit.prevent="apply">
-      <div class="field"><label for="ev-f-since">{{ t('filter.since') }}</label>
+      <div class="field" :class="fieldClass('since')"><label for="ev-f-since">{{ t('filter.since') }}</label>
         <DatePicker id="ev-f-since" v-model="f.since" mode="datetime" :presets="sincePresets" /></div>
-      <div class="field"><label for="ev-f-until">{{ t('filter.until') }}</label>
+      <div class="field" :class="fieldClass('until')"><label for="ev-f-until">{{ t('filter.until') }}</label>
         <DatePicker id="ev-f-until" v-model="f.until" mode="datetime" :presets="untilPresets" /></div>
-      <label class="field"><span>{{ t('event.host') }}</span><input v-model.trim="f.host" maxlength="255" :placeholder="t('filter.all_hosts')"></label>
-      <label class="field"><span>{{ t('filter.path_prefix') }}</span><input v-model.trim="f.path_prefix" maxlength="500" placeholder="/"></label>
-      <label class="field"><span>{{ t('filter.q') }}</span><input v-model.trim="f.q" maxlength="200"></label>
-      <label class="field"><span>{{ t('filter.src_ip') }}</span><input v-model.trim="f.src_ip" maxlength="64" placeholder="203.0.113.0/24"></label>
-      <label class="field"><span>{{ t('filter.rule_id') }}</span><input v-model.trim="f.rule_id" inputmode="numeric" maxlength="9"></label>
-      <div class="field"><label for="ev-f-outcome">{{ t('event.outcome') }}</label>
+      <label class="field" :class="fieldClass('host')"><span>{{ t('event.host') }}</span><input v-model.trim="f.host" maxlength="255" :placeholder="t('filter.all_hosts')"></label>
+      <label class="field" :class="fieldClass('path_prefix')"><span>{{ t('filter.path_prefix') }}</span><input v-model.trim="f.path_prefix" maxlength="500" placeholder="/"></label>
+      <label class="field" :class="fieldClass('q')"><span>{{ t('filter.q') }}</span><input v-model.trim="f.q" maxlength="200"></label>
+      <label class="field" :class="fieldClass('src_ip')"><span>{{ t('filter.src_ip') }}</span><input v-model.trim="f.src_ip" maxlength="64" placeholder="203.0.113.0/24"></label>
+      <label class="field" :class="fieldClass('rule_id')"><span>{{ t('filter.rule_id') }}</span><input v-model.trim="f.rule_id" inputmode="numeric" maxlength="9"></label>
+      <div class="field" :class="fieldClass('outcome')"><label for="ev-f-outcome">{{ t('event.outcome') }}</label>
         <SelectBox id="ev-f-outcome" v-model="f.outcome" :options="outcomeOpts" /></div>
-      <div class="field"><label for="ev-f-decided">{{ t('event.decided_by') }}</label>
+      <div class="field" :class="fieldClass('decided_by')"><label for="ev-f-decided">{{ t('event.decided_by') }}</label>
         <SelectBox id="ev-f-decided" v-model="f.decided_by" :options="deciderOpts" /></div>
-      <div class="field"><label for="ev-f-origin">{{ t('event.origin') }}</label>
+      <div class="field" :class="fieldClass('origin')"><label for="ev-f-origin">{{ t('event.origin') }}</label>
         <SelectBox id="ev-f-origin" v-model="f.origin" :options="originOpts" /></div>
-      <div class="field"><label for="ev-f-family">{{ t('event.family') }}</label>
+      <div class="field" :class="fieldClass('family')"><label for="ev-f-family">{{ t('event.family') }}</label>
         <SelectBox id="ev-f-family" v-model="f.family" :options="familyOpts" searchable /></div>
       <div class="actions filteractions">
-        <button type="submit" class="btn primary"><Icon name="filter" />{{ t('filter.apply') }}</button>
+        <button type="submit" class="btn primary" :class="{ 'needs-apply': dirty }"><Icon name="filter" />{{ t('filter.apply') }}</button>
         <button type="button" class="btn ghost" @click="reset"><Icon name="clear" />{{ t('filter.reset') }}</button>
+        <span v-if="dirty" class="applyhint" role="status"><Icon name="warning" />{{ t('filter.not_applied') }}</span>
       </div>
     </form>
     <ErrorBox :error="error" />
+    <section class="card">
+      <EventTimeline :query="params()" @select="(r) => router.push({ query: { ...route.query, since: r.since, until: r.until } })" />
+    </section>
     <Loading v-if="loading && !items.length" />
     <section v-if="items.length" class="card">
       <div class="chartgrid">
@@ -41,21 +45,21 @@
       <HBars :items="familyBars" :series="outcomeSeries" />
       <p class="muted small">{{ t('chart.loaded_rows', { n: fmtNum(items.length) }) }}</p>
     </section>
-    <EventTable table-id="events" :items="items" :page-size="50" filterable @filter="toggleFilter" />
-    <LoadMore :cursor="cursor" :busy="loading" @more="load(false)" />
+    <EventTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" table-id="events" :items="items" :page-size="50" filterable @filter="toggleFilter" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useFilterState } from '../filterState.js'
+import EventTimeline from '../components/EventTimeline.vue'
 import { get } from '../api.js'
 import { t } from '../i18n.js'
 import { fmtNum } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import EventTable from '../components/EventTable.vue'
-import LoadMore from '../components/LoadMore.vue'
 import Icon from '../components/Icon.vue'
 import SelectBox from '../components/SelectBox.vue'
 import DatePicker from '../components/DatePicker.vue'
@@ -169,6 +173,14 @@ function toIso(local) {
   return toLocalInput(d.toISOString()) + sign + p(off / 60) + ':' + p(off % 60)
 }
 
+const { dirty, fieldClass } = useFilterState(f, () => {
+  const o = {}
+  for (const k of KEYS) {
+    const v = typeof route.query[k] === 'string' ? route.query[k] : ''
+    o[k] = (k === 'since' || k === 'until') ? toLocalInput(v) : v
+  }
+  return o
+})
 function fromQuery() {
   for (const k of KEYS) {
     const v = typeof route.query[k] === 'string' ? route.query[k] : ''

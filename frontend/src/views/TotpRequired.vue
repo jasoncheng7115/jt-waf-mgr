@@ -6,7 +6,7 @@
       <h1 class="authtitle">jt-waf-mgr</h1>
     </div>
     <FlowSteps compact :title="t('guide.first.title')" :steps="firstSteps" />
-    <h2>{{ t('totp.title') }}</h2>
+    <h2><Icon name="fingerprint" /> {{ t('totp.title') }}</h2>
     <p class="alert info">{{ t('totp.required_intro') }}</p>
     <div v-if="!setup">
       <div class="actions">

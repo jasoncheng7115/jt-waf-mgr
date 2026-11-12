@@ -10,7 +10,7 @@
     <FlowSteps v-if="showGuide" :title="t('guide.user.title')" :steps="lifecycle" :note="t('guide.user.note')" />
     <ErrorBox :error="error" />
     <section class="card">
-      <h2>{{ t('users.add') }}</h2>
+      <h2><Icon name="add" /> {{ t('users.add') }}</h2>
       <form class="filters inline" @submit.prevent="create">
         <label class="field"><span>{{ t('login.username') }}</span><input v-model.trim="nu.username" maxlength="64" required pattern="[A-Za-z0-9._\-]{1,64}" autocomplete="off"></label>
         <label class="field"><span>{{ t('users.display_name') }}</span><input v-model.trim="nu.display_name" maxlength="100"></label>
@@ -32,7 +32,7 @@
     </section>
 
     <section class="card">
-      <h2>{{ t('users.title') }} <span class="count">{{ users.length }}</span></h2>
+      <h2><Icon name="users" /> {{ t('users.title') }} <span class="count">{{ users.length }}</span></h2>
       <div v-if="users.length" class="chartgrid">
         <div><h3 class="charthead">{{ t('chart.users.roles') }}</h3><SegBar :parts="roleParts" :label="t('chart.users.roles')" /></div>
         <div><h3 class="charthead">{{ t('chart.users.totp') }}</h3><SegBar :parts="totpParts" :label="t('chart.users.totp')" /></div>

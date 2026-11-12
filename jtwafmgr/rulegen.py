@@ -130,8 +130,22 @@ def redos_shape(rx):
     return False
 
 
+_REDOS_OK = {}     # regex -> True (passed); only passes are remembered, a failure is checked again
+
+
 def redos_runtime_ok(rx, timeout=2.0):
     """Run the regex on long hostile strings in a subprocess; False if it does not finish in time."""
+    if _REDOS_OK.get(rx):
+        return True
+    ok = _redos_run(rx, timeout)
+    if ok:
+        if len(_REDOS_OK) > 5000:
+            _REDOS_OK.clear()
+        _REDOS_OK[rx] = True
+    return ok
+
+
+def _redos_run(rx, timeout):
     code = ('import re,sys\nr=re.compile(sys.stdin.read())\n'
             'for s in ("a"*20000+"!", "/"*20000+"x", "%2e"*5000+"\\x00", "a/"*10000, " "*20000+"x", "0"*20000+"z"):\n'
             '    r.search(s)\n')
@@ -312,11 +326,20 @@ def _confident(spec, rid, cfg, internal):
     h = _host_cond(spec.get('host'))
     if h:
         conds.append(h)
-    conds.append(('REMOTE_ADDR', '!@ipMatch ' + internal, 't:none'))
+    # source: 'external' (default) -- internal addresses are never blocked; 'all' -- internal addresses too,
+    # except the known scanners (their list is written into the rule as it is at this moment)
+    source = spec.get('source') or 'external'
+    if source == 'external':
+        conds.append(('REMOTE_ADDR', '!@ipMatch ' + internal, 't:none'))
+    elif source == 'all':
+        if cfg.known_scanners:
+            conds.append(('REMOTE_ADDR', '!@ipMatch ' + _ip_list(cfg.known_scanners), 't:none'))
+    else:
+        raise SpecError('source', 'invalid_source')
     first = "id:%d,phase:1,pass,log,msg:'jt confident block: %s',tag:'jt-confident-block'" % (rid, msg)
     text = _chain(conds, first, 'setvar:tx.jt_block=1,ctl:ruleEngine=On')
     norm = {'target': target, 'header': spec.get('header') or '', 'regex': rx, 'exceptions': exc,
-            'host': spec.get('host') or {'mode': 'any'}, 'msg': msg, 'reference': ref}
+            'host': spec.get('host') or {'mode': 'any'}, 'msg': msg, 'reference': ref, 'source': source}
     return norm, text, 'before'
 
 
@@ -401,7 +424,14 @@ def _raw(spec, rid, cfg):
         raise SpecError('text', 'one_rule_per_change')
     if rid is not None and ids and ids[0] != rid:
         raise SpecError('text', 'id_mismatch', rule_id=ids[0])
-    return {'text': text.strip('\n'), 'placement': placement}, text.strip('\n'), placement
+    norm = {'text': text.strip('\n'), 'placement': placement}
+    # where a new rule goes: at the end of its file (default), or right before another managed rule
+    before = spec.get('before_rule_id')
+    if before not in (None, ''):
+        if not isinstance(before, int) or isinstance(before, bool) or before <= 0:
+            raise SpecError('before_rule_id', 'invalid_rule_id')
+        norm['before_rule_id'] = before
+    return norm, text.strip('\n'), placement
 
 
 def raw_direction(text):

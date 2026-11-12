@@ -163,9 +163,34 @@ def cmd_geoip_update(args):
     """Run by jt-waf-mgr-geoip.service (sandboxed, user jtwaf); also usable by hand."""
     from . import geoip
     cfg = config_mod.load(args.config if os.path.exists(args.config) or args.config != config_mod.DEFAULT_PATH else None)
+    try:   # account / key / editions set in the web interface (the service writes them to the GeoIP directory)
+        with open(os.path.join(cfg['geoip']['dir'], 'account.json'), encoding='utf-8') as fh:
+            acc = json.load(fh)
+        for k in ('enabled', 'editions', 'update_days'):
+            if acc.get(k) is not None:
+                cfg['geoip'][k] = acc[k]
+    except (OSError, ValueError):
+        pass
     st = geoip.update(cfg, force=args.force, log=lambda m: print(m, flush=True))
     print(json.dumps(st, indent=1))
     return 1 if st.get('ok') is False else 0
+
+
+def cmd_analyst_run(args):
+    """Run by jt-waf-mgr-analyst.service (hourly timer, or the "Run now" request file); also usable by hand."""
+    from . import analyst
+    app = _app(args)
+    out = analyst.run(app, force=args.force, log=lambda m: print(m, flush=True), trigger='manual' if args.force else None)
+    print(json.dumps(out, indent=1, ensure_ascii=False))
+    return 1 if out.get('error') else 0
+
+
+def cmd_notify_run(args):
+    """Run by jt-waf-mgr-notify.service (request file, one-minute timer); also usable by hand."""
+    from . import notify
+    app = _app(args)
+    notify.run(app, log=lambda m: print(m, flush=True))
+    return 0          # failed deliveries are recorded (audit, system check); the unit itself did its job
 
 
 def cmd_geoip(args):
@@ -245,6 +270,9 @@ def main(argv=None):
     bk.add_argument('--verify', metavar='FILE')
     gu = sub.add_parser('geoip-update', help='download the GeoIP databases now (normally run by its own unit)')
     gu.add_argument('--force', action='store_true', help='even when the files are recent')
+    ar = sub.add_parser('analyst-run', help='analyse recent events with the configured LLM server (normally run by its own unit)')
+    ar.add_argument('--force', action='store_true', help='even when the last run is recent')
+    sub.add_parser('notify-run', help='send queued notifications now (normally run by its own unit)')
     gl = sub.add_parser('geoip', help='look up one address and show the GeoIP status')
     gl.add_argument('ip')
     sub.add_parser('config-check', help='validate the configuration file')
@@ -254,7 +282,7 @@ def main(argv=None):
     try:
         return {'serve': cmd_serve, 'user': cmd_user, 'import': cmd_import, 'check': cmd_check,
                 'integrity': cmd_integrity, 'verify-release': cmd_verify_release, 'audit-verify': cmd_audit_verify,
-                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'geoip': cmd_geoip,
+                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'geoip': cmd_geoip, 'analyst-run': cmd_analyst_run, 'notify-run': cmd_notify_run,
                 'config-check': cmd_config_check, 'migrate': cmd_migrate, 'doctor': cmd_doctor}[args.cmd](args)
     except config_mod.ConfigError as e:
         print('configuration error: %s' % e, file=sys.stderr)

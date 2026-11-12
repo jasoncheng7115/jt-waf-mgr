@@ -403,6 +403,9 @@ SYSTEM_FILES = {
     'deploy/jt-waf-mgr-geoip.service': '/etc/systemd/system/jt-waf-mgr-geoip.service',
     'deploy/jt-waf-mgr-geoip.timer': '/etc/systemd/system/jt-waf-mgr-geoip.timer',
     'deploy/jt-waf-mgr-geoip.path': '/etc/systemd/system/jt-waf-mgr-geoip.path',
+    'deploy/jt-waf-mgr-analyst.service': '/etc/systemd/system/jt-waf-mgr-analyst.service',
+    'deploy/jt-waf-mgr-analyst.timer': '/etc/systemd/system/jt-waf-mgr-analyst.timer',
+    'deploy/jt-waf-mgr-analyst.path': '/etc/systemd/system/jt-waf-mgr-analyst.path',
 }
 
 

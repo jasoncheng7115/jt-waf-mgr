@@ -130,6 +130,9 @@ DEFAULTS = {
         'config_check_minutes': 5,
         # System check: warn below this much free space where the database lives.
         'disk_min_free_mb': 1024,
+        # files changed by known automation (CRS updates, country lists): recorded as "automation", not as an
+        # outside change; glob patterns
+        'automation_paths': [],
     },
     'backup': {
         # Daily copy of the database (SQLite online backup) with a SHA-256 file, kept keep_days.
@@ -146,8 +149,45 @@ DEFAULTS = {
         'account_id': '',
         # the license key, alone in a file readable by root and the jtwaf group (0640): never in this file
         'license_key_file': '/etc/jt-waf-mgr/maxmind-license.key',
+        'license_key': '',          # normally set in the web interface (Settings), stored in the database
         'editions': ['GeoLite2-City', 'GeoLite2-ASN'],
         'update_days': 3,
+    },
+    'llm': {
+        # a local, OpenAI-compatible LLM server for the event analysis (set in Settings)
+        'enabled': False,
+        'url': '',
+        'model': '',
+        'api_key': '',
+        'timeout_seconds': 180,
+    },
+    'analyst': {
+        # scheduled analysis of recent events: proposes confident blocks (never approves them)
+        'enabled': False,
+        'interval_minutes': 180,       # at least 10; the timer wakes the job every 5 minutes
+        'window_hours': 24,
+        'max_proposals': 5,
+        'min_events': 5,
+        'min_sources': 2,
+    },
+    'notify': {
+        # notifications (e-mail and chat channels): set in Settings > Notifications; sent by jt-waf-mgr-notify.service
+        'enabled': False,
+        'language': 'zh-TW',
+        'base_url': '',               # https://waf.example.com: links in messages; empty = no links
+        'max_per_hour': 60,           # per channel; more are recorded as suppressed
+        'remind_hours': 24,           # open alerts are reminded every N hours; 0 = never
+        'matrix': {},                 # {event: [channels]}; an event not listed uses its default
+        'email_enabled': False, 'smtp_host': '', 'smtp_port': 587, 'smtp_tls': 'starttls', 'smtp_username': '',
+        'smtp_password': '', 'smtp_from': '', 'email_to': [],
+        'telegram_enabled': False, 'telegram_token': '', 'telegram_chat_id': '',
+        'teams_enabled': False, 'teams_webhook': '',
+        'slack_enabled': False, 'slack_webhook': '',
+        'discord_enabled': False, 'discord_webhook': '',
+        'zulip_enabled': False, 'zulip_site': '', 'zulip_bot_email': '', 'zulip_api_key': '', 'zulip_stream': '',
+        'zulip_topic': 'jt-waf-mgr',
+        'nextcloud_enabled': False, 'nextcloud_url': '', 'nextcloud_token': '', 'nextcloud_secret': '',
+        'webhook_enabled': False, 'webhook_url': '', 'webhook_secret': '', 'webhook_token': '',
     },
     'compliance': {
         # Taiwan Cyber Security Management Act protection level of this system: "", "low", "medium", "high".
@@ -157,6 +197,7 @@ DEFAULTS = {
 }
 
 ROLES = ('viewer', 'operator', 'approver', 'admin')
+LANGUAGES = ('zh-TW', 'en', 'ja')
 GEOIP_EDITIONS = ('GeoLite2-City', 'GeoLite2-Country', 'GeoLite2-ASN', 'GeoIP2-City', 'GeoIP2-Country', 'GeoIP2-ISP')
 FACILITIES = {'kern': 0, 'user': 1, 'daemon': 3, 'auth': 4, 'authpriv': 10,
               **{'local%d' % i: 16 + i for i in range(8)}}
@@ -237,6 +278,15 @@ class Config:
                 raise ConfigError('integrity.%s must be at least 1' % k)
         if not 0 <= data['backup']['hour'] <= 23 or data['backup']['keep_days'] < 1:
             raise ConfigError('backup.hour 0-23, backup.keep_days at least 1')
+        nt = data['notify']
+        if nt['language'] not in LANGUAGES:
+            raise ConfigError('notify.language: ' + ', '.join(LANGUAGES))
+        if nt['smtp_tls'] not in ('none', 'starttls', 'tls'):
+            raise ConfigError('notify.smtp_tls: none, starttls or tls')
+        if not 1 <= nt['smtp_port'] <= 65535 or not 1 <= nt['max_per_hour'] <= 1000 or not 0 <= nt['remind_hours'] <= 720:
+            raise ConfigError('notify: smtp_port 1-65535, max_per_hour 1-1000, remind_hours 0-720')
+        if not isinstance(nt['matrix'], dict):
+            raise ConfigError('notify.matrix must be a table')
         self.sensitive = [s.lower() for s in data['waf']['sensitive_fields']]
 
     def __getitem__(self, k):

@@ -1,0 +1,10 @@
+[Unit]
+Description=jt-waf-mgr: run the event analysis (or the LLM connection test) when an admin asks for it
+
+[Path]
+PathExists=/var/lib/jt-waf-mgr/analyst.request
+PathExists=/var/lib/jt-waf-mgr/llm-test.request
+Unit=jt-waf-mgr-analyst.service
+
+[Install]
+WantedBy=multi-user.target

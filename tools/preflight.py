@@ -104,11 +104,33 @@ def check_privacy(files, deny):
             data = fh.read()
         if rel.startswith('tests/fixtures/') or is_text(data):
             scan_text(rel, data.decode('utf-8', 'replace'), deny)
+        elif data.startswith(b'\x89PNG\r\n\x1a\n'):
+            check_png(rel, data, deny)
         else:
             low = data.lower()
             for d, rx in deny:
                 if rx.search(low.decode('latin-1')):
                     fail('privacy', '%s (binary) contains a denylisted name' % rel)
+
+
+def check_png(rel, data, deny):
+    """Screenshots: the pixels are compressed bytes (a short name matches them by chance), so only the chunks that
+    can carry text are looked at, and a published PNG must not have any (no tool names, paths or comments)."""
+    import struct
+    i = 8
+    while i + 8 <= len(data):
+        n, kind = struct.unpack('>I4s', data[i:i + 8])
+        if kind in (b'tEXt', b'iTXt', b'zTXt', b'eXIf'):
+            body = data[i + 8:i + 8 + n]
+            if kind == b'zTXt':
+                import zlib
+                try:
+                    body = body.split(b'\x00', 1)[0] + b' ' + zlib.decompress(body.split(b'\x00', 1)[1][1:])
+                except (zlib.error, IndexError):
+                    pass
+            fail('privacy', '%s: PNG with a %s chunk (strip metadata from screenshots)' % (rel, kind.decode()))
+            scan_text(rel + ':' + kind.decode(), body.decode('latin-1'), deny)
+        i += 12 + n
 
 
 def check_tar(path, deny):
@@ -141,6 +163,19 @@ def check_version():
                 head = fh.read(4000)
             if '## %s' % v not in head and '## v%s' % v not in head:
                 fail('version', '%s has no section for %s' % (f, v))
+    # the READMEs carry the version in their title and link to each other
+    for f in ('README.md', 'README_zh-TW.md', 'README_ja.md'):
+        p = os.path.join(ROOT, f)
+        if not os.path.exists(p):
+            fail('version', '%s is missing (three languages)' % f)
+            continue
+        with open(p, encoding='utf-8') as fh:
+            head = fh.read(600)
+        if not head.startswith('# jt-waf-mgr v%s\n' % v):
+            fail('version', '%s: the title must be "# jt-waf-mgr v%s"' % (f, v))
+        for other in ('README.md', 'README_zh-TW.md', 'README_ja.md'):
+            if other != f and '(%s)' % other not in head:
+                fail('version', '%s: no language link to %s right under the title' % (f, other))
     return v
 
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=jt-waf-mgr: send notifications as soon as one is queued
+
+[Path]
+PathExists=/var/lib/jt-waf-mgr/notify.request
+Unit=jt-waf-mgr-notify.service
+
+[Install]
+WantedBy=multi-user.target

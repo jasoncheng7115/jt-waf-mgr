@@ -98,7 +98,12 @@
             </li>
           </ul>
           <dl v-if="details.length" class="kv">
-            <template v-for="d in details" :key="d.k"><dt>{{ d.k }}</dt><dd :class="{ mono: d.mono }">{{ d.v }}</dd></template>
+            <template v-for="d in details" :key="d.k"><dt>{{ d.k }}</dt>
+              <dd v-if="d.chips" class="detchips"><span v-for="c in d.chips" :key="c" class="chip mono">{{ c }}</span></dd>
+              <dd v-else-if="d.lines" class="detlines">
+                <div v-for="(ln, i) in d.lines" :key="i" class="detline"><span class="mono dl-host">{{ ln[0] }}</span><span class="mono dl-op">{{ ln[1] }}</span><span class="mono dl-path">{{ ln[2] }}</span></div>
+              </dd>
+              <dd v-else :class="{ mono: d.mono }">{{ d.v }}</dd></template>
           </dl>
           <div v-if="current.rule_ids.length" class="idchips">
             <RouterLink v-for="id in current.rule_ids.slice(0, 40)" :key="id" class="chip mono" :to="'/rules/' + id">{{ id }}</RouterLink>
@@ -115,8 +120,8 @@
       <section class="card">
         <h2><Icon name="chart" /> {{ t('waf.score.title') }}</h2>
         <p class="muted small">{{ t('waf.score.hint', { n: md.scoring.threshold }) }}</p>
-        <div class="chartgrid">
-          <div>
+        <div class="scorelayout">
+          <div class="scol">
             <h3 class="charthead">{{ t('waf.score.scale') }}</h3>
             <ScoreScale :rows="scoreRows" :threshold="md.scoring.threshold" :threshold-label="t('waf.score.threshold_line', { n: md.scoring.threshold })"
                         :marks="scoreMarks" :label="t('waf.score.scale')" />
@@ -125,32 +130,26 @@
               <span class="lg-item"><span class="lg sw-over"></span>{{ t('waf.score.legend_reach') }}</span>
               <span class="lg-item"><span class="lg sw-thr"></span>{{ t('waf.score.legend_threshold') }}</span>
             </div>
+            <h3 class="subhead">{{ t('waf.score.examples') }}</h3>
+            <ul class="examples">
+              <li v-for="e in examples" :key="e.key">
+                <span class="mono exscore">{{ e.title }}</span>
+                <span class="exouts">
+                  <span v-for="ln in ['external', 'internal']" :key="ln" class="badge tiny" :class="'bd-' + resEffect(e.outcome[ln])"><Icon :name="EFFECT_ICON[resEffect(e.outcome[ln])]" />{{ t('waf.lane.' + ln) }}{{ t('waf.sum.colon') }}{{ resText(e.outcome[ln]) }}</span>
+                </span>
+              </li>
+            </ul>
           </div>
-          <div>
+          <div class="scol">
             <h3 class="charthead">{{ t('waf.score.levels') }}</h3>
             <HBars :items="levelBars" :value-label="t('waf.score.rules')" />
             <p class="muted small">{{ t('waf.score.levels_note') }}</p>
-          </div>
-        </div>
-        <h3 class="subhead">{{ t('waf.score.examples') }}</h3>
-        <ul class="examples">
-          <li v-for="e in examples" :key="e.key">
-            <span class="mono exscore">{{ e.title }}</span>
-            <span v-for="ln in ['external', 'internal']" :key="ln" class="exout">
-              <span class="badge tiny" :class="'bd-' + resEffect(e.outcome[ln])"><Icon :name="EFFECT_ICON[resEffect(e.outcome[ln])]" />{{ t('waf.lane.' + ln) }}{{ t('waf.sum.colon') }}{{ resText(e.outcome[ln]) }}</span>
-            </span>
-          </li>
-        </ul>
-        <div class="chartgrid">
-          <div>
-            <h3 class="charthead">{{ t('waf.chart.vhosts') }}</h3>
-            <SegBar :parts="vhostParts" :label="t('waf.chart.vhosts')" />
-          </div>
-          <div>
             <h3 class="charthead">{{ t('waf.chart.rules_by_stage') }}</h3>
             <HBars :items="stageBars" :value-label="t('waf.score.rules')" pickable :open-label="t('waf.flow.show_rules')" @pick="(it) => showStageRules({ key: it.key })" />
           </div>
         </div>
+        <h3 class="charthead">{{ t('waf.chart.vhosts') }}</h3>
+        <SegBar :parts="vhostParts" :label="t('waf.chart.vhosts')" />
       </section>
 
       <!-- (3) the rules involved -->
@@ -297,8 +296,14 @@ const details = computed(() => {
   const d = s.data || {}
   const out = []
   if (s.key === 'not_inspected') {
-    if ((d.servers || []).length) out.push({ k: t('waf.det.servers_off'), v: d.servers.map((x) => safeText(x.server, 100)).join(', '), mono: true })
-    if ((d.locations || []).length) out.push({ k: t('waf.det.locations_off'), v: d.locations.map((x) => safeText(x.server, 100) + ' ' + safeText(x.location, 100)).join(', '), mono: true })
+    if ((d.servers || []).length) out.push({ k: t('waf.det.servers_off'), chips: [...new Set(d.servers.map((x) => safeText(x.server, 100)))].sort() })
+    if ((d.locations || []).length) {
+      // "~ ^/path" -> modifier and pattern in their own columns, one location per line
+      out.push({ k: t('waf.det.locations_off'), lines: d.locations.map((x) => {
+        const m = /^(=|~\*|~|\^~)?\s*(.*)$/.exec(String(x.location || ''))
+        return [safeText(x.server, 100), (m && m[1]) || '', safeText(m ? m[2] : x.location, 160)]
+      }).sort((a, b) => a[0].localeCompare(b[0]) || a[2].localeCompare(b[2])) })
+    }
   } else if (s.key === 'exclusions') {
     out.push({ k: t('waf.det.runtime'), v: fmtNum(d.runtime || 0) })
     out.push({ k: t('waf.det.config_time'), v: fmtNum(d.config_time || 0) })
@@ -472,6 +477,19 @@ onMounted(load)
 </script>
 
 <style scoped>
+.scorelayout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 8px 32px; align-items: start; margin-bottom: 8px; }
+.scol > .charthead:not(:first-child), .scol > .subhead { margin-top: 18px; }
+.examples li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.exouts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.detchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.detlines { display: grid; gap: 2px; }
+.detline { display: grid; grid-template-columns: minmax(10em, max-content) 2.2em minmax(0, 1fr); gap: 10px; padding: 3px 0;
+  border-bottom: 1px dashed var(--border); }
+.detline:last-child { border-bottom: 0; }
+.dl-op { color: var(--muted); text-align: center; }
+.dl-path { overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .scorelayout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .detline { grid-template-columns: minmax(0, 1fr); gap: 0; } .dl-op { text-align: left; } }
 .cardhead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .cardhead h2 { margin: 0; }
 .lanepick { display: flex; flex-wrap: wrap; gap: 4px; }

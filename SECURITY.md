@@ -1,5 +1,7 @@
 # Security policy
 
+**English** · [繁體中文](SECURITY_zh-TW.md) · [日本語](SECURITY_ja.md)
+
 ## Reporting a vulnerability
 
 Please use GitHub's **private vulnerability reporting** for this repository (Security → Report a

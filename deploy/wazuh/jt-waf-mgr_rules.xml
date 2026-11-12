@@ -138,6 +138,63 @@
     <mitre><id>T1562.001</id></mitre>
   </rule>
 
+  <!-- a full database backup left the server (password hashes, OTP secrets, audit trail) -->
+  <rule id="133580" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^backup\.downloaded$</field>
+    <description>jt-waf-mgr: database backup downloaded by $(jt_waf_mgr.actor)</description>
+    <mitre><id>T1005</id></mitre>
+  </rule>
+
+  <!-- wrong one-time codes for a sensitive action (backup download, approving one's own loosening) -->
+  <rule id="133581" level="6">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^auth\.step_up_failed$</field>
+    <description>jt-waf-mgr: wrong one-time code for $(jt_waf_mgr.purpose) by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <rule id="133582" level="12" frequency="3" timeframe="600">
+    <if_matched_sid>133581</if_matched_sid>
+    <same_field>jt_waf_mgr.actor</same_field>
+    <description>jt-waf-mgr: repeated wrong one-time codes for a sensitive action (session misuse?)</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <rule id="133583" level="12">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^auth\.step_up_locked$</field>
+    <description>jt-waf-mgr: one-time code checks locked for $(jt_waf_mgr.actor) after repeated failures</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- alerts to follow up (0.4.0): the event analysis or the system found something a person must look at -->
+  <rule id="133584" level="10">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^alert\.created$</field>
+    <field name="jt_waf_mgr.alert_severity">^warning$</field>
+    <description>jt-waf-mgr: alert to follow up: $(jt_waf_mgr.kind) $(jt_waf_mgr.host) $(jt_waf_mgr.path)</description>
+  </rule>
+
+  <rule id="133585" level="12">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^alert\.created$</field>
+    <field name="jt_waf_mgr.alert_severity">^critical$</field>
+    <description>jt-waf-mgr: critical alert to follow up: $(jt_waf_mgr.kind) $(jt_waf_mgr.host) $(jt_waf_mgr.path)</description>
+  </rule>
+
+  <rule id="133586" level="3">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^alert\.handled$</field>
+    <description>jt-waf-mgr: alert $(jt_waf_mgr.alert_id) marked handled by $(jt_waf_mgr.actor)</description>
+  </rule>
+
+  <!-- a notification could not be delivered after its retries: the channel may be broken -->
+  <rule id="133587" level="7">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^notify\.failed$</field>
+    <description>jt-waf-mgr: notification to $(jt_waf_mgr.channel) failed: $(jt_waf_mgr.error)</description>
+  </rule>
+
   <!-- anything at crit that the rules above do not name -->
   <rule id="133577" level="12">
     <if_sid>133560</if_sid>

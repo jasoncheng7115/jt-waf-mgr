@@ -336,3 +336,20 @@ Results:
 - Approver and admin: add "Configuration changes" next to Versions.
 - Overview: if `/system/check` is readable (admin) and any item is `fail`, show a red banner "Integrity problem: {keys}" with a link to System check.
   - Fetch it once per page load, for admins only.
+
+## Settings in the web interface (admin, 0.3.4)
+- `GET /settings/ui` → `{"settings": {"<section.key>": {"type": "bool|int|str|list|secret|choice", "value": …,
+  "source": "ui|file", "updated_by", "updated_at", "min", "max", "choices", "max_items"}}}`. Secrets have no `value`,
+  only `"set": bool` and `"hint": "…abcd"`.
+- `PATCH /settings/ui` with `{"<section.key>": value, …}`: validated against the whole configuration, stored,
+  applied at once, audited `settings.changed` (secret values never). A secret: `""` clears, `null` keeps.
+  Errors: 400 `unknown_setting`, `invalid_value` (`details.key`, `details.item`), `invalid_configuration`.
+- `POST /llm/test` → 202 `{"requested_at"}`: the analysis unit makes the connection (the web service has no
+  network access beyond localhost); `GET /llm/test` → `{"result": {"ok", "model", "models", "reply", "seconds",
+  "error", "detail", "requested_at", "finished_at"} | null, "pending": bool}`. Audit `llm.test_requested`, `llm.tested`.
+
+## Scheduled event analysis (0.3.4) — page "Analysis" (`/analysis`)
+- `GET /analyst/status`, `GET /analyst/runs`, `GET /analyst/runs/{id}` (viewer, token scope `changes:read`).
+- `POST /analyst/run` (admin): writes the request file the analysis unit watches; 409 `analyst_not_ready` when
+  the LLM or the analysis is off or not configured. Audit `analyst.run_requested`, `analyst.run`.
+

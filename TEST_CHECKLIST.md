@@ -2,6 +2,7 @@
 
 Every release passes all of these before it is published or installed anywhere (a site, a test machine,
 a customer). A failed item stops the release; "it is only a small change" is not an exception.
+What each gate covers and how it passes: `TEST_PLAN.md`.
 
 ## 1. Code
 - [ ] `python3 -m unittest discover -s tests -t .` — all pass (also run by `tools/make_release.sh`).
@@ -13,7 +14,11 @@ a customer). A failed item stops the release; "it is only a small change" is not
 - [ ] `tools/e2e/run.sh` — every page in zh-TW and en, light and dark, the theme switch, sorting /
       filtering / column choice / paging, select box and date picker, charts with tooltips, the guide,
       the login page and favicon; no console errors, no raw i18n keys, no buttons without icons.
+- [ ] The same run ends with `tools/security_scan.py`: `security scan: OK` (headers, cookies, authentication and
+      authorisation on every route, CSRF, methods, traversal, hostile input, malformed bodies, login).
 - [ ] For UI changes: look at the screenshots, including a phone width (375 px) and a tablet (768 px).
+- [ ] `tools/zap_scan.py` — OWASP ZAP (passive + active) on a disposable logged-in instance: URLs seen ≥ 40 and
+      no High / Medium / Low alert outside `deploy/zap-baseline.conf`. Keep the report (`zap-reports/`).
 
 ## 3. Install and upgrade
 - [ ] `tools/make_release.sh` — signed release; `openssl dgst -sha256 -verify deploy/release-key.pem

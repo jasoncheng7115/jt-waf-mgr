@@ -10,7 +10,7 @@
     <FlowSteps v-if="showGuide" :title="t('guide.token.title')" :steps="tokenFlow" :note="t('guide.token.note')" />
     <ErrorBox :error="error" />
     <section class="card">
-      <h2>{{ t('tokens.add') }}</h2>
+      <h2><Icon name="add" /> {{ t('tokens.add') }}</h2>
       <form class="form" @submit.prevent="create">
         <div class="filters inline">
           <label class="field"><span>{{ t('tokens.name') }}</span><input v-model.trim="nt.name" maxlength="64" required placeholder="jt-ipam"></label>
@@ -34,7 +34,7 @@
       </div>
     </section>
     <section class="card">
-      <h2>{{ t('tokens.title') }} <span class="count">{{ tokens.length }}</span></h2>
+      <h2><Icon name="key" /> {{ t('tokens.title') }} <span class="count">{{ tokens.length }}</span></h2>
       <div v-if="tokens.length" class="chartgrid">
         <div><h3 class="charthead">{{ t('chart.tokens.state') }}</h3><SegBar :parts="stateParts" :label="t('chart.tokens.state')" /></div>
         <div><h3 class="charthead">{{ t('chart.tokens.scopes') }}</h3>

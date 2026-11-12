@@ -26,7 +26,7 @@ class Audit:
 
     def log(self, action, actor=None, actor_type='user', src_ip=None, result='ok', severity=None, **details):
         """One audit row (hash-chained) and one syslog line carrying the row's id and hash, so the SIEM
-        holds an independent copy of the chain. severity: None (info / warning by result) or 'crit'."""
+        holds an independent copy of the chain. severity: None (info, or warning when the result is not ok), 'warning' or 'crit'."""
         ts = util.now()
         if src_ip is None:
             src_ip = getattr(self.ctx, 'src_ip', None)
@@ -39,7 +39,13 @@ class Audit:
             rec.update(details)
             if severity:
                 rec['severity'] = severity     # syslog files drop the priority; SIEM rules need it
-            self._syslog({'jt_waf_mgr': rec}, level=2 if severity == 'crit' else (4 if result != 'ok' else 6))
+            self._syslog({'jt_waf_mgr': rec}, level=2 if severity == 'crit' else (4 if result != 'ok' or severity == 'warning' else 6))
+        try:      # notifications and alerts: never let them break the action that is being recorded
+            from . import notify
+            notify.on_audit(self, rid, action, actor, src_ip, result, severity, details)
+        except Exception as e:
+            self.notify_errors = getattr(self, 'notify_errors', 0) + 1
+            self.notify_last_error = (util.now(), '%s: %s' % (type(e).__name__, str(e)[:200]))
         return rid
 
     def notice(self, kind, level=6, **fields):

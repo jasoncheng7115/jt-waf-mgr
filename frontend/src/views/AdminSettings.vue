@@ -3,8 +3,9 @@
     <h1>{{ t('settings.title') }}</h1>
     <WorkflowSettings />
     <RegressionSamples />
-    <GeoipSettings />
-    <h2>{{ t('settings.config_title') }}</h2>
+    <GeoipSettings @saved="load" />
+    <UiSettings :groups="['llm', 'analyst', 'network', 'policy']" @saved="load" />
+    <h2><Icon name="page" /> {{ t('settings.config_title') }}</h2>
     <p class="alert info">{{ t('settings.readonly_note', { path: CONFIG_PATH }) }}</p>
     <ErrorBox :error="error" />
     <section v-if="s" class="card">
@@ -25,6 +26,7 @@
 </template>
 
 <script setup>
+import Icon from '../components/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { get } from '../api.js'
 import { t, tOr } from '../i18n.js'
@@ -33,16 +35,19 @@ import ErrorBox from '../components/ErrorBox.vue'
 import WorkflowSettings from '../components/WorkflowSettings.vue'
 import RegressionSamples from '../components/RegressionSamples.vue'
 import GeoipSettings from '../components/GeoipSettings.vue'
+import UiSettings from '../components/UiSettings.vue'
 import HBars from '../components/charts/HBars.vue'
 
 const CONFIG_PATH = '/etc/jt-waf-mgr/config.toml'
 const KNOWN = ['internal_networks', 'focus_sites', 'sensitive_fields', 'id_ranges', 'audit_log', 'nginx_conf', 'retention_days', 'password_min_length', 'require_totp_roles']
 const s = ref(null)
 const error = ref(null)
+// set in the cards above (web interface): not repeated in this read-only list
+const IN_UI = ['focus_sites', 'known_scanners', 'account_policy', 'geoip', 'compliance_level']
 const keys = computed(() => {
   if (!s.value) return []
-  const extra = Object.keys(s.value).filter((k) => !KNOWN.includes(k)).sort()
-  return KNOWN.filter((k) => k in s.value).concat(extra)
+  const extra = Object.keys(s.value).filter((k) => !KNOWN.includes(k) && !IN_UI.includes(k)).sort()
+  return KNOWN.filter((k) => k in s.value && !IN_UI.includes(k)).concat(extra)
 })
 // Charts from the values already shown below.
 const retentionItems = computed(() => {
@@ -50,7 +55,7 @@ const retentionItems = computed(() => {
   if (!r || typeof r !== 'object') return []
   return Object.keys(r).filter((k) => typeof r[k] === 'number').map((k) => ({ key: k, label: tOr('chart.settings.ret_' + k, k), values: { days: r[k] } }))
 })
-const listItems = computed(() => ['internal_networks', 'known_scanners', 'focus_sites', 'sensitive_fields']
+const listItems = computed(() => ['internal_networks', 'sensitive_fields']
   .filter((k) => s.value && Array.isArray(s.value[k]))
   .map((k) => ({ key: k, label: tOr('settings.' + k, k), values: { n: s.value[k].length } })))
 function fmt(v) {
@@ -59,7 +64,8 @@ function fmt(v) {
   if (Array.isArray(v) && v.every((x) => typeof x !== 'object')) return safeMultiline(v.join('\n'))
   return safeMultiline(JSON.stringify(v, null, 2))
 }
-onMounted(async () => {
+async function load() {
   try { s.value = await get('/settings') } catch (e) { error.value = e }
-})
+}
+onMounted(load)
 </script>

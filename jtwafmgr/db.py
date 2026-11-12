@@ -233,6 +233,71 @@ SCHEMA = [
     """
     ALTER TABLE changes ADD COLUMN proposed_owner TEXT;
     """,
+    # 6: scheduled event analysis with a local LLM (analyst.py): one row per run, kept for transparency
+    """
+    CREATE TABLE analyst_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_id TEXT NOT NULL,
+        started_at REAL NOT NULL,
+        finished_at REAL,
+        trigger TEXT NOT NULL DEFAULT 'timer',
+        window_hours INTEGER NOT NULL,
+        model TEXT NOT NULL DEFAULT '',
+        llm_seconds REAL,
+        prompt_chars INTEGER NOT NULL DEFAULT 0,
+        candidates TEXT NOT NULL DEFAULT '[]',
+        verdicts TEXT NOT NULL DEFAULT '[]',
+        proposals TEXT NOT NULL DEFAULT '[]',
+        skipped TEXT NOT NULL DEFAULT '[]',
+        usage TEXT NOT NULL DEFAULT '{}',
+        error TEXT,
+        reply_excerpt TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX analyst_runs_started ON analyst_runs(started_at);
+    """,
+    # 7: notifications (one row per message and channel, sent by jt-waf-mgr-notify) and alerts to follow up
+    """
+    CREATE TABLE notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at REAL NOT NULL,
+        event TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'info',
+        channel TEXT NOT NULL,
+        audit_id INTEGER,
+        details TEXT NOT NULL DEFAULT '{}',
+        dedup TEXT NOT NULL DEFAULT '',
+        test INTEGER NOT NULL DEFAULT 0,
+        requested_by TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_at REAL NOT NULL,
+        sent_at REAL,
+        error TEXT
+    );
+    CREATE INDEX notifications_due ON notifications(status, next_at);
+    CREATE INDEX notifications_dedup ON notifications(dedup, channel, created_at);
+    CREATE TABLE alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at REAL NOT NULL,
+        last_seen REAL NOT NULL,
+        source TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        dedup TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 1,
+        details TEXT NOT NULL DEFAULT '{}',
+        link TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'open',
+        handled_by TEXT,
+        handled_at REAL,
+        note TEXT NOT NULL DEFAULT '',
+        reminded_at REAL
+    );
+    CREATE INDEX alerts_state ON alerts(state, id);
+    CREATE INDEX alerts_dedup ON alerts(dedup, state);
+    ALTER TABLE analyst_runs ADD COLUMN alerts TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE analyst_runs ADD COLUMN events_scanned INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

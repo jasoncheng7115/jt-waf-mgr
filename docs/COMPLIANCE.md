@@ -1,5 +1,7 @@
 # Compliance mapping
 
+**English** · [繁體中文](COMPLIANCE.zh-TW.md) · [日本語](COMPLIANCE.ja.md)
+
 What jt-waf-mgr does that supports common security controls, and what the organisation running it
 still has to do. Only what the code actually does is listed. The **Compliance** page in the UI
 (admin) computes the status of each control from the live configuration; this document explains the
