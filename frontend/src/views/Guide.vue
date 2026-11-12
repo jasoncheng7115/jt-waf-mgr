@@ -43,6 +43,11 @@
       <div class="legend archlegend">
         <span class="lg-item"><span class="lg lg-main"></span>{{ t('guide.arch.legend_traffic') }}</span>
         <span class="lg-item"><span class="lg lg-data"></span>{{ t('guide.arch.legend_data') }}</span>
+        <span class="lg-item"><span class="lg-k core"></span>{{ t('guide.arch.legend_core') }}</span>
+        <span class="lg-item"><span class="lg-k svc"></span>{{ t('guide.arch.legend_svc') }}</span>
+        <span class="lg-item"><span class="lg-k file"></span>{{ t('guide.arch.legend_file') }}</span>
+        <span class="lg-item"><span class="lg-k root"></span>{{ t('guide.arch.legend_root') }}</span>
+        <span class="lg-item"><span class="lg-k ext"></span>{{ t('guide.arch.legend_ext') }}</span>
       </div>
     </section>
 
@@ -85,10 +90,10 @@ const nodes = [
   { key: 'collector', x: 210, y: 320, w: 140, h: 60, kind: 'svc', icon: 'download', to: '/events' },
   { key: 'database', x: 370, y: 320, w: 140, h: 60, kind: 'svc', icon: 'database' },
   { key: 'workflow', x: 530, y: 320, w: 140, h: 60, kind: 'svc', icon: 'change', to: '/changes' },
-  { key: 'webui', x: 690, y: 320, w: 120, h: 60, kind: 'svc', icon: 'page', to: '/' },
+  { key: 'webui', x: 688, y: 320, w: 142, h: 60, kind: 'svc', icon: 'page', to: '/' },
   { key: 'sandbox', x: 515, y: 410, w: 175, h: 60, kind: 'svc', sub: true, icon: 'test' },
   { key: 'monitor', x: 205, y: 410, w: 175, h: 60, kind: 'svc', sub: true, icon: 'verify', to: '/admin/system', role: 'admin' },
-  { key: 'users', x: 860, y: 320, w: 120, h: 60, kind: 'ext', icon: 'users', to: '/admin/users', role: 'admin' },
+  { key: 'users', x: 848, y: 320, w: 146, h: 60, kind: 'ext', icon: 'users', to: '/admin/users', role: 'admin' },
   { key: 'siem', x: 20, y: 410, w: 150, h: 60, kind: 'ext', sub: true, icon: 'bell' },
 ]
 const N = Object.fromEntries(nodes.map((n) => [n.key, n]))
@@ -116,7 +121,7 @@ const edges = [
   edge('w-ap', 'workflow', 't', 'apply', 'b', { d: 'M640,320 L640,290 L775,290 L775,244', label: 'guide.edge.approved', lx: 650, ly: 284, anchor: 'start' }),
   edge('w-sb', 'workflow', 'b', 'sandbox', 't'),
   edge('us-u', 'users', 'l', 'webui', 'r', { main: true }),
-  edge('mo-si', 'monitor', 'l', 'siem', 'r', { label: 'guide.edge.syslog', ly: 434 }),
+  edge('mo-si', 'monitor', 'l', 'siem', 'r'),
   edge('d-mo', 'database', 'b', 'monitor', 'r', { d: 'M440,380 L440,440 L380,440', label: 'guide.edge.verifies', lx: 446, ly: 410, anchor: 'start' }),
 ]
 const sel = ref('nginx')
@@ -144,37 +149,47 @@ const roleIcon = { viewer: 'show', operator: 'tool', approver: 'approve', admin:
 </script>
 
 <style scoped>
-.archwrap { overflow-x: auto; }
+.archwrap { overflow-x: auto; border-radius: 8px; background: linear-gradient(180deg, var(--panel-2), var(--panel)); padding: 6px; }
+.archsvg { width: 100%; min-width: 720px; height: auto; display: block; }
+.arch-group { fill: var(--tint-b); stroke: var(--tint-b-line); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.arch-grouplabel { fill: var(--tint-b-line); font-size: 14px; font-weight: 700; }
+.arch-node { cursor: pointer; outline: none; }
+.arch-node rect { stroke-width: 2; filter: drop-shadow(0 1px 2px rgba(16, 24, 40, .12)); transition: stroke-width .1s; }
+.arch-node.ext rect { fill: var(--tint-e); stroke: var(--tint-e-line); }
+.arch-node.core rect { fill: var(--tint-a); stroke: var(--tint-a-line); stroke-width: 2.5; }
+.arch-node.file rect { fill: var(--tint-d); stroke: var(--tint-d-line); }
+.arch-node.root rect { fill: var(--blocked-bg); stroke: var(--blocked); stroke-width: 2.5; }
+.arch-node.svc rect { fill: var(--panel); stroke: var(--tint-b-line); }
+.arch-node:hover rect, .arch-node:focus-visible rect { stroke-width: 3.5; }
+.arch-node.sel rect { stroke: var(--accent); stroke-width: 4; }
+.arch-name { fill: var(--text); font-size: 14.5px; font-weight: 700; pointer-events: none; }
+.arch-sub { fill: var(--muted); font-size: 12px; pointer-events: none; }
+.arch-edge { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.arch-edge.main { stroke: var(--tint-a-line); stroke-width: 3; }
+.arch-edge.hot { stroke: var(--accent); stroke-width: 3; }
+.arch-arrowhead { fill: var(--muted); }
+.arch-edgelabel { fill: var(--text); font-size: 12px; font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.archdesc { margin-top: 10px; padding: 10px 12px; border-left: 4px solid var(--accent); background: var(--guide-bg); border-radius: 0 6px 6px 0; }
+.archdesc h3 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 6px; align-items: center; color: var(--accent); }
+.archdesc p { margin: 0 0 8px; white-space: pre-line; }
+.archlegend { margin-top: 8px; }
+.lg-main { background: var(--tint-a-line); height: 3px; width: 16px; }
+.lg-data { background: var(--muted); height: 2px; width: 16px; }
+.lg-k { display: inline-block; width: 14px; height: 10px; border-radius: 3px; border: 2px solid; }
+.lg-k.ext { background: var(--tint-e); border-color: var(--tint-e-line); }
+.lg-k.core { background: var(--tint-a); border-color: var(--tint-a-line); }
+.lg-k.file { background: var(--tint-d); border-color: var(--tint-d-line); }
+.lg-k.root { background: var(--blocked-bg); border-color: var(--blocked); }
+.lg-k.svc { background: var(--panel); border-color: var(--tint-b-line); }
+.rolegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.rolecard { border: 1px solid var(--border); border-top: 3px solid var(--tint-c-line); border-radius: 8px; padding: 10px 12px; background: var(--tint-c); }
+.rolecard:nth-child(2) { border-top-color: var(--tint-b-line); background: var(--tint-b); }
+.rolecard:nth-child(3) { border-top-color: var(--tint-d-line); background: var(--tint-d); }
+.rolecard:nth-child(4) { border-top-color: var(--tint-a-line); background: var(--tint-a); }
+.rolecard.mine { box-shadow: 0 0 0 2px var(--accent); }
+.rolecard h3 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 6px; align-items: center; }
+.rolecard p { margin: 0; }
 .wafcard { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .wafcard h2 { display: flex; gap: 6px; align-items: center; margin: 0 0 4px; }
 .wafcard p { margin: 0; }
-.archsvg { width: 100%; min-width: 720px; height: auto; display: block; }
-.arch-group { fill: var(--panel-2); stroke: var(--border-strong); stroke-dasharray: none; }
-.arch-grouplabel { fill: var(--muted); font-size: 14px; font-weight: 600; }
-.arch-node { cursor: pointer; outline: none; }
-.arch-node rect { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; }
-.arch-node.core rect { stroke: var(--accent); stroke-width: 2; }
-.arch-node.root rect { stroke: var(--blocked); stroke-width: 2; }
-.arch-node.file rect { fill: var(--code-bg); }
-.arch-node.ext rect { fill: var(--panel-2); }
-.arch-node:hover rect, .arch-node:focus-visible rect { stroke: var(--accent); stroke-width: 2.5; }
-.arch-node.sel rect { stroke: var(--accent); stroke-width: 3; fill: var(--panel); }
-.arch-name { fill: var(--text); font-size: 15px; font-weight: 600; pointer-events: none; }
-.arch-sub { fill: var(--muted); font-size: 12px; pointer-events: none; }
-.arch-edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
-.arch-edge.main { stroke: var(--series-1); stroke-width: 2.5; }
-.arch-edge.hot { stroke: var(--accent); stroke-width: 2.5; }
-.arch-arrowhead { fill: var(--muted); }
-.arch-edgelabel { fill: var(--muted); font-size: 11.5px; }
-.archdesc { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 6px 6px 0; }
-.archdesc h3 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 6px; align-items: center; }
-.archdesc p { margin: 0 0 8px; white-space: pre-line; }
-.archlegend { margin-top: 8px; }
-.lg-main { background: var(--series-1); height: 3px; width: 16px; }
-.lg-data { background: var(--muted); height: 2px; width: 16px; }
-.rolegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 8px; }
-.rolecard { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
-.rolecard.mine { border-color: var(--accent); }
-.rolecard h3 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 6px; align-items: center; }
-.rolecard p { margin: 0; }
 </style>

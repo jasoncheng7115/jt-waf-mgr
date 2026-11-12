@@ -36,7 +36,7 @@
       <slot name="toolbar" />
       <span class="dt-count">{{ t('table.rows', { n: fmtNum(filtered.length) }) }}<template v-if="filtered.length !== rows.length"> / {{ fmtNum(rows.length) }}</template></span>
     </div>
-    <div class="tablewrap">
+    <div ref="wrap" class="tablewrap" @scroll="syncFromWrap">
       <table class="grid">
         <thead>
           <tr>
@@ -67,6 +67,11 @@
         </tbody>
       </table>
     </div>
+    <!-- When the table is wider than its box and its own scrollbar is below the visible screen, a copy of the
+         scrollbar floats at the bottom of the window (scrolls the table, follows it). -->
+    <div v-show="floatBar" ref="fbar" class="dt-floatbar" :style="floatStyle" aria-hidden="true" @scroll="syncFromBar">
+      <div :style="{ width: scrollW + 'px', height: '1px' }"></div>
+    </div>
     <div v-if="filtered.length > pageSize || pageSize !== defaultPageSize" class="dt-pager">
       <span class="dt-range">{{ t('table.range', { from: fmtNum(from + 1), to: fmtNum(Math.min(from + pageSize, filtered.length)), total: fmtNum(filtered.length) }) }}</span>
       <button type="button" class="btn small ghost" :disabled="page === 0" :aria-label="t('table.first')" @click="page = 0"><Icon name="prev" /><Icon name="prev" /></button>
@@ -81,7 +86,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { t, lang } from '../i18n.js'
 import { fmtNum } from '../util.js'
 import Icon from './Icon.vue'
@@ -203,4 +208,47 @@ watch(colsOpen, (o) => {
   else { document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', onKey) }
 })
 onBeforeUnmount(() => { document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', onKey) })
+
+// --- floating horizontal scrollbar -----------------------------------------------------------
+const wrap = ref(null), fbar = ref(null)
+const floatBar = ref(false)
+const scrollW = ref(0)
+const floatStyle = ref({})
+let syncing = false
+function measure() {
+  const w = wrap.value
+  if (!w) return
+  const r = w.getBoundingClientRect()
+  const overflow = w.scrollWidth > w.clientWidth + 1
+  const vh = window.innerHeight
+  // the table is on screen, but its bottom edge (and its own scrollbar) is below the window
+  const show = overflow && r.top < vh - 40 && r.bottom > vh
+  floatBar.value = show
+  if (show) {
+    scrollW.value = w.scrollWidth
+    floatStyle.value = { left: r.left + 'px', width: r.width + 'px' }
+    nextTick(() => { if (fbar.value && Math.abs(fbar.value.scrollLeft - w.scrollLeft) > 1) { syncing = true; fbar.value.scrollLeft = w.scrollLeft } })
+  }
+}
+function syncFromWrap() {
+  if (syncing) { syncing = false; return }
+  if (floatBar.value && fbar.value) { syncing = true; fbar.value.scrollLeft = wrap.value.scrollLeft }
+}
+function syncFromBar() {
+  if (syncing) { syncing = false; return }
+  if (wrap.value) { syncing = true; wrap.value.scrollLeft = fbar.value.scrollLeft }
+}
+let ro2 = null
+onMounted(() => {
+  window.addEventListener('scroll', measure, { passive: true })
+  window.addEventListener('resize', measure)
+  if (window.ResizeObserver) { ro2 = new ResizeObserver(measure); ro2.observe(wrap.value) }
+  measure()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', measure)
+  window.removeEventListener('resize', measure)
+  if (ro2) ro2.disconnect()
+})
+watch(() => [pageRows.value.length, visibleCols.value.length, props.rows], () => nextTick(measure))
 </script>

@@ -307,10 +307,20 @@ class Workflow:
         base = cur['version'] if cur else 0
         try:
             items, files, _ = self.build_files(r, base + 1)
-            # static: every rule of the resulting files passes the expert-mode checks
+            # static: every rule of the resulting files passes the expert-mode checks, one rule at a time
+            # (the per-rule limits apply to a rule, not to a whole file); a failure names the rule
+            for it in items:
+                if it.get('deleted') or not it.get('enabled', 1) or it.get('kind') == 'comment' or not (it.get('text') or '').strip():
+                    continue
+                try:
+                    rulegen.check_raw_text(it['text'], cfg=self.cfg)
+                except rulegen.SpecError as e:
+                    e.details = dict(e.details or {}, rule_id=it.get('rule_id'), placement=it.get('placement'),
+                                     excerpt=(it['text'] or '')[:160])
+                    raise
             for p, text in files.items():
-                body = text.split('\n\n', 1)[1] if '\n\n' in text else text
-                rulegen.check_raw_text(body, cfg=self.cfg) if body.strip() else None
+                if len(text) > 4 * 1024 * 1024:
+                    raise ChangeError('file_too_large', file=p)
             ids = [it['rule_id'] for it in items if it.get('rule_id') and not it.get('deleted')]
             dup = sorted({i for i in ids if ids.count(i) > 1})
             if dup:

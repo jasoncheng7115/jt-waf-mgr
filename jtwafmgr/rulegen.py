@@ -58,9 +58,24 @@ FORBIDDEN = [
                 r'ArgumentSeparator|CookieFormat|UnicodeMapFile|PcreMatchLimit\w*|RequestBody\w*|ResponseBody\w*|'
                 r'StatusEngine|ServerSignature|HttpBlKey|GeoLookupDb|GsbLookupDb|WebAppId|Default\w*)\b',
                 re.I | re.M), 'engine-wide setting'),
-    (re.compile(r'@\w*FromFile\b', re.I), 'operators reading files'),
+    # @pmFromFile / @ipMatchFromFile are allowed only for a .data file in the ModSecurity configuration
+    # directory (e.g. the CRS's own lists): see _data_file_ok(); every other file-reading operator is refused
+    (re.compile(r'@(?!(?:pm|ipMatch)FromFile\b)\w*FromFile\b', re.I), 'operators reading files'),
     (re.compile(r'@inspectFile\b', re.I), '@inspectFile'),
 ]
+DATA_FILE_OP = re.compile(r'@(?:pm|ipMatch)FromFile\s+([^\s"\']+)', re.I)
+DATA_FILE_DIRS = ('/etc/nginx/modsec/', '/etc/modsecurity/', '/usr/share/modsecurity-crs/')
+
+
+def _data_file_ok(path, cfg=None):
+    """A list file the rule reads: an absolute path to a .data file below a ModSecurity configuration
+    directory, no '..', no URL (@pmFromFile can fetch https:// lists — never from here)."""
+    if re.fullmatch(r'[\w.-]+\.data', path) and not path.startswith('.'):
+        return True          # a bare file name: next to the rule file, inside the configuration directory
+    return (path.startswith('/') and path.endswith('.data') and '..' not in path.split('/')
+            and re.fullmatch(r'[\w./-]+', path) is not None and any(path.startswith(d) for d in DATA_FILE_DIRS))
+
+
 ALLOWED_DIRECTIVES = ('SecRule', 'SecAction', 'SecRuleRemoveById', 'SecRuleRemoveByTag', 'SecRuleRemoveByMsg',
                       'SecRuleUpdateTargetById', 'SecRuleUpdateTargetByTag', 'SecRuleUpdateActionById', 'SecMarker')
 
@@ -340,6 +355,9 @@ def check_raw_text(text, allow_ids=None, cfg=None):
     for rx, what in FORBIDDEN:
         if rx.search(text):
             raise SpecError('text', 'forbidden', what=what)
+    for m in DATA_FILE_OP.finditer(text):
+        if not _data_file_ok(m.group(1), cfg):
+            raise SpecError('text', 'forbidden', what='operators reading files outside the ModSecurity data directories')
     ids = []
     for _, s, _ in logical_lines(text):
         words = split_args(s)

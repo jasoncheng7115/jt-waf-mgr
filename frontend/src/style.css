@@ -1,12 +1,12 @@
 /* jt-waf-mgr UI. One stylesheet, no inline styles (strict CSP). */
 :root {
-  --bg: #f4f5f7;
+  --bg: #e9edf2;
   --panel: #ffffff;
-  --panel-2: #f8f9fb;
+  --panel-2: #f2f4f8;
   --text: #1c2330;
   --muted: #5e6878;
-  --border: #dde1e7;
-  --border-strong: #c5cbd4;
+  --border: #d3d9e1;
+  --border-strong: #b8c0cb;
   --accent: #1f5fbf;
   --accent-text: #ffffff;
   --link: #1b57b0;
@@ -25,7 +25,16 @@
   --int: #3d5a73;
   --int-bg: #e6eef5;
   --code-bg: #f1f3f6;
-  --shadow: 0 1px 2px rgba(20, 30, 50, .06);
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 2px 6px rgba(16, 24, 40, .05);
+  --row-alt: #f7f9fb;
+  --tint-a: #e8f1fd; --tint-a-line: #2a78d6;
+  --tint-b: #e4f6ef; --tint-b-line: #1a9b6c;
+  --tint-c: #efebfb; --tint-c-line: #6250d6;
+  --tint-d: #fdeee6; --tint-d-line: #d9622f;
+  --tint-e: #eceff4; --tint-e-line: #5e6b7d;
+  --guide-bg: #edf3fb;
+  --guide-border: #c9d8ee;
+  --head-bg: #f2f5f9;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", "Noto Sans JP", "PingFang TC", "Hiragino Sans", "Microsoft JhengHei", Meiryo, sans-serif;
   color-scheme: light;
@@ -70,6 +79,15 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --grid: #2c3542;
+    --row-alt: #1d2430;
+    --tint-a: #172235; --tint-a-line: #3987e5;
+    --tint-b: #13291f; --tint-b-line: #199e70;
+    --tint-c: #221b36; --tint-c-line: #9085e9;
+    --tint-d: #2e1f14; --tint-d-line: #d95926;
+    --tint-e: #1f2632; --tint-e-line: #8a96a8;
+    --guide-bg: #172235;
+    --guide-border: #2b3d58;
+    --head-bg: #1f2632;
     color-scheme: dark;
   }
 }
@@ -104,6 +122,15 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --grid: #2c3542;
+  --row-alt: #1d2430;
+  --tint-a: #172235; --tint-a-line: #3987e5;
+  --tint-b: #13291f; --tint-b-line: #199e70;
+  --tint-c: #221b36; --tint-c-line: #9085e9;
+  --tint-d: #2e1f14; --tint-d-line: #d95926;
+  --tint-e: #1f2632; --tint-e-line: #8a96a8;
+  --guide-bg: #172235;
+  --guide-border: #2b3d58;
+  --head-bg: #1f2632;
   color-scheme: dark;
 }
 
@@ -635,3 +662,86 @@ td .pickval + .geotag { margin-top: 2px; }
   .brand-logo { width: 22px; height: 22px; }
   .node { max-width: 6.5em; }
 }
+
+/* ---- layering: card headers, tinted guides, accented tiles, zebra rows (2026-11-12: "too white") ---- */
+.card > h2:first-child { margin: -14px -16px 12px; padding: 10px 16px; background: var(--head-bg);
+  border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.flowsteps { background: var(--guide-bg); border-color: var(--guide-border); }
+.flowsteps .fs-box { background: var(--panel); max-width: 24em; }
+.fs-label { white-space: nowrap; }
+.tile { border-top: 3px solid var(--border-strong); }
+.tile.t-blocked { border-top-color: var(--blocked); }
+.tile.t-logged { border-top-color: var(--logged); }
+.tile.t-ext { border-top-color: var(--series-1); }
+.tile.t-int { border-top-color: var(--series-3); }
+table.grid tbody tr:nth-child(even) td { background: var(--row-alt); }
+table.grid tbody tr:hover td { background: var(--panel-2); }
+table.grid th { background: var(--head-bg); }
+
+/* ---- stat tiles with colour and trend ---------------------------------------------------------- */
+.tile.stat { display: flex; flex-direction: column; gap: 2px; }
+.tile.t-events { background: var(--guide-bg); border-top-color: var(--series-1); }
+.tile.t-blocked { background: var(--blocked-bg); }
+.tile.t-logged { background: var(--logged-bg); }
+.tile.t-ext { background: var(--ext-bg); border-top-color: var(--ext); }
+.tile.t-int { background: var(--int-bg); border-top-color: var(--int); }
+.stat-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.stat-spark { width: 55%; max-width: 140px; height: 34px; flex: none; overflow: visible; outline: none; }
+.stat-spark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sl-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sl-area { opacity: .14; }
+.sl-cross { stroke: var(--muted); stroke-width: 1; }
+.tone-line-s1 .sl-line { stroke: var(--series-1); } .tone-line-s1 .sl-area { fill: var(--series-1); }
+.tone-line-blocked .sl-line { stroke: var(--blocked); } .tone-line-blocked .sl-area { fill: var(--blocked); }
+.tone-line-logged .sl-line { stroke: var(--logged); } .tone-line-logged .sl-area { fill: var(--logged); }
+.tone-line-ext .sl-line { stroke: var(--ext); } .tone-line-ext .sl-area { fill: var(--ext); }
+.tone-line-int .sl-line { stroke: var(--int); } .tone-line-int .sl-area { fill: var(--int); }
+.delta { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta.up, .delta.down { color: var(--text); font-weight: 600; }
+
+/* page header never sticks to a notice above it */
+.alert.lastlogin { margin-bottom: 14px; }
+.pagehead { margin-top: 4px; }
+
+/* ---- active filters must be obvious -------------------------------------------------------------- */
+.ovfilters.active { border: 2px solid var(--accent); background: var(--guide-bg); }
+.fchip-lead { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--accent); }
+.fchip { background: var(--accent); border-color: var(--accent); }
+.fchip .fchip-k { color: var(--accent-text); opacity: .85; }
+.fchip .fchip-v { color: var(--accent-text); }
+.fchip .fchip-x { color: var(--accent-text); background: transparent; }
+.fchip .fchip-x:hover { background: rgba(255, 255, 255, .22); color: var(--accent-text); }
+.filteredbanner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; padding: 8px 12px;
+  border-radius: 6px; background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn); font-size: 14px; }
+.filteredbanner .icon { color: var(--warn); }
+.fb-item { background: var(--panel); border: 1px solid var(--warn); border-radius: 4px; padding: 0 6px; font-weight: 600; }
+
+/* the hourly chart draws at its box's real width (see TimeBars.vue) */
+.timebars { width: 100%; min-width: 0; overflow: hidden; }
+.timebars .chartsvg { width: auto; height: auto; min-width: 0; max-width: 100%; }
+.dt-floatbar { position: fixed; bottom: 0; z-index: 800; height: 16px; overflow-x: auto; overflow-y: hidden;
+  background: var(--panel); border-top: 1px solid var(--border-strong); box-shadow: 0 -2px 6px rgba(16, 24, 40, .08); }
+
+/* ---- richer colour: tiles without a meaning of their own get an accent in a fixed order; card headers
+   carry an accent bar; page titles an accent icon ------------------------------------------------- */
+.tiles > .tile:not(.stat):not([class*=" t-"]):nth-child(5n+1) { background: var(--tint-a); border-top-color: var(--tint-a-line); }
+.tiles > .tile:not(.stat):not([class*=" t-"]):nth-child(5n+2) { background: var(--tint-b); border-top-color: var(--tint-b-line); }
+.tiles > .tile:not(.stat):not([class*=" t-"]):nth-child(5n+3) { background: var(--tint-c); border-top-color: var(--tint-c-line); }
+.tiles > .tile:not(.stat):not([class*=" t-"]):nth-child(5n+4) { background: var(--tint-d); border-top-color: var(--tint-d-line); }
+.tiles > .tile:not(.stat):not([class*=" t-"]):nth-child(5n+5) { background: var(--tint-e); border-top-color: var(--tint-e-line); }
+.card > h2:first-child { box-shadow: inset 4px 0 0 var(--accent); }
+.card.attention > h2:first-child { box-shadow: inset 4px 0 0 var(--score); }
+.pagehead h1 .icon { color: var(--accent); }
+.tile .tl { font-weight: 600; color: var(--muted); }
+
+/* a checkbox and its explanation belong together */
+label.check { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; cursor: pointer; }
+label.check + p.muted { margin: 3px 0 10px 26px; }
+
+/* WAF decision summary: each line tinted by what it does */
+.sumlist li { padding: 7px 10px; border-radius: 6px; margin-bottom: 5px; border-left: 4px solid var(--border-strong); background: var(--panel-2); }
+.sumlist li:has(.eff-blocks) { background: var(--blocked-bg); border-left-color: var(--blocked); }
+.sumlist li:has(.eff-logs), .sumlist li:has(.eff-scores) { background: var(--logged-bg); border-left-color: var(--logged); }
+.sumlist li:has(.eff-loosens) { background: var(--ok-bg); border-left-color: var(--ok); }
+.sumlist li:has(.eff-not_inspected) { background: var(--warn-bg); border-left-color: var(--warn); }
+.sumlist li:has(.eff-info) { background: var(--guide-bg); border-left-color: var(--accent); }

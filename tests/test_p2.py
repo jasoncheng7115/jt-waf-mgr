@@ -265,6 +265,40 @@ class TestWorkflow(unittest.TestCase):
         self.fake_apply()
         self.assertFalse(self.wf.managed.disk_state()['drift'])
 
+    def private_before(self):
+        """A private copy of the fixture's local before-CRS file (tests must never edit the shared fixture)."""
+        src = self.wf.managed.detect_import_files()[0]
+        dst = os.path.join(self.env.dir, 'local-before-crs.conf')
+        shutil.copy(src, dst)
+        self.env.cfg['managed']['import_before'] = dst
+        return dst
+
+    def test_adoption_of_large_real_world_files(self):
+        """A real site's rule file is far larger than one rule (37 KB on the first site): the static check runs
+        per rule, and a CRS data list read with @pmFromFile is accepted."""
+        before = self.private_before()
+        with open(before, 'a') as fh:
+            for i in range(300):
+                fh.write('\n# probe block %d\nSecRule REQUEST_URI "@beginsWith /probe-%03d-%s" '
+                         '"id:%d,phase:1,deny,status:403,log,msg:\'probe %d\'"\n' % (i, i, 'x' * 60, 10400 + i, i))
+            fh.write('\nSecRule REQUEST_HEADERS:User-Agent "@pmFromFile /etc/nginx/modsec/crs/rules/scanners-user-agents.data" '
+                     '"id:10399,phase:1,deny,status:403,log,msg:\'scanner\'"\n')
+        self.assertGreater(os.path.getsize(before), 30000)
+        cid = self.wf.propose_adoption('boss')
+        self.wf.run_checks(cid)
+        checks = json.loads(self.wf.get(cid)['checks'])
+        self.assertTrue(checks['static']['ok'], checks['static'])
+
+    def test_static_failure_names_the_rule(self):
+        before = self.private_before()
+        with open(before, 'a') as fh:
+            fh.write('\nSecRule ARGS "@pmFromFile /etc/shadow" "id:10398,phase:1,deny,log"\n')
+        cid = self.wf.propose_adoption('boss')
+        self.wf.run_checks(cid)
+        st = json.loads(self.wf.get(cid)['checks'])['static']
+        self.assertFalse(st['ok'])
+        self.assertEqual(st['details'].get('rule_id'), 10398)
+
     def test_rules_file_upload_becomes_proposals(self):
         self.adopt()
         items = [it for it in self.wf.managed.items() if it['placement'] == 'before' and it['rule_id']]

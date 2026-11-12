@@ -6,7 +6,7 @@
     <FlowSteps compact :steps="steps" :note="t('geoip.how_note')" />
     <ErrorBox :error="error" />
     <template v-if="st">
-      <p v-if="!st.configured" class="alert info">{{ t('geoip.not_configured', { file: '/etc/jt-waf-mgr/config.toml' }) }}</p>
+      <p v-if="!st.configured" class="alert info">{{ t('geoip.not_configured', { file: '/etc/jt-waf-mgr/config.toml', key: '/etc/jt-waf-mgr/maxmind-license.key' }) }}</p>
       <DataTable id="geoip-editions" :columns="cols" :rows="st.editions" row-key="edition" :toolbar="false">
         <template #cell-present="{ row }"><span class="badge" :class="row.present ? 'b-ok' : 'b-warn'">{{ row.present ? t('geoip.present') : t('geoip.missing') }}</span></template>
         <template #cell-size="{ row }">{{ row.size ? fmtBytes(row.size) : '—' }}</template>

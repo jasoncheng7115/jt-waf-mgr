@@ -266,12 +266,21 @@ def overview(app, req):
         "SUM(origin='internal') int, SUM(decided_by IN ('confident','fallback')) bc, SUM(decided_by='score') bs "
         'FROM events WHERE ts>=? AND ts<?' + fw, (since, until) + fa)
     buckets = {}
-    for r in app.db.q("SELECT CAST(ts/3600 AS INTEGER) h, SUM(outcome='blocked') b, SUM(outcome='logged') l "
+    for r in app.db.q("SELECT CAST(ts/3600 AS INTEGER) h, SUM(outcome='blocked') b, SUM(outcome='logged') l, "
+                      "SUM(origin='external') e, SUM(origin='internal') i "
                       'FROM events WHERE ts>=? AND ts<?' + fw + ' GROUP BY h', (since, until) + fa):
-        buckets[r['h']] = (r['b'] or 0, r['l'] or 0)
+        buckets[r['h']] = (r['b'] or 0, r['l'] or 0, r['e'] or 0, r['i'] or 0)
     first, last = int(since // 3600) + 1, int(until // 3600)
-    timeline = [{'t': util.iso(h * 3600), 'blocked': buckets.get(h, (0, 0))[0], 'logged': buckets.get(h, (0, 0))[1]}
-                for h in range(first, last + 1)]
+    z = (0, 0, 0, 0)
+    timeline = [{'t': util.iso(h * 3600), 'blocked': buckets.get(h, z)[0], 'logged': buckets.get(h, z)[1],
+                 'external': buckets.get(h, z)[2], 'internal': buckets.get(h, z)[3]} for h in range(first, last + 1)]
+    # the same window just before, for the trend of each number
+    span = until - since
+    pv = app.db.one(
+        "SELECT COUNT(*) n, SUM(outcome='blocked') b, SUM(outcome='logged') l, SUM(origin='external') ext, "
+        "SUM(origin='internal') int FROM events WHERE ts>=? AND ts<?" + fw, (since - span, since) + fa)
+    previous = {'events': pv['n'] or 0, 'blocked': pv['b'] or 0, 'logged': pv['l'] or 0,
+                'external': pv['ext'] or 0, 'internal': pv['int'] or 0}
     src = app.db.q(
         "SELECT src_ip k, origin, SUM(outcome='blocked') b, SUM(outcome='logged') l FROM events WHERE ts>=? AND ts<?" + fw +
         ' GROUP BY src_ip ORDER BY COUNT(*) DESC LIMIT 15', (since, until) + fa)
@@ -292,7 +301,7 @@ def overview(app, req):
         'range': rng, 'since': util.iso(since), 'until': util.iso(until),
         'totals': {'events': t['n'] or 0, 'blocked': t['b'] or 0, 'logged': t['l'] or 0, 'external': t['ext'] or 0,
                    'internal': t['int'] or 0, 'blocked_confident': t['bc'] or 0, 'blocked_score': t['bs'] or 0},
-        'filters': {k: req.query[k] for k in FILTER_KEYS if req.query.get(k)},
+        'filters': {k: req.query[k] for k in FILTER_KEYS if req.query.get(k)}, 'previous': previous,
         'timeline': timeline, 'by_host': _group(app, 'host', since, until, extra_where=fw, args=fa),
         'by_family': _by_family(app, since, until, fw, fa),
         'by_src': [{'key': r['k'], 'origin': r['origin'], 'blocked': r['b'] or 0, 'logged': r['l'] or 0, 'geo': geo(r['k'])}

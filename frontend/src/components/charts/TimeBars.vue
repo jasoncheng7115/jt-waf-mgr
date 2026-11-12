@@ -1,12 +1,12 @@
 <!-- Columns over time (one or more stacked series) with a crosshair tooltip that snaps to the nearest bucket.
      data: [{ t, <seriesKey>: n }]   series: [{ key, label, tone }] -->
 <template>
-  <div class="timebars">
-    <svg ref="svg" :viewBox="'0 0 ' + W + ' ' + H" class="chartsvg" role="img" :aria-label="label || t('chart.timeline')"
+  <div ref="box" class="timebars">
+    <svg ref="svg" :viewBox="'0 0 ' + Wr + ' ' + H" :width="Wr" :height="H" class="chartsvg" role="img" :aria-label="label || t('chart.timeline')"
          @pointermove="move" @pointerleave="leave">
-      <line v-for="g in grid" :key="'g' + g.v" class="gridline" :x1="PADL" :x2="W" :y1="g.y" :y2="g.y" />
+      <line v-for="g in grid" :key="'g' + g.v" class="gridline" :x1="PADL" :x2="Wr" :y1="g.y" :y2="g.y" />
       <text v-for="g in grid" :key="'l' + g.v" class="axis-label" :x="PADL - 6" :y="g.y + 4" text-anchor="end">{{ fmtCompact(g.v) }}</text>
-      <line class="axis" :x1="PADL" :y1="H - PADB" :x2="W" :y2="H - PADB" />
+      <line class="axis" :x1="PADL" :y1="H - PADB" :x2="Wr" :y2="H - PADB" />
       <g v-for="(b, i) in bars" :key="i" :class="{ hot: i === hover }">
         <path v-for="s in b.segs" :key="s.key" :class="'fill-' + s.tone" :d="s.d" />
       </g>
@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { t, lang } from '../../i18n.js'
 import { fmtNum, fmtShortTime } from '../../util.js'
 import { useTip } from './tip.js'
@@ -32,21 +32,33 @@ const props = defineProps({
   series: { type: Array, required: true },
   label: { type: String, default: '' },
 })
-const W = 1000, H = 190, PADL = 48, PADB = 24, PADT = 10
+// the drawing is as wide as its box (1 unit = 1 px): no letterboxing, text never stretched
+const H = 190, PADL = 48, PADB = 24, PADT = 10
+const box = ref(null)
+const Wr = ref(1000)
+let ro = null
+onMounted(() => {
+  const fit = () => { if (box.value) Wr.value = Math.max(320, Math.round(box.value.clientWidth)) }
+  fit()
+  if (window.ResizeObserver) { ro = new ResizeObserver(fit); ro.observe(box.value) }
+})
+onBeforeUnmount(() => { if (ro) ro.disconnect() })
 const svg = ref(null)
 const hover = ref(-1)
 const { tip, at, hide } = useTip()
 
 function total(d) { return props.series.reduce((s, x) => s + (d[x.key] || 0), 0) }
-function niceMax(v) {
-  if (v <= 4) return 4
-  const p = Math.pow(10, Math.floor(Math.log10(v)))
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p
+function niceStep(v) {
+  // a whole-number step (1, 2, 5 × 10^k, or 25 × 10^k) so that 4 steps cover v: every tick is a whole count
+  const raw = Math.max(1, v / 4)
+  const p = Math.pow(10, Math.floor(Math.log10(raw)))
+  for (const m of [1, 2, 2.5, 5, 10]) { const st = m * p; if (st >= raw && Number.isInteger(st)) return st }
   return 10 * p
 }
-const maxVal = computed(() => niceMax(Math.max(1, ...props.data.map(total))))
-const grid = computed(() => [0, 0.25, 0.5, 0.75, 1].map((f) => ({ v: Math.round(maxVal.value * f), y: H - PADB - f * (H - PADT - PADB) })))
-const slot = computed(() => (W - PADL) / Math.max(1, props.data.length))
+const step = computed(() => niceStep(Math.max(1, ...props.data.map(total))))
+const maxVal = computed(() => step.value * 4)
+const grid = computed(() => [0, 1, 2, 3, 4].map((k) => ({ v: k * step.value, y: H - PADB - (k / 4) * (H - PADT - PADB) })))
+const slot = computed(() => (Wr.value - PADL) / Math.max(1, props.data.length))
 const bw = computed(() => Math.max(1, Math.min(24, slot.value - 2)))
 function colPath(x, y0, h, w, round) {
   if (h <= 0) return ''
@@ -92,8 +104,12 @@ function fmtDay(iso) {
 function fmtCompact(v) { return v >= 10000 ? Math.round(v / 1000) + 'K' : fmtNum(v) }
 function move(e) {
   if (!svg.value || !props.data.length) return
-  const r = svg.value.getBoundingClientRect()
-  const x = ((e.clientX - r.left) / r.width) * W
+  // map the pointer into viewBox units with the SVG's own transform (exact whatever the scaling / centring)
+  const ctm = svg.value.getScreenCTM()
+  if (!ctm) return
+  const pt = svg.value.createSVGPoint()
+  pt.x = e.clientX; pt.y = e.clientY
+  const x = pt.matrixTransform(ctm.inverse()).x
   const i = Math.min(props.data.length - 1, Math.max(0, Math.floor((x - PADL) / slot.value)))
   hover.value = i
   const d = props.data[i]

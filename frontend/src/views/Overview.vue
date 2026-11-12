@@ -7,7 +7,7 @@
     </div>
     <FlowSteps v-if="showGuide" compact :title="t('guide.ev.title')" :steps="flow" :note="t('guide.ev.note')" />
     <!-- one row of filters above everything they scope; every value is also in the URL -->
-    <div class="ovfilters" role="group" :aria-label="t('overview.filter.label')">
+    <div class="ovfilters" :class="{ active: hasFilters }" role="group" :aria-label="t('overview.filter.label')">
       <div class="seg" role="group" :aria-label="t('overview.range')">
         <button type="button" :class="{ on: range === '24h' }" :aria-pressed="range === '24h' ? 'true' : 'false'" @click="setQuery({ range: '24h' })"><Icon name="timer" />{{ t('overview.range_24h') }}</button>
         <button type="button" :class="{ on: range === '7d' }" :aria-pressed="range === '7d' ? 'true' : 'false'" @click="setQuery({ range: '7d' })"><Icon name="calendar" />{{ t('overview.range_7d') }}</button>
@@ -20,6 +20,7 @@
         <button v-for="o in outcomeOpts" :key="o.value" type="button" :class="{ on: (filters.outcome || '') === o.value }" :aria-pressed="(filters.outcome || '') === o.value ? 'true' : 'false'"
                 @click="setQuery({ outcome: o.value })"><Icon :name="o.icon" />{{ o.label }}</button>
       </div>
+      <span v-if="chips.length" class="fchip-lead"><Icon name="filter" /> {{ t('overview.filter.active') }}</span>
       <span v-for="c in chips" :key="c.key" class="fchip">
         <span class="fchip-k">{{ c.label }}</span>
         <span class="fchip-v" :class="{ mono: c.mono }" :title="c.full">{{ c.text }}</span>
@@ -37,13 +38,22 @@
     <ErrorBox :error="error" />
     <Loading v-if="loading && !data" />
     <div v-if="data" class="ovbody" :class="{ stale: dimmed }" :aria-busy="loading ? 'true' : 'false'">
+      <div v-if="hasFilters" class="filteredbanner" role="status"><Icon name="filter" />
+        <span>{{ t('overview.filter.banner') }}</span>
+        <strong v-for="c in chips" :key="'b' + c.key" class="fb-item">{{ c.label }}: {{ c.text }}</strong>
+        <template v-if="filters.origin"><strong class="fb-item">{{ t('origin.' + filters.origin) }}</strong></template>
+        <template v-if="filters.outcome"><strong class="fb-item">{{ t('outcome.' + filters.outcome) }}</strong></template>
+      </div>
       <div class="tiles">
-        <div class="tile"><div class="tl">{{ t('overview.events') }}</div><div class="tv">{{ fmtNum(data.totals.events) }}</div></div>
-        <div class="tile t-blocked"><div class="tl">{{ t('outcome.blocked') }}</div><div class="tv">{{ fmtNum(data.totals.blocked) }}</div>
-          <div class="ts">{{ t('decided.confident') }} {{ fmtNum(data.totals.blocked_confident) }} · {{ t('decided.score') }} {{ fmtNum(data.totals.blocked_score) }}</div></div>
-        <div class="tile"><div class="tl">{{ t('outcome.logged') }}</div><div class="tv">{{ fmtNum(data.totals.logged) }}</div></div>
-        <div class="tile"><div class="tl">{{ t('origin.external') }}</div><div class="tv">{{ fmtNum(data.totals.external) }}</div></div>
-        <div class="tile"><div class="tl">{{ t('origin.internal') }}</div><div class="tv">{{ fmtNum(data.totals.internal) }}</div></div>
+        <div v-for="st in statTiles" :key="st.key" class="tile stat" :class="st.cls">
+          <div class="tl">{{ st.label }}</div>
+          <div class="stat-row">
+            <div class="tv">{{ fmtNum(st.value) }}</div>
+            <Sparkline class="stat-spark" :values="st.series" :tone="st.tone" :label="st.label" />
+          </div>
+          <div class="ts"><span v-if="st.delta" class="delta" :class="st.delta.dir">{{ st.delta.text }}</span>
+            <span v-if="st.sub"> · {{ st.sub }}</span></div>
+        </div>
       </div>
 
       <section class="card">
@@ -128,6 +138,7 @@ import Icon from '../components/Icon.vue'
 import EventTable from '../components/EventTable.vue'
 import CountList from '../components/CountList.vue'
 import HBars from '../components/charts/HBars.vue'
+import Sparkline from '../components/charts/Sparkline.vue'
 import { countryName } from '../util.js'
 import { lang } from '../i18n.js'
 import TruncText from '../components/TruncText.vue'
@@ -207,6 +218,31 @@ const flow = computed(() => [
   { key: 'list', label: t('guide.ev.list'), icon: 'list', to: '/events' },
 ])
 
+// Stat tiles: value, change against the same window just before, and the hourly trend.
+function delta(cur, prev) {
+  if (prev === undefined || prev === null) return null
+  if (!prev) return cur ? { dir: 'up', text: t('overview.trend_new', { range: rangeLabel.value }) } : { dir: 'flat', text: t('overview.trend_same', { range: rangeLabel.value }) }
+  const p = Math.round(((cur - prev) / prev) * 100)
+  if (p === 0) return { dir: 'flat', text: t('overview.trend_same', { range: rangeLabel.value }) }
+  return { dir: p > 0 ? 'up' : 'down', text: (p > 0 ? '▲ ' : '▼ ') + Math.abs(p) + '% ' + t('overview.trend_vs', { range: rangeLabel.value }) }
+}
+const rangeLabel = computed(() => (data.value && data.value.range === '7d' ? t('overview.prev_7d') : t('overview.prev_24h')))
+const statTiles = computed(() => {
+  const d = data.value
+  if (!d) return []
+  const tl = d.timeline || []
+  const ser = (f) => tl.map((b) => ({ t: b.t, v: f(b) }))
+  const pv = d.previous || {}
+  const T = d.totals
+  return [
+    { key: 'events', cls: 't-events', label: t('overview.events'), value: T.events, tone: 's1', series: ser((b) => (b.blocked || 0) + (b.logged || 0)), delta: delta(T.events, pv.events) },
+    { key: 'blocked', cls: 't-blocked', label: t('outcome.blocked'), value: T.blocked, tone: 'blocked', series: ser((b) => b.blocked || 0), delta: delta(T.blocked, pv.blocked),
+      sub: t('decided.confident') + ' ' + fmtNum(T.blocked_confident) + ' · ' + t('decided.score') + ' ' + fmtNum(T.blocked_score) },
+    { key: 'logged', cls: 't-logged', label: t('outcome.logged'), value: T.logged, tone: 'logged', series: ser((b) => b.logged || 0), delta: delta(T.logged, pv.logged) },
+    { key: 'external', cls: 't-ext', label: t('origin.external'), value: T.external, tone: 'ext', series: ser((b) => b.external || 0), delta: delta(T.external, pv.external) },
+    { key: 'internal', cls: 't-int', label: t('origin.internal'), value: T.internal, tone: 'int', series: ser((b) => b.internal || 0), delta: delta(T.internal, pv.internal) },
+  ]
+})
 const outcomeSeries = computed(() => [
   { key: 'blocked', label: t('outcome.blocked'), tone: 'blocked' },
   { key: 'logged', label: t('outcome.logged'), tone: 'logged' },

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.2 (2026-11-12)
+
+- Adoption of real-sized rule files: the static check now runs rule by rule (the per-rule length limit was
+  applied to the whole 37 KB file and refused the adoption); a failure names the rule.
+- `@pmFromFile` / `@ipMatchFromFile` are accepted for `.data` lists inside the ModSecurity configuration
+  directories (e.g. the CRS's own scanner list); any other file, a path with `..` or a URL is refused.
+- Overview: coloured stat tiles with an hourly trend and the change against the previous window; active
+  filters are unmistakable (highlighted bar, filled chips, a banner over the numbers); the hourly chart uses
+  the full width and its crosshair follows the pointer exactly.
+- Tables wider than the screen get a floating horizontal scrollbar at the bottom of the window.
+- Livelier light theme: tinted page, card headers with an accent bar, tinted guides and tiles, zebra rows; the
+  architecture diagram, the role cards and the WAF decision summary are coloured by meaning.
+- Spacing: a notice no longer touches the page title buttons; checkboxes sit next to their explanation; flow
+  step labels no longer wrap.
+- GeoIP setup text says to add the [geoip] section.
+
 ## 0.3.1 (2026-11-12)
 
 Install and upgrade
