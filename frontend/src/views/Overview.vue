@@ -143,8 +143,9 @@
           <h2><Icon name="globe" /> {{ t('overview.by_country') }}</h2>
           <p class="muted small">{{ t('map.external_hint') }}</p>
           <div class="mapgrid">
-            <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('overview.by_country')" />
-            <HBars :items="countryItems.slice(0, 15)" :series="outcomeSeries" />
+            <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('overview.by_country')" pickable :active-key="filters.country || null"
+                      @pick="(it) => toggleFilter('country', it.key)" />
+            <HBars :items="countryItems.slice(0, 15)" :series="outcomeSeries" pickable :open-label="t('filter.open_events')" @pick="(it) => toggleFilter('country', it.key)" />
           </div>
         </section>
         <section class="card span2">
@@ -185,8 +186,8 @@ const router = useRouter()
 const data = ref(null)
 
 // filters live in the URL (bookmarkable, Back works); the same names as the event list
-const FILTER_KEYS = ['origin', 'outcome', 'decided_by', 'host', 'src_ip', 'rule_id', 'family', 'path_prefix', 'q']
-const CHIP_LABEL = { decided_by: 'event.decided_by', host: 'event.host', src_ip: 'event.source', rule_id: 'filter.rule_id',
+const FILTER_KEYS = ['origin', 'outcome', 'decided_by', 'host', 'src_ip', 'country', 'rule_id', 'family', 'path_prefix', 'q']
+const CHIP_LABEL = { decided_by: 'event.decided_by', host: 'event.host', src_ip: 'event.source', country: 'filter.country', rule_id: 'filter.rule_id',
   family: 'event.family', path_prefix: 'filter.path_prefix', q: 'filter.q' }
 const range = computed(() => (route.query.range === '7d' ? '7d'
   : route.query.range === 'custom' && typeof route.query.since === 'string' && route.query.since ? 'custom' : '24h'))
@@ -232,7 +233,7 @@ const filters = computed(() => {
 const hasFilters = computed(() => Object.keys(filters.value).length > 0)
 const chips = computed(() => Object.keys(CHIP_LABEL).filter((k) => filters.value[k]).map((k) => {
   const v = filters.value[k]
-  const text = k === 'family' ? tOr('family.' + v, v) : k === 'decided_by' ? tOr('decided.' + v, v) : safeText(v, 60)
+  const text = k === 'family' ? tOr('family.' + v, v) : k === 'decided_by' ? tOr('decided.' + v, v) : k === 'country' ? countryName(v, lang.value) + ' (' + safeText(v, 4) + ')' : safeText(v, 60)
   return { key: k, label: t(CHIP_LABEL[k]), text, full: safeText(v, 500), mono: ['src_ip', 'rule_id', 'path_prefix', 'q'].includes(k) }
 }))
 const originOpts = computed(() => [
@@ -265,7 +266,8 @@ function clearAll() {
 function eventsLink(key, value) { return { path: '/events', query: { ...filters.value, [key]: value, ...timeQ.value } } }
 const countryItems = computed(() => (data.value?.by_country || []).map((c) => ({
   key: c.key, label: c.key === '?' ? t('overview.geo_unknown') : countryName(c.key, lang.value) + ' (' + c.key + ')',
-  sub: t('overview.geo_sources', { n: c.sources }), values: { blocked: c.blocked, logged: c.logged } })))
+  sub: t('overview.geo_sources', { n: c.sources }), values: { blocked: c.blocked, logged: c.logged },
+  active: filters.value.country === c.key, to: c.key === '?' ? null : eventsLink('country', c.key) })))
 const asnItems = computed(() => (data.value?.by_asn || []).map((c) => ({
   key: c.key, label: c.key === '?' ? t('overview.geo_unknown') : 'AS' + c.key + ' ' + (c.label || ''),
   sub: t('overview.geo_sources', { n: c.sources }), values: { blocked: c.blocked, logged: c.logged } })))

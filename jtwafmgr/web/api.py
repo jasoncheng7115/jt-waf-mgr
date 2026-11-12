@@ -384,7 +384,7 @@ def _by_geo(app, since, until, field, top=15, fw='', fa=()):
 
 # --- events --------------------------------------------------------------------------------
 
-FILTER_KEYS = ('host', 'src_ip', 'rule_id', 'outcome', 'decided_by', 'origin', 'family', 'path_prefix', 'q')
+FILTER_KEYS = ('host', 'src_ip', 'country', 'rule_id', 'outcome', 'decided_by', 'origin', 'family', 'path_prefix', 'q')
 
 
 def _event_filters(req, with_time=True):
@@ -422,6 +422,23 @@ def _event_filters(req, with_time=True):
         else:
             where.append('src_ip=?')
             args.append(v)
+    if q.get('country'):
+        # external sources in one country (GeoIP): the matching addresses among those seen (in the time range, if any)
+        cc = q['country'].upper()
+        if not re.fullmatch(r'[A-Z]{2}', cc):
+            raise ApiError(400, 'bad_request', 'country: a two-letter country code')
+        tw = [w for w in where if w.startswith('ts')]
+        ips = []
+        if GEO:
+            for r in req.app.db.q("SELECT DISTINCT src_ip FROM events WHERE origin='external'" + ''.join(' AND ' + w for w in tw),
+                                  tuple(args[:len(tw)])):
+                g = geo(r[0])
+                if g and g.get('scope') == 'external' and g.get('cc') == cc:
+                    ips.append(r[0])
+        if len(ips) > 20000:
+            raise ApiError(400, 'bad_request', 'country: matches too many addresses; narrow the time range')
+        where.append('src_ip IN (%s)' % ','.join('?' * len(ips)) if ips else '0')
+        args += ips
     rid = _int_param(req, 'rule_id')
     if rid is not None:
         where.append('rule_ids LIKE ?')

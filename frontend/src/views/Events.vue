@@ -15,6 +15,8 @@
       <label class="field" :class="fieldClass('path_prefix')"><span>{{ t('filter.path_prefix') }}</span><input v-model.trim="f.path_prefix" maxlength="500" placeholder="/"></label>
       <label class="field" :class="fieldClass('q')"><span>{{ t('filter.q') }}</span><input v-model.trim="f.q" maxlength="200"></label>
       <label class="field" :class="fieldClass('src_ip')"><span>{{ t('filter.src_ip') }}</span><input v-model.trim="f.src_ip" maxlength="64" placeholder="203.0.113.0/24"></label>
+      <div class="field" :class="fieldClass('country')"><label for="ev-f-country">{{ t('filter.country') }}</label>
+        <SelectBox id="ev-f-country" v-model="f.country" :options="countryOpts" searchable /></div>
       <label class="field" :class="fieldClass('rule_id')"><span>{{ t('filter.rule_id') }}</span><input v-model.trim="f.rule_id" inputmode="numeric" maxlength="9"></label>
       <div class="field" :class="fieldClass('outcome')"><label for="ev-f-outcome">{{ t('event.outcome') }}</label>
         <SelectBox id="ev-f-outcome" v-model="f.outcome" :options="outcomeOpts" /></div>
@@ -46,8 +48,9 @@
       <template v-if="countryItems.length">
         <h3 class="charthead">{{ t('map.loaded_title') }}</h3>
         <div class="mapgrid">
-          <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('map.loaded_title')" />
-          <HBars :items="countryItems.slice(0, 10)" :series="outcomeSeries" />
+          <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('map.loaded_title')" pickable :active-key="route.query.country || null"
+                    @pick="(it) => toggleFilter('country', it.key)" />
+          <HBars :items="countryItems.slice(0, 10)" :series="outcomeSeries" pickable @pick="(it) => toggleFilter('country', it.key)" />
         </div>
       </template>
       <p class="muted small">{{ t('chart.loaded_rows', { n: fmtNum(items.length) }) }}</p>
@@ -74,8 +77,9 @@ import FlowSteps from '../components/FlowSteps.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
 import WorldMap from '../components/charts/WorldMap.vue'
+import CENTRE from '../components/charts/countryCentroids.js'
 
-const KEYS = ['since', 'until', 'host', 'path_prefix', 'q', 'src_ip', 'rule_id', 'outcome', 'decided_by', 'origin', 'family']
+const KEYS = ['since', 'until', 'host', 'path_prefix', 'q', 'src_ip', 'country', 'rule_id', 'outcome', 'decided_by', 'origin', 'family']
 const DECIDERS = ['confident', 'score', 'fallback', 'other']
 const FAMILIES = ['protocol', 'lfi', 'rfi', 'rce', 'php', 'generic', 'xss', 'sqli', 'session', 'java', 'scanner', 'method', 'body', 'data_leak', 'local', 'other']
 
@@ -114,6 +118,9 @@ const originOpts = computed(() => [
   { value: 'external', label: t('origin.external'), icon: 'globe' },
   { value: 'internal', label: t('origin.internal'), icon: 'network' },
 ])
+const countryOpts = computed(() => [{ value: '', label: t('filter.all_countries') },
+  ...Object.keys(CENTRE).map((cc) => ({ value: cc, label: countryName(cc, lang.value) + ' (' + cc + ')' }))
+    .sort((a, b) => a.label.localeCompare(b.label, lang.value))])
 const familyOpts = computed(() => [{ value: '', label: t('filter.all_families') }, ...FAMILIES.map((k) => ({ value: k, label: t('family.' + k) }))])
 
 // date presets, local time "YYYY-MM-DDTHH:MM:SS"
@@ -174,7 +181,7 @@ const countryItems = computed(() => {
     c.ips.add(e.src_ip)
     m.set(g.cc, c)
   }
-  return [...m.values()].map((c) => ({ ...c, sub: t('overview.geo_sources', { n: c.ips.size }) }))
+  return [...m.values()].map((c) => ({ ...c, sub: t('overview.geo_sources', { n: c.ips.size }), active: route.query.country === c.key }))
     .sort((a, b) => (b.values.blocked + b.values.logged) - (a.values.blocked + a.values.logged))
 })
 

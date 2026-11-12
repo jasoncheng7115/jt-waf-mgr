@@ -102,8 +102,10 @@ Families (stable keys, UI translates `family.<key>`): `protocol`, `lfi`, `rfi`, 
  "local_rule_ids": [10203]}                          // rule ids in the site's local range (10000–19999)
 ```
 
-`GET /api/v1/events?since&until&host&path_prefix&src_ip&rule_id&outcome&decided_by&origin&family&q&limit&cursor`
+`GET /api/v1/events?since&until&host&path_prefix&src_ip&country&rule_id&outcome&decided_by&origin&family&q&limit&cursor`
 → `{"items": [EventSummary], "next_cursor": …}`, newest first. `src_ip` may be a CIDR. `q` = substring on path.
+`country` = two-letter code: external sources GeoIP places in that country (none without a GeoIP database); the
+same filter works on `/overview` and `/events/timeline`.
 
 `GET /api/v1/events/{id}` → EventSummary plus
 ```json

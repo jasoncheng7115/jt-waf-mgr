@@ -188,6 +188,12 @@ async function audit(page, where) {
   ok(wm.land > 50000 && wm.dots >= 3, 'overview: world map with land and bubbles (' + wm.dots + ')');
   await page.locator('.worldmap .wm-dot').last().hover();
   ok(await page.locator('.charttip').isVisible(), 'world map tooltip on hover');
+  await page.locator('.worldmap .wm-dot').first().click();
+  await page.waitForLoadState('networkidle');
+  const cc = new URL(page.url()).searchParams.get('country');
+  ok(/^[A-Z]{2}$/.test(cc || '') && (await page.locator('.worldmap .wm-dot.on').count()) === 1, 'overview: a bubble filters by country (' + cc + ')');
+  await page.goto(base + '/events?country=' + cc, { waitUntil: 'networkidle' });
+  ok((await page.locator('.worldmap .wm-dot').count()) === 1, 'events: country filter leaves one country');
   await page.goto(base + '/events', { waitUntil: 'networkidle' });
   ok((await page.locator('.worldmap .wm-dot').count()) >= 1, 'events: world map of loaded events');
   await page.goto(base + '/lookup/203.0.113.9', { waitUntil: 'networkidle' });

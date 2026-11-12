@@ -122,6 +122,21 @@ class TestService(unittest.TestCase):
         st, _, _ = c.req('GET', '/api/v1/overview?range=7d&origin=sideways')
         self.assertEqual(st, 400)
 
+    def test_country_filter(self):
+        c = self.client('viewer1')
+        st, jp, _ = c.req('GET', '/api/v1/events?country=jp')
+        self.assertEqual(st, 200)
+        self.assertTrue(jp['items'] and all(e['src_geo']['cc'] == 'JP' for e in jp['items']))
+        st, de, _ = c.req('GET', '/api/v1/events?country=DE')
+        self.assertEqual((st, de['items']), (200, []))
+        st, ov, _ = c.req('GET', '/api/v1/overview?range=7d&country=JP')
+        self.assertEqual((ov['filters'], ov['totals']['events']), ({'country': 'JP'}, len(jp['items'])))
+        st, tl, _ = c.req('GET', '/api/v1/events/timeline?country=DE')
+        self.assertEqual((st, sum(b['blocked'] + b['logged'] for b in tl['timeline'])), (200, 0))
+        for bad in ('J', 'JPN', '1A', '%3F%3F'):
+            st, _, _ = c.req('GET', '/api/v1/events?country=' + bad)
+            self.assertEqual(st, 400, bad)
+
     def test_status_and_request(self):
         c = self.client('admin1', self.secret)
         st, body, _ = c.req('GET', '/api/v1/geoip')

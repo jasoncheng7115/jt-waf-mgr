@@ -47,7 +47,7 @@
 ### 事件
 
 - `GET /api/v1/events`（`events:read`）
-  - 篩選：`since`、`until`、`host`、`path_prefix`、`src_ip`（可 CIDR）、`rule_id`、`outcome`（`blocked`／`logged`）、`decided_by`（`confident`／`score`／`fallback`）、`origin`（`external`／`internal`）。
+  - 篩選：`since`、`until`、`host`、`path_prefix`、`src_ip`（可 CIDR）、`country`（兩碼國家代碼，外部來源依 GeoIP）、`rule_id`、`outcome`（`blocked`／`logged`）、`decided_by`（`confident`／`score`／`fallback`）、`origin`（`external`／`internal`）。
 - `GET /api/v1/events/{event_id}`（`events:read`）
 - `GET /api/v1/events/stats`（`events:read`）
   - `group_by=host|rule|src_ip|family|hour`，`since`／`until`。

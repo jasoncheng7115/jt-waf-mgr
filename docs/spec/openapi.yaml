@@ -206,6 +206,7 @@ paths:
         - {name: host, in: query, schema: {type: string}}
         - {name: path_prefix, in: query, schema: {type: string}}
         - {name: src_ip, in: query, schema: {type: string}, description: "address or CIDR"}
+        - {name: country, in: query, schema: {type: string, pattern: '^[A-Za-z]{2}$'}, description: "external sources in this country (GeoIP)"}
         - {name: rule_id, in: query, schema: {type: integer}}
         - {name: outcome, in: query, schema: {type: string, enum: [blocked, logged]}}
         - {name: decided_by, in: query, schema: {type: string, enum: [confident, score, fallback, ipblock]}}

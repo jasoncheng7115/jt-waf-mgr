@@ -2,6 +2,13 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.9 (2026-11-13)
+
+- Filter by country: click a country on the world map or in the country list (overview, event list), or pick one in
+  the event list's filters. Works for the overview, the event list and its timeline (`country=` in the API, external
+  sources placed by GeoIP).
+- The address lookup map marks the location even when the address has no events in the last 30 days.
+
 ## 0.4.8 (2026-11-13)
 
 - World map of where requests come from (GeoIP): on the overview (every country, with the top 15 listed beside
