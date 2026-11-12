@@ -42,6 +42,9 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --grid: #e1e0d9;
+  --map-sea: #edf2f8;
+  --map-land: #d3dae5;
+  --map-border: #b3becd;
   --st-good: #0ca30c;
   --st-warning: #fab219;
   --st-serious: #ec835a;
@@ -79,6 +82,9 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --grid: #2c3542;
+    --map-sea: #131922;
+    --map-land: #2b3442;
+    --map-border: #3d4858;
     --row-alt: #1d2430;
     --tint-a: #172235; --tint-a-line: #3987e5;
     --tint-b: #13291f; --tint-b-line: #199e70;
@@ -122,6 +128,9 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --grid: #2c3542;
+  --map-sea: #131922;
+  --map-land: #2b3442;
+  --map-border: #3d4858;
   --row-alt: #1d2430;
   --tint-a: #172235; --tint-a-line: #3987e5;
   --tint-b: #13291f; --tint-b-line: #199e70;
@@ -300,7 +309,7 @@ input[type=checkbox] { padding: 0; }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 3px 9px; font-size: 13px; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
-.seg button { font: inherit; font-size: 13.5px; padding: 4px 12px; border: none; background: var(--panel); color: var(--muted); cursor: pointer; }
+.seg button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13.5px; padding: 4px 12px; border: none; background: var(--panel); color: var(--muted); cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border-strong); }
 .seg button.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 .langswitch select { font-size: 13.5px; padding: 3px 6px; }
@@ -868,3 +877,7 @@ form + *, .actions + .pwage, form + .pwage { margin-top: 16px; }
 .tile.stat .ts { font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 8px; }
 .tile.stat .stat-spark { display: block; width: calc(100% + 32px); max-width: none; height: 46px; margin: auto -16px 0; }
 .tile.stat .stat-spark .sl-area { opacity: .18; }
+
+/* a world map with its ranked list beside it (one column on narrow screens) */
+.mapgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .mapgrid { grid-template-columns: minmax(0, 1fr); } }

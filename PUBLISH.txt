@@ -28,6 +28,7 @@ tools/build_frontend.sh
 tools/check_i18n.py
 tools/check_ui.py
 tools/i18n_add.py
+tools/make_worldmap.py
 tools/preflight.py
 tools/make_release.sh
 tools/make_sbom.py

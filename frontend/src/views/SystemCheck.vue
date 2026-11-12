@@ -262,7 +262,7 @@ function shownDetails(it) {
 function isHash(v) { return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v) }
 function boolClass(key, k, v) {
   // true is good for most flags; for these, true means a problem
-  const bad = ['drift']
+  const bad = ['drift', 'ca_file_unreadable', 'unencrypted_remote']
   const good = bad.includes(k) ? !v : v
   return good ? 'b-ok' : 'b-warn'
 }

@@ -63,6 +63,7 @@ class Client:
                 raw = r.read(MAX_RESPONSE + 1)
         except urllib.error.HTTPError as e:
             code = {401: 'unauthorized', 403: 'unauthorized', 404: 'not_found'}.get(e.code, 'http_%d' % e.code)
+            e.close()
             raise LLMError(code, e.reason)
         except (urllib.error.URLError, OSError) as e:
             raise LLMError('unreachable', getattr(e, 'reason', e))

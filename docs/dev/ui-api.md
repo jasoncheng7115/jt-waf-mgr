@@ -80,6 +80,8 @@ When `must_change_password` is true the UI shows only the change-password screen
  "by_family": [{"key": "sqli", "blocked": 0, "logged": 0}],
  "by_src":    [{"key": "203.0.113.7", "origin": "external", "blocked": 0, "logged": 0}],
  "by_rule":   [{"key": "930120", "msg": "…", "blocked": 0, "logged": 0}],
+ "by_country": [{"key": "JP", "label": "Japan", "blocked": 0, "logged": 0, "sources": 0}],   // external, GeoIP: every country (the UI draws the world map and lists the top 15); [] without GeoIP
+ "by_asn":    [{"key": "64500", "label": "Example Hosting", "blocked": 0, "logged": 0, "sources": 0}],   // top 15; [] without GeoIP
  "score_only": [EventSummary, …],      // external, blocked, decided_by=score: most likely false positives, newest first, max 50
  "focus": [{"host": "sso.example.com", "events": 0, "blocked": 0, "external": 0,
             "external_not_blocked": 0, "recent": [EventSummary, …]}]}   // one per configured focus site

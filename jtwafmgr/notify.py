@@ -739,6 +739,8 @@ def http_post(url, body, headers):
             detail = _error_detail(e.read(4000))
         except Exception:
             detail = ''
+        finally:
+            e.close()
         raise SendError('HTTP %d%s' % (e.code, (': ' + detail) if detail else ''))
     except urllib.error.URLError as e:
         raise SendError('connection failed: %s' % _v(getattr(e, 'reason', e), 160))

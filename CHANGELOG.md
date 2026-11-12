@@ -2,6 +2,16 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.8 (2026-11-13)
+
+- World map of where requests come from (GeoIP): on the overview (every country, with the top 15 listed beside
+  it), on the event list (the loaded events) and on the address lookup (the address's location). Drawn in the
+  page from a bundled outline (loaded only when needed); no map service, nothing leaves the browser.
+- Event timelines over several days are labelled once per day, at midnight.
+- System check: "CA file unreadable" and "unencrypted remote" show green when they are false; the CA line is shown
+  only when a CA file is set.
+- Notification and LLM calls close the connection after an HTTP error response.
+
 ## 0.4.7 (2026-11-13)
 
 - Timelines on list pages are titled for what they count (alerts, changes, audit records, versions, deliveries,

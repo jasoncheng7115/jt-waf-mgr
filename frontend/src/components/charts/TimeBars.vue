@@ -98,6 +98,15 @@ const bars = computed(() => {
 const ticks = computed(() => {
   const n = props.data.length
   if (!n) return []
+  if (!daily.value && n > 48) {
+    // hourly buckets over several days: one date label at each local midnight (every k-th day when there are many)
+    const mid = []
+    for (let i = 0; i < n; i++) { const dt = new Date(props.data[i].t); if (!isNaN(dt) && dt.getHours() === 0) mid.push(i) }
+    if (mid.length) {
+      const k = Math.max(1, Math.ceil(mid.length / 8))
+      return mid.filter((_, j) => j % k === 0).map((i) => ({ x: PADL + i * slot.value, label: fmtDay(props.data[i].t) }))
+    }
+  }
   const step = Math.max(1, Math.ceil(n / 8))
   const out = []
   for (let i = 0; i < n; i += step) {

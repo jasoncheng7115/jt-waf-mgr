@@ -318,7 +318,7 @@ def overview(app, req):
         'by_src': [{'key': r['k'], 'origin': r['origin'], 'blocked': r['b'] or 0, 'logged': r['l'] or 0, 'geo': geo(r['k'])}
                    for r in src],
         'by_rule': _by_rule(app, since, until, fw=fw, fa=fa), 'score_only': score_only, 'focus': focus,
-        'by_country': _by_geo(app, since, until, 'cc', fw=fw, fa=fa), 'by_asn': _by_geo(app, since, until, 'asn', fw=fw, fa=fa),
+        'by_country': _by_geo(app, since, until, 'cc', top=300, fw=fw, fa=fa), 'by_asn': _by_geo(app, since, until, 'asn', fw=fw, fa=fa),
     })
 
 

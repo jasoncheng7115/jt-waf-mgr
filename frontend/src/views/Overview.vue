@@ -135,13 +135,17 @@
           <h2><Icon name="network" /> {{ t('overview.by_src') }}</h2>
           <CountList :items="data.by_src" mono pickable :active-key="filters.src_ip" :open-label="t('filter.open_lookup')" :link-for="(it) => ({ path: '/lookup/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('src_ip', it.key)" />
         </section>
-        <section v-if="(data.by_country || []).length" class="card">
-          <h2><Icon name="globe" /> {{ t('overview.by_country') }}</h2>
-          <HBars :items="countryItems" :series="outcomeSeries" />
-        </section>
         <section v-if="(data.by_asn || []).length" class="card">
           <h2><Icon name="network" /> {{ t('overview.by_asn') }}</h2>
           <HBars :items="asnItems" :series="outcomeSeries" />
+        </section>
+        <section v-if="(data.by_country || []).length" class="card span2">
+          <h2><Icon name="globe" /> {{ t('overview.by_country') }}</h2>
+          <p class="muted small">{{ t('map.external_hint') }}</p>
+          <div class="mapgrid">
+            <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('overview.by_country')" />
+            <HBars :items="countryItems.slice(0, 15)" :series="outcomeSeries" />
+          </div>
         </section>
         <section class="card span2">
           <h2><Icon name="shield" /> {{ t('overview.by_rule') }}</h2>
@@ -166,6 +170,7 @@ import Icon from '../components/Icon.vue'
 import EventTable from '../components/EventTable.vue'
 import CountList from '../components/CountList.vue'
 import HBars from '../components/charts/HBars.vue'
+import WorldMap from '../components/charts/WorldMap.vue'
 import Sparkline from '../components/charts/Sparkline.vue'
 import { countryName } from '../util.js'
 import { lang } from '../i18n.js'

@@ -181,6 +181,18 @@ async function audit(page, where) {
   // overview country chart
   await page.goto(base + '/', { waitUntil: 'networkidle' });
   ok((await page.locator('text=依國家').count()) > 0, 'overview: by-country chart');
+  // world map: land drawn (lazy-loaded outline), one bubble per country, tooltip on a bubble
+  await page.waitForSelector('.worldmap .wm-land', { timeout: 5000 }).catch(() => {});
+  const wm = await page.evaluate(() => ({ land: (document.querySelector('.worldmap .wm-land')?.getAttribute('d') || '').length,
+    dots: document.querySelectorAll('.worldmap .wm-dot').length }));
+  ok(wm.land > 50000 && wm.dots >= 3, 'overview: world map with land and bubbles (' + wm.dots + ')');
+  await page.locator('.worldmap .wm-dot').last().hover();
+  ok(await page.locator('.charttip').isVisible(), 'world map tooltip on hover');
+  await page.goto(base + '/events', { waitUntil: 'networkidle' });
+  ok((await page.locator('.worldmap .wm-dot').count()) >= 1, 'events: world map of loaded events');
+  await page.goto(base + '/lookup/203.0.113.9', { waitUntil: 'networkidle' });
+  ok((await page.locator('.worldmap .wm-dot').count()) === 1, 'lookup: location on the world map');
+  await page.goto(base + '/', { waitUntil: 'networkidle' });
   // hover tooltip on a chart
   const bar = page.locator('.hb-bar').first();
   await bar.hover();

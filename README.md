@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.7
+# jt-waf-mgr v0.4.8
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -70,7 +70,7 @@ something you can read, and every change into a workflow you can trust:
 - **Integrity and compliance**: system check page, compliance page, daily verified backups with download (one-time
   code), configuration change history with attribution (jt-waf-mgr, registered automation, or outside).
 - **Interface**: English, 繁體中文 and 日本語; light and dark; phones and tablets; GeoIP (MaxMind GeoLite2, downloaded
-  by its own sandboxed job).
+  by its own sandboxed job) with a world map of where requests come from, drawn in the page (no map service).
 
 | | |
 |---|---|
@@ -90,8 +90,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.7.tar.gz.sig jt-waf-mgr-0.4.7.tar.gz
-tar xzf jt-waf-mgr-0.4.7.tar.gz && cd jt-waf-mgr-0.4.7
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.8.tar.gz.sig jt-waf-mgr-0.4.8.tar.gz
+tar xzf jt-waf-mgr-0.4.8.tar.gz && cd jt-waf-mgr-0.4.8
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

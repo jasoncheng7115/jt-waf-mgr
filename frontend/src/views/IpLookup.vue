@@ -24,6 +24,8 @@
         <div class="chartgrid">
           <div><h3 class="charthead">{{ t('chart.ip_split', { period: t('lookup.d7_events') }) }}</h3><SegBar :parts="split(data.d7)" :label="t('lookup.d7_events')" /></div>
           <div><h3 class="charthead">{{ t('chart.ip_split', { period: t('lookup.d30_events') }) }}</h3><SegBar :parts="split(data.d30)" :label="t('lookup.d30_events')" /></div>
+          <div v-if="mapItems.length"><h3 class="charthead">{{ t('lookup.location') }}</h3>
+            <WorldMap :items="mapItems" :series="outcomeSeries" :label="t('lookup.location')" marker /></div>
         </div>
         <EventTimeline v-if="data.d30.events" :query="{ src_ip: data.ip, since: since30 }" :title="t('lookup.timeline')"
                        @select="(r) => router.push({ path: '/events', query: { src_ip: data.ip, since: r.since, until: r.until } })" />
@@ -50,9 +52,9 @@ import { useRouter } from 'vue-router'
 import { get } from '../api.js'
 import EventTimeline from '../components/EventTimeline.vue'
 const since30 = new Date(Date.now() - 30 * 86400e3).toISOString()
-import { t, tOr } from '../i18n.js'
+import { lang, t, tOr } from '../i18n.js'
 import { hasRole } from '../store.js'
-import { safeText, fmtNum, fmtTime } from '../util.js'
+import { countryName, safeText, fmtNum, fmtTime } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import OriginBadge from '../components/OriginBadge.vue'
@@ -60,6 +62,7 @@ import Icon from '../components/Icon.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
+import WorldMap from '../components/charts/WorldMap.vue'
 
 const props = defineProps({ ip: { type: String, default: '' } })
 const router = useRouter()
@@ -93,6 +96,18 @@ const flow = computed(() => {
   ]
 })
 
+const outcomeSeries = computed(() => [
+  { key: 'blocked', label: t('outcome.blocked'), tone: 'blocked' },
+  { key: 'logged', label: t('outcome.logged'), tone: 'logged' },
+])
+// where this address is (GeoIP), with its last 30 days
+const mapItems = computed(() => {
+  const g = data.value && data.value.geo
+  if (!g || g.scope !== 'external' || !g.cc) return []
+  const d = data.value.d30 || {}
+  return [{ key: g.cc, label: countryName(g.cc, lang.value) + ' (' + g.cc + ')',
+            values: { blocked: d.blocked || 0, logged: Math.max((d.events || 0) - (d.blocked || 0), 0) } }]
+})
 const countSeries = computed(() => [{ key: 'events', label: t('chart.hits'), tone: 's1' }])
 function split(p) {
   return [

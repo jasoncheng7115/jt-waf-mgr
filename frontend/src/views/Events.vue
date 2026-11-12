@@ -43,6 +43,13 @@
       </div>
       <h3 class="charthead">{{ t('chart.families_loaded') }}</h3>
       <HBars :items="familyBars" :series="outcomeSeries" />
+      <template v-if="countryItems.length">
+        <h3 class="charthead">{{ t('map.loaded_title') }}</h3>
+        <div class="mapgrid">
+          <WorldMap :items="countryItems" :series="outcomeSeries" :label="t('map.loaded_title')" />
+          <HBars :items="countryItems.slice(0, 10)" :series="outcomeSeries" />
+        </div>
+      </template>
       <p class="muted small">{{ t('chart.loaded_rows', { n: fmtNum(items.length) }) }}</p>
     </section>
     <EventTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" table-id="events" :items="items" :page-size="50" filterable @filter="toggleFilter" />
@@ -55,8 +62,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useFilterState } from '../filterState.js'
 import EventTimeline from '../components/EventTimeline.vue'
 import { get } from '../api.js'
-import { t } from '../i18n.js'
-import { fmtNum } from '../util.js'
+import { lang, t } from '../i18n.js'
+import { countryName, fmtNum } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import EventTable from '../components/EventTable.vue'
@@ -66,6 +73,7 @@ import DatePicker from '../components/DatePicker.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
+import WorldMap from '../components/charts/WorldMap.vue'
 
 const KEYS = ['since', 'until', 'host', 'path_prefix', 'q', 'src_ip', 'rule_id', 'outcome', 'decided_by', 'origin', 'family']
 const DECIDERS = ['confident', 'score', 'fallback', 'other']
@@ -153,6 +161,21 @@ const familyBars = computed(() => {
     }
   }
   return [...m.values()].sort((a, b) => (b.values.blocked + b.values.logged) - (a.values.blocked + a.values.logged)).slice(0, 10)
+})
+
+// external sources by country (GeoIP on each loaded event)
+const countryItems = computed(() => {
+  const m = new Map()
+  for (const e of items.value) {
+    const g = e.src_geo
+    if (e.origin === 'internal' || !g || g.scope !== 'external' || !g.cc) continue
+    const c = m.get(g.cc) || { key: g.cc, label: countryName(g.cc, lang.value) + ' (' + g.cc + ')', values: { blocked: 0, logged: 0 }, ips: new Set() }
+    c.values[e.outcome === 'blocked' ? 'blocked' : 'logged']++
+    c.ips.add(e.src_ip)
+    m.set(g.cc, c)
+  }
+  return [...m.values()].map((c) => ({ ...c, sub: t('overview.geo_sources', { n: c.ips.size }) }))
+    .sort((a, b) => (b.values.blocked + b.values.logged) - (a.values.blocked + a.values.logged))
 })
 
 // URL holds RFC 3339; <input type=datetime-local> wants local "YYYY-MM-DDTHH:MM:SS".

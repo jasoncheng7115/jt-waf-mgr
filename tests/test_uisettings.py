@@ -110,6 +110,7 @@ class TestLLMClient(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def cfg(self, key):
         return {'llm': {'url': 'http://127.0.0.1:%d/v1' % self.srv.server_address[1], 'model': 'test-model',

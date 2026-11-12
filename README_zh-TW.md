@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.7
+# jt-waf-mgr v0.4.8
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -60,7 +60,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   允許來源網段（權杖可以提案，永遠不能核准）。
 - **完整性與合規**：系統檢查頁、合規頁、每日驗證過的備份與下載（需一次性驗證碼）、設定異動記錄與來源判斷（jt-waf-mgr、
   已登記的自動化或外部）。
-- **介面**：English、繁體中文、日本語；淺色與深色；手機與平板；GeoIP（MaxMind GeoLite2，由獨立的受限程序下載）。
+- **介面**：English、繁體中文、日本語；淺色與深色；手機與平板；GeoIP（MaxMind GeoLite2，由獨立的受限程序下載），以及在頁面內繪製的請求來源世界地圖（不使用任何地圖服務）。
 
 | | |
 |---|---|
@@ -78,8 +78,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.7.tar.gz.sig jt-waf-mgr-0.4.7.tar.gz
-tar xzf jt-waf-mgr-0.4.7.tar.gz && cd jt-waf-mgr-0.4.7
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.8.tar.gz.sig jt-waf-mgr-0.4.8.tar.gz
+tar xzf jt-waf-mgr-0.4.8.tar.gz && cd jt-waf-mgr-0.4.8
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼

@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.7
+# jt-waf-mgr v0.4.8
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -64,7 +64,7 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **完全性とコンプライアンス**：システムチェック、コンプライアンス、毎日検証されるバックアップとダウンロード（ワンタイム
   コード）、設定変更の履歴と原因判定（jt-waf-mgr、登録済みの自動化、外部）。
 - **画面**：English・繁體中文・日本語、ライト / ダーク、スマートフォンとタブレット、GeoIP（MaxMind GeoLite2、専用の制限付き
-  ジョブでダウンロード）。
+  ジョブでダウンロード）と、ページ内で描画するリクエスト発信元の世界地図（地図サービスは使いません）。
 
 | | |
 |---|---|
@@ -83,8 +83,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.7.tar.gz.sig jt-waf-mgr-0.4.7.tar.gz
-tar xzf jt-waf-mgr-0.4.7.tar.gz && cd jt-waf-mgr-0.4.7
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.8.tar.gz.sig jt-waf-mgr-0.4.8.tar.gz
+tar xzf jt-waf-mgr-0.4.8.tar.gz && cd jt-waf-mgr-0.4.8
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
