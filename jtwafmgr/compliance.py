@@ -397,8 +397,12 @@ def system_check(app):
     out.append(_item('anchor_file', 'ok' if ao else 'warn', path=mon.anchors.path, append_only=ao))
 
     sl = cfg['syslog']
-    out.append(_item('syslog', 'warn' if not sl['enabled'] or app.audit.syslog_errors else 'ok',
-                     enabled=sl['enabled'], address=sl['address'], errors=app.audit.syslog_errors,
+    plain_remote = not sl['address'].startswith('/') and sl.get('protocol') != 'tls'
+    au = app.audit.__dict__
+    out.append(_item('syslog', 'warn' if not sl['enabled'] or app.audit.syslog_errors or plain_remote or au.get('syslog_dropped') else 'ok',
+                     enabled=sl['enabled'], address=sl['address'], protocol=sl.get('protocol'), format=sl.get('format'),
+                     unencrypted_remote=plain_remote, queued=len(au.get('_queue') or ()), dropped=au.get('syslog_dropped', 0),
+                     errors=app.audit.syslog_errors,
                      last_error=util.iso(app.audit.syslog_last_error[0]) if app.audit.syslog_last_error else None))
 
     try:

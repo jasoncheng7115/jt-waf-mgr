@@ -4,7 +4,7 @@
     <WorkflowSettings />
     <RegressionSamples />
     <GeoipSettings @saved="load" />
-    <UiSettings :groups="['llm', 'analyst', 'network', 'policy']" @saved="load" />
+    <UiSettings :groups="['llm', 'analyst', 'network', 'syslog', 'policy']" @saved="load" />
     <h2><Icon name="page" /> {{ t('settings.config_title') }}</h2>
     <p class="alert info">{{ t('settings.readonly_note', { path: CONFIG_PATH }) }}</p>
     <ErrorBox :error="error" />
@@ -43,7 +43,7 @@ const KNOWN = ['internal_networks', 'focus_sites', 'sensitive_fields', 'id_range
 const s = ref(null)
 const error = ref(null)
 // set in the cards above (web interface): not repeated in this read-only list
-const IN_UI = ['focus_sites', 'known_scanners', 'account_policy', 'geoip', 'compliance_level']
+const IN_UI = ['focus_sites', 'known_scanners', 'account_policy', 'geoip', 'compliance_level', 'syslog']
 const keys = computed(() => {
   if (!s.value) return []
   const extra = Object.keys(s.value).filter((k) => !KNOWN.includes(k) && !IN_UI.includes(k)).sort()

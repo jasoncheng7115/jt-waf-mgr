@@ -17,7 +17,9 @@ from tests.helpers import FIXTURE_SITE, TempEnv, record
 
 class TestRulegen(unittest.TestCase):
     def setUp(self):
-        self.cfg = TempEnv().cfg
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        self.cfg = env.cfg
 
     def test_confident_shape(self):
         spec, text, pl = rulegen.build('confident_block', {'target': 'path', 'regex': r'^/\.env', 'msg': 'secret file'},
@@ -577,7 +579,9 @@ class TestSandboxBuild(unittest.TestCase):
 
     def test_evaluate(self):
         from jtwafmgr.sandbox import evaluate
-        cfg = TempEnv().cfg
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        cfg = env.cfg
         cases = [{'host': 'a.example.com', 'path': '/x', 'expect': 403},
                  {'host': 'a.example.com', 'path': '/y', 'expect': 403},
                  {'host': 'a.example.com', 'path': '/z', 'expect': 'not403', 'origin': 'regression'},

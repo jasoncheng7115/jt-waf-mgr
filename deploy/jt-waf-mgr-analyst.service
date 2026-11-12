@@ -1,5 +1,5 @@
 [Unit]
-Description=jt-waf-mgr: analyse recent WAF events with the local LLM and propose confident blocks
+Description=jt-waf-mgr: analyse recent WAF events with the configured LLM server and propose changes and alerts
 Documentation=file:///usr/lib/jt-waf-mgr/README.md
 After=network-online.target
 Wants=network-online.target
@@ -43,7 +43,7 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 UMask=0077
-# The LLM server is local: only the loopback and the private ranges are reachable. An LLM server
+# The LLM server is on the local network: only the loopback and the private ranges are reachable. One
 # elsewhere needs a drop-in (systemctl edit jt-waf-mgr-analyst.service) with its own IPAddressAllow=.
 IPAddressDeny=any
 IPAddressAllow=localhost 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7

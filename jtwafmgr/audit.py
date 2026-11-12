@@ -1,12 +1,28 @@
 """Audit trail: every action goes to the database and, as one JSON line, to syslog."""
+import atexit
+import collections
+import datetime
+import errno
 import json
+import os
 import socket
 import threading
+import time
+import weakref
 
 from . import util
 from .config import FACILITIES
 
 PROGRAM = 'jt-waf-mgr'
+_ALL = weakref.WeakSet()
+
+
+@atexit.register
+def _flush_all():
+    """Short-lived commands (analysis, notifications, the CLI): send what is queued before the process ends."""
+    end = time.monotonic() + 3
+    for a in list(_ALL):
+        a.flush(max(0.0, end - time.monotonic()))
 
 
 class Audit:
@@ -15,6 +31,14 @@ class Audit:
         self.cfg = cfg
         self._sock = None
         self._lock = threading.Lock()
+        self._cond = threading.Condition()
+        self._queue = collections.deque()
+        self._sender = None
+        self._retry_at = 0.0
+        self._reset = False
+        self.syslog_sent = 0
+        self.syslog_dropped = 0
+        _ALL.add(self)
         self.chain = self.__init_chain()
         self.ctx = threading.local()
         self.syslog_errors = 0
@@ -39,7 +63,8 @@ class Audit:
             rec.update(details)
             if severity:
                 rec['severity'] = severity     # syslog files drop the priority; SIEM rules need it
-            self._syslog({'jt_waf_mgr': rec}, level=2 if severity == 'crit' else (4 if result != 'ok' or severity == 'warning' else 6))
+            self._syslog({'jt_waf_mgr': rec}, level=2 if severity == 'crit' else (4 if result != 'ok' or severity == 'warning' else 6),
+                         pin=action == 'settings.changed' and str(details.get('key', '')).startswith('syslog.'))
         try:      # notifications and alerts: never let them break the action that is being recorded
             from . import notify
             notify.on_audit(self, rid, action, actor, src_ip, result, severity, details)
@@ -55,32 +80,148 @@ class Audit:
             rec.update(fields)
             self._syslog({'jt_waf_mgr': rec}, level=level)
 
-    def _syslog(self, obj, level=6):
+    RETRY_AFTER = 30          # a syslog destination that failed is tried again after this many seconds
+    QUEUE_MAX = 5000          # records kept while it is unreachable (then the oldest are dropped and counted)
+
+    def _syslog(self, obj, level=6, pin=False):
+        """Queue one record for the syslog sender thread: a request never waits for a network, a DNS lookup or a
+        TLS handshake, and records are kept (and sent later) while the destination is unreachable."""
         # ensure_ascii escapes every control character and newline, so one record is one line
         # whatever an attacker put in a username or a URL (no log injection).
         line = json.dumps(obj, ensure_ascii=True, separators=(',', ':'))
-        pri = FACILITIES[self.cfg['syslog']['facility']] * 8 + level
-        msg = ('<%d>%s: %s' % (pri, PROGRAM, line)).encode('ascii')
-        addr = self.cfg['syslog']['address']
-        with self._lock:
+        # pin: sent with the settings of this moment (a change of the syslog settings is reported where it went before)
+        item = [level, line, time.time(), dict(self.cfg['syslog']) if pin else None, 0]
+        with self._cond:
+            if len(self._queue) >= self.QUEUE_MAX:
+                self._queue.popleft()
+                self.syslog_dropped += 1
+            self._queue.append(item)
+            self._cond.notify()
+        self._start_sender()
+
+    def _encode(self, item):
+        """(target, stream, bytes) with the settings as they are now."""
+        level, line, ts, pinned, _tries = item
+        sl = pinned or self.cfg['syslog']
+        pri = FACILITIES[sl['facility']] * 8 + level
+        addr, proto, fmt = sl['address'], sl.get('protocol', 'udp'), sl.get('format', 'rfc3164')
+        local = addr.startswith('/')
+        msg = self._format(pri, line, fmt, local, ts).encode('utf-8')
+        stream = not local and proto in ('tcp', 'tls')
+        if stream:      # framing: octet counting for RFC 5424 (RFC 6587), a line feed for the classic format
+            msg = (b'%d ' % len(msg)) + msg if fmt == 'rfc5424' else msg + b'\n'
+        return (addr, proto), stream, msg
+
+    def _start_sender(self):
+        if self._sender is None or not self._sender.is_alive():
+            with self._lock:
+                if self._sender is None or not self._sender.is_alive():
+                    self._sender = threading.Thread(target=self._send_loop, name='syslog', daemon=True)
+                    self._sender.start()
+
+    def _send_loop(self):
+        dest = None
+        while True:
+            with self._cond:
+                while not self._queue:
+                    self._cond.wait(5)
+                wait = self._retry_at - time.monotonic()
+                if wait > 0:
+                    self._cond.wait(min(wait, 5))
+                    continue
+                head = self._queue[0]
+                target, stream, msg = self._encode(head)
+                if self._reset:
+                    self._reset, dest = False, None
+                    self._close()
             try:
-                if self._sock is None:
-                    if addr.startswith('/'):
-                        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-                        self._sock.connect(addr)
-                    else:
-                        host, _, port = addr.rpartition(':')
-                        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                        self._sock.connect((host, int(port or 514)))
-                self._sock.send(msg)
-            except OSError as e:
+                if self._sock is None or dest != target:
+                    self._close()
+                    self._sock = self._connect(target[0], target[1], target[0].startswith('/'))
+                    dest = target
+                if stream:
+                    self._sock.sendall(msg)
+                else:
+                    self._sock.send(msg)
+            except Exception as e:     # noqa: BLE001 -- the sender thread must never die
                 self.syslog_errors += 1
-                self.syslog_last_error = (util.now(), str(e)[:200])
-                try:
-                    if self._sock:
-                        self._sock.close()
-                finally:
-                    self._sock = None
+                self.syslog_last_error = (util.now(), ('%s: %s' % (type(e).__name__, e))[:200])
+                self._close()
+                dest = None
+                head[4] += 1
+                unsendable = isinstance(e, (ValueError, UnicodeError)) or getattr(e, 'errno', None) in (errno.EMSGSIZE,)
+                if unsendable or (head[3] is not None and head[4] >= 3):
+                    # this record can never go (too big, or for a destination given up on): drop it, not the queue
+                    with self._cond:
+                        if self._queue and self._queue[0] is head:
+                            self._queue.popleft()
+                            self.syslog_dropped += 1
+                    continue
+                self._retry_at = time.monotonic() + self.RETRY_AFTER
+                continue
+            with self._cond:
+                if self._queue and self._queue[0] is head:
+                    self._queue.popleft()
+                self.syslog_sent += 1
+                self._cond.notify_all()
+
+    def _close(self):
+        try:
+            if self._sock:
+                self._sock.close()
+        except OSError:
+            pass
+        self._sock = None
+
+    def reconnect(self):
+        """Settings changed: the next record goes with the new destination, at once."""
+        with self._cond:
+            self._reset = True
+            self._retry_at = 0
+            self._cond.notify_all()
+
+    def flush(self, timeout=3.0):
+        """Wait (a little) until the queue is sent: short-lived commands call it before they exit."""
+        end = time.monotonic() + timeout
+        with self._cond:
+            while self._queue and time.monotonic() < end and self._retry_at <= time.monotonic():
+                self._cond.wait(0.1)
+        return len(self._queue)
+
+    def _format(self, pri, line, fmt, local, when=None):
+        when = when or time.time()
+        if fmt == 'rfc5424':
+            ts = datetime.datetime.fromtimestamp(when).astimezone().isoformat(timespec='milliseconds')
+            return '<%d>1 %s %s %s %d audit - %s' % (pri, ts, self._hostname(), PROGRAM, os.getpid(), line)
+        if local:        # the local syslog daemon adds the time and the host name
+            return '<%d>%s: %s' % (pri, PROGRAM, line)
+        now = time.localtime(when)
+        ts = time.strftime('%b ', now) + ('%2d' % now.tm_mday) + time.strftime(' %H:%M:%S', now)
+        return '<%d>%s %s %s: %s' % (pri, ts, self._hostname(), PROGRAM, line)
+
+    def _hostname(self):
+        h = socket.gethostname().split('.')[0]
+        return ''.join(ch for ch in h if 33 <= ord(ch) < 127)[:255] or '-'
+
+    @staticmethod
+    def _connect(addr, proto, local):
+        if local:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            s.connect(addr)
+            return s
+        host, _, port = addr.rpartition(':')
+        host = host.strip('[]')
+        if proto == 'udp':
+            info = socket.getaddrinfo(host, int(port or 514), type=socket.SOCK_DGRAM)[0]
+            s = socket.socket(info[0], socket.SOCK_DGRAM)
+            s.connect(info[4])
+            return s
+        s = socket.create_connection((host, int(port or (6514 if proto == 'tls' else 514))), timeout=2)
+        if proto == 'tls':
+            import ssl
+            s = ssl.create_default_context().wrap_socket(s, server_hostname=host)
+        s.settimeout(2)
+        return s
 
     def list(self, action=None, actor=None, limit=100, before_id=None):
         sql, args = 'SELECT * FROM audit WHERE 1=1', []

@@ -13,7 +13,7 @@ import os
 import re
 
 from . import util
-from .config import Config, ConfigError, GEOIP_EDITIONS, LANGUAGES, ROLES  # noqa: F401
+from .config import FACILITIES, Config, ConfigError, GEOIP_EDITIONS, LANGUAGES, ROLES  # noqa: F401
 
 PREFIX = 'ui.'
 EMAIL_RE = r'[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}'
@@ -84,6 +84,12 @@ EDITABLE = {
     'notify.webhook_url': ('secret', {'re': r'(https?://[^\s"\'<>\\]{1,1990})?', 'max': 2000}),
     'notify.webhook_secret': ('secret', {'re': r'[\x21-\x7e]{0,200}'}),
     'notify.webhook_token': ('secret', {'re': r'[\x21-\x7e]{0,500}'}),
+    # syslog (audit rows as one JSON line each)
+    'syslog.enabled': ('bool', {}),
+    'syslog.address': ('str', {'re': r'/[\w./-]{1,200}|(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]{1,253}):\d{1,5}', 'max': 260}),
+    'syslog.protocol': ('choice', {'choices': ('udp', 'tcp', 'tls')}),
+    'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
+    'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
     # interface, people and policy
     'ui.login_notice': ('str', {'max': 2000, 'multiline': True}),
     'compliance.level': ('choice', {'choices': ('', 'low', 'medium', 'high')}),
@@ -285,13 +291,22 @@ def set_many(app, changes, actor, src_ip=None):
             continue
         db.x('INSERT OR REPLACE INTO settings(key, value, updated_by, updated_at) VALUES (?,?,?,?)',
              (PREFIX + k, json.dumps(v), actor, util.now()))
-        _with(cfg.data, k, v)
-        changed.append(k)
         secret = EDITABLE[k][0] == 'secret'
-        app.audit.log('settings.changed', actor, src_ip=src_ip, key=k,
-                      old=None if secret else old, new=('(secret %s)' % ('cleared' if not v else 'set')) if secret else v)
+        entry = dict(key=k, old=None if secret else old, new=('(secret %s)' % ('cleared' if not v else 'set')) if secret else v)
+        if k.startswith('syslog.'):
+            # recorded with the old settings, before they change: the SIEM always sees where its copy went (or
+            # that it was switched off)
+            app.audit.log('settings.changed', actor, src_ip=src_ip,
+                          severity='crit' if k == 'syslog.enabled' and not v else 'warning', **entry)
+            _with(cfg.data, k, v)
+        else:
+            _with(cfg.data, k, v)
+            app.audit.log('settings.changed', actor, src_ip=src_ip, **entry)
+        changed.append(k)
     if changed:
         _refresh(cfg)
+        if any(k.startswith('syslog.') for k in changed):
+            app.audit.reconnect()          # the next record goes with the new settings
         if any(k.startswith('geoip.') for k in changed):
             write_geoip_files(cfg)
     return changed

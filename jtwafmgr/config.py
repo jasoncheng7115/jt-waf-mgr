@@ -111,8 +111,13 @@ DEFAULTS = {
     },
     'syslog': {
         'enabled': True,
+        # a local socket (/dev/log: the host's rsyslog / journald forwards it; recommended) or host:port
         'address': '/dev/log',
         'facility': 'local0',
+        # for host:port: udp | tcp | tls (TCP with TLS, the server certificate checked against the system CAs)
+        'protocol': 'udp',
+        # rfc3164 (classic BSD syslog) | rfc5424 (with an ISO timestamp, host name and message id)
+        'format': 'rfc3164',
     },
     'ui': {
         'source_url': '',
@@ -248,6 +253,13 @@ class Config:
                 raise ConfigError('auth.require_totp_roles: unknown role %r' % role)
         if data['syslog']['facility'] not in FACILITIES:
             raise ConfigError('syslog.facility: unknown facility')
+        sl = data['syslog']
+        if sl['protocol'] not in ('udp', 'tcp', 'tls') or sl['format'] not in ('rfc3164', 'rfc5424'):
+            raise ConfigError('syslog.protocol: udp, tcp or tls; syslog.format: rfc3164 or rfc5424')
+        if not sl['address'].startswith('/') and not re.fullmatch(r'(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]{1,253}):\d{1,5}', sl['address']):
+            raise ConfigError('syslog.address: a socket path (/dev/log) or host:port')
+        if not sl['address'].startswith('/') and not 1 <= int(sl['address'].rsplit(':', 1)[1]) <= 65535:
+            raise ConfigError('syslog.address: port 1-65535')
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', data['node']['id']):
             raise ConfigError('node.id: letters, digits, _ . - only')
         host, _, port = data['server']['listen'].rpartition(':')

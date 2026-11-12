@@ -525,8 +525,10 @@ _FULLWIDTH = str.maketrans({'[': '［', ']': '］', '*': '＊', '_': '＿', '`':
 
 def _md_escape(s):
     """Teams Adaptive Card text: markdown characters become their full-width look-alikes (backslash escapes are
-    not honoured everywhere), so a value can never become a link, emphasis or a mention."""
-    return s.translate(_FULLWIDTH)
+    not honoured everywhere), so a value can never become a link, emphasis or a mention; a bare address is broken
+    with a zero-width space so Teams does not turn it into a link either."""
+    s = re.sub(r'(?i)(https?|ftp)://', lambda m: m.group(1) + ':\u200b//', s.translate(_FULLWIDTH))
+    return re.sub(r'(?i)\bwww\.', 'www\u200b.', s)
 
 
 def _nomention(s):

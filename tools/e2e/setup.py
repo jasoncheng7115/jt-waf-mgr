@@ -48,7 +48,33 @@ app.monitor.check_chain(); app.monitor.backup()
 # notifications and alerts (synthetic; nothing is sent: the notify unit does not run here)
 from jtwafmgr import alerts, uisettings
 uisettings.set_many(app, {'notify.enabled': True, 'notify.base_url': 'https://waf.example.com', 'notify.webhook_enabled': True,
-                          'notify.webhook_url': 'https://hooks.example.com/waf', 'notify.webhook_secret': 'e2e-signing-secret-0123456789'}, 'admin')
+                          'notify.webhook_url': 'https://hooks.example.com/waf', 'notify.webhook_secret': 'e2e-signing-secret-0123456789',
+                          'llm.enabled': True, 'llm.url': 'http://192.0.2.10:8080/v1', 'llm.model': 'example-model',
+                          'analyst.enabled': True, 'analyst.window_hours': 168}, 'admin')
+# one synthetic analysis run (no LLM here): what the analysis page and its summary show
+cands = [
+    {'id': 'c1', 'path': '/.env', 'events': 14, 'sources': 9, 'hosts': ['app.example.com', 'shop.example.com'], 'host_count': 2,
+     'families': ['lfi'], 'rules': [{'id': 930130, 'msg': 'Restricted File Access Attempt', 'hits': 14}], 'statuses': {'404': 11, '200': 3},
+     'variants': ['/.env'], 'blocked_by_score': 2, 'logged': 12, 'answered_2xx': 3, 'internal_users': 0, 'methods': {'GET': 14},
+     'first_seen': '2026-11-10T01:00:00+00:00', 'last_seen': '2026-11-12T01:00:00+00:00'},
+    {'id': 'c2', 'path': '/wp-login.php', 'events': 22, 'sources': 12, 'hosts': ['www.example.com'], 'host_count': 1,
+     'families': ['scanner'], 'rules': [{'id': 913100, 'msg': 'Found User-Agent associated with security scanner', 'hits': 9}],
+     'statuses': {'404': 22}, 'variants': ['/wp-login.php'], 'blocked_by_score': 0, 'logged': 22, 'answered_2xx': 0,
+     'internal_users': 0, 'methods': {'GET': 20, 'POST': 2}, 'first_seen': '2026-11-10T03:00:00+00:00', 'last_seen': '2026-11-12T02:00:00+00:00'},
+    {'id': 'f1', 'type': 'false_positive', 'host': 'shop.example.com', 'path': '/api/notes', 'events': 12, 'sources': 5,
+     'internal_sources': 3, 'methods': {'POST': 12}, 'variants': ['/api/notes'], 'families': ['xss'],
+     'rules': [{'id': 941100, 'msg': 'XSS Attack Detected via libinjection', 'hits': 12, 'targets': ['ARGS:body'], 'matched': ['<p>hello</p>']}],
+     'first_seen': '2026-11-11T08:00:00+00:00', 'last_seen': '2026-11-12T08:00:00+00:00'}]
+verdicts = [
+    {'id': 'c1', 'verdict': 'attack_probe', 'confidence': 0.95, 'reason': 'Environment file probe; no site serves it.', 'regex': '^/\\.env$', 'label': 'env file probe', 'problem': None},
+    {'id': 'c2', 'verdict': 'attack_probe', 'confidence': 0.9, 'reason': 'WordPress login probe; these sites do not run WordPress.', 'regex': '^/wp-login\\.php$', 'label': 'wordpress login probe', 'problem': None},
+    {'id': 'f1', 'verdict': 'false_positive', 'confidence': 0.9, 'reason': 'Rich-text editor content (HTML) of the notes API.', 'regex': None, 'label': None, 'problem': None}]
+app.db.x("INSERT INTO analyst_runs(node_id, started_at, finished_at, trigger, window_hours, model, llm_seconds, prompt_chars, candidates, "
+         "verdicts, proposals, skipped, usage, alerts, events_scanned) VALUES ('waf1', ?, ?, 'timer', 168, 'example-model', 61.4, 8200, ?, ?, '[]', ?, "
+         "'{\"prompt_tokens\": 2400, \"completion_tokens\": 900}', '[]', 260)",
+         (now - 3600, now - 3500, json.dumps(cands), json.dumps(verdicts),
+          json.dumps([{'id': 'c1', 'path': '/.env', 'reason': 'not_adopted'}, {'id': 'c2', 'path': '/wp-login.php', 'reason': 'not_adopted'},
+                      {'id': 'f1', 'host': 'shop.example.com', 'path': '/api/notes', 'reason': 'not_adopted'}])))
 alerts.raise_alert(app.db, app.audit, 'analyst', 'attack_passed', 'critical', 'attack_passed:/.env',
                    {'path': '/.env', 'host': 'app.example.com', 'count': 3, 'reason': '<b>not markup</b> probe answered 200'}, link='/analysis')
 alerts.raise_alert(app.db, app.audit, 'analyst', 'false_positive', 'warning', 'false_positive:shop.example.com/api/notes',

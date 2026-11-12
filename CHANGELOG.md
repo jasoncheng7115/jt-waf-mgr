@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 (2026-11-13)
+
+- Syslog in the web interface (Settings): on / off, destination (the local /dev/log, recommended, or host:port),
+  protocol UDP, TCP or TLS (server certificate checked against the system CAs), format RFC 3164 or RFC 5424 (ISO
+  time, host name, message id; octet-counting framing over TCP), facility. A TCP / TLS server that does not answer is
+  retried after 30 seconds instead of slowing every request; failures show in the system check.
+- Teams messages: a web address in a value is never turned into a link.
+- Tests clean up every temporary directory they create.
+- The analysis unit and guide describe the LLM server as configured (not local) and the batched requests.
+- Browser test environment: a synthetic analysis run, so the analysis page and its summary are covered.
+
 ## 0.4.0 (2026-11-12)
 
 - Notifications: e-mail (SMTP, text + HTML), Telegram, Microsoft Teams (Workflows, Adaptive Card), Slack,
