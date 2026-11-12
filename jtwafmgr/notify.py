@@ -544,6 +544,60 @@ def render(db, cfg, event, d):
     return Msg(title, sev, [(a, _v(b)) for a, b in facts if b not in (None, '', [])], _v(text, 600), _link(cfg, path), lang)
 
 
+# --- preview (settings page): every event rendered from made-up example data, never from real records ---------------
+
+_SAMPLE_CHANGE = {'kind': 'confident_block', 'op': 'add', 'direction': 'tighten', 'rule_id': 10205,
+                  'proposed_by': 'analyst', 'reason': 'Block probes for /.env on all sites', 'state': 'pending_approval'}
+SAMPLES = {
+    'alert.created': {'kind': 'attack_passed', 'alert_severity': 'critical', 'host': 'app.example.com', 'path': '/.env',
+                      'count': 3, 'reason': 'probe answered 200', 'link': '/alerts'},
+    'alert.reminder': {'open': 2, 'items': [{'id': 7, 'kind': 'attack_passed', 'summary': 'app.example.com /.env'},
+                                            {'id': 8, 'kind': 'false_positive', 'summary': 'shop.example.com /api/notes'}]},
+    'integrity.audit_chain_failed': {'reason': 'row 812: hash does not match'},
+    'integrity.audit_chain_failed_recovered': {},
+    'integrity.program_failed': {'reason': 'files differ from the signed manifest', 'changed': ['jtwafmgr/web/api.py']},
+    'integrity.program_failed_recovered': {},
+    'config.changed_outside': {'changed': ['/etc/nginx/vhost/app.example.com.conf'], 'snapshot': 12},
+    'change.apply_blocked_drift': {'change_id': 9, 'version': 4},
+    'auth.step_up_locked': {'_actor': 'alice', '_src_ip': '192.0.2.10', 'failures': 5, 'minutes': 15, 'purpose': 'approve'},
+    'account.locked': {'_actor': 'alice', '_src_ip': '192.0.2.10', 'failures': 5, 'minutes': 15},
+    'totp.disabled': {'_actor': 'alice', '_src_ip': '192.0.2.10'},
+    'change.awaiting_approval': {'change_id': 9},
+    'change.check_failed': {'change_id': 9, 'step': 'sandbox'},
+    'change.applied': {'change_id': 9, 'version': 4, 'files': ['after-crs.conf']},
+    'change.apply_failed': {'change_id': 9, 'version': 4, 'step': 'nginx -t'},
+    'change.rejected': {'change_id': 9},
+    'change.rollback_requested': {'change_id': 9, 'version': 4},
+    'report.daily': {'day': '2026-01-01', 'events': 1240, 'prev_events': 1180, 'blocked': 310, 'prev_blocked': 295,
+                     'logged': 930, 'prev_logged': 885, 'sources': 212, 'top_hosts': [['app.example.com', 640]],
+                     'top_rules': [['930120', 120]], 'open_alerts': 1, 'applied': 2, 'proposed': 3},
+    'analyst.proposals': {'run_id': 14, 'proposals': [21, 22]},
+    'analyst.failed': {'run_id': 15, 'error': 'unreachable: timed out'},
+    'backup.failed': {'file': '/var/backups/jt-waf-mgr/jt-waf-mgr-20260101-030000.db', 'error': 'No space left on device'},
+    'system.version_changed': {'previous': '0.4.8', 'current': '0.4.9'},
+    'user.created': {'_actor': 'admin', 'target': 'bob'},
+    'token.created': {'_actor': 'admin', 'name': 'siem-reader'},
+    'settings.changed': {'_actor': 'admin', 'key': 'notify.remind_hours'},
+}
+
+
+class _SampleDB:
+    """Answers render()'s one question about a change with the example change."""
+    def one(self, sql, args=()):
+        return _SAMPLE_CHANGE if 'FROM changes' in sql else None
+
+
+def preview(cfg, event, lang=None):
+    """The message an event would send, from example data (lang: one of the three, default notify.language)."""
+    if event not in EVENTS and event != TEST_EVENT:
+        raise KeyError(event)
+    c = {'node': cfg['node'], 'notify': dict(cfg['notify'], language=lang if lang in TEXT else cfg['notify']['language'])}
+    m = render(_SampleDB(), c, event, dict(SAMPLES.get(event, {})))
+    return {'event': event, 'severity': m.severity, 'title': m.title, 'text': m.text,
+            'facts': [{'label': a, 'value': b} for a, b in m.facts], 'link': m.link, 'plain': fmt_text(m),
+            'language': c['notify']['language']}
+
+
 def still_relevant(db, event, d):
     """False when the message no longer says anything true (an approval request for a change that is decided)."""
     if event == 'change.awaiting_approval' and _int(d.get('change_id')):

@@ -513,3 +513,27 @@ class TestApi(NotifyBase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestPreview(TestApi):
+    test_test_send_deliveries_and_alerts = None       # runs in TestApi
+
+    def test_preview_every_event_in_three_languages(self):
+        adm = self.client('admin1')
+        n_audit = self.app.db.one('SELECT COUNT(*) c FROM audit')['c']
+        for lang in ('zh-TW', 'en', 'ja'):
+            for ev in list(notify.EVENTS) + [notify.TEST_EVENT]:
+                st, p, _ = adm.req('GET', '/api/v1/notify/preview?event=%s&lang=%s' % (ev, lang))
+                self.assertEqual(st, 200, (ev, lang))
+                self.assertEqual(p['language'], lang)
+                self.assertTrue(p['title'] and '{' not in p['title'] and p['plain'].count('\n') >= 0, (ev, p['title']))
+        st, p, _ = adm.req('GET', '/api/v1/notify/preview?event=change.awaiting_approval&lang=en')
+        self.assertIn('#9', p['title'])
+        self.assertIn({'label': 'Rule', 'value': '10205'}, p['facts'])
+        # example data only: no notification queued, nothing read from or written to the change list or the audit trail
+        self.assertEqual(self.app.db.one('SELECT COUNT(*) c FROM notifications')['c'], 0)
+        self.assertEqual(self.app.db.one('SELECT COUNT(*) c FROM audit')['c'], n_audit)
+        self.assertEqual(adm.req('GET', '/api/v1/notify/preview?event=nope')[0], 404)
+        self.assertEqual(adm.req('GET', '/api/v1/notify/preview?event=report.daily&lang=xx')[1]['language'],
+                         self.app.cfg['notify']['language'])
+        self.assertEqual(self.client('viewer1').req('GET', '/api/v1/notify/preview?event=report.daily')[0], 403)

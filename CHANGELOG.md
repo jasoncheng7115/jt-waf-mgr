@@ -2,6 +2,11 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.10 (2026-11-13)
+
+- Notification settings: "Preview" on every event of the event matrix shows the message it sends (title, text,
+  facts, link), from made-up example data, in any of the three languages. `GET /notify/preview?event=&lang=` (admin).
+
 ## 0.4.9 (2026-11-13)
 
 - Filter by country: click a country on the world map or in the country list (overview, event list), or pick one in

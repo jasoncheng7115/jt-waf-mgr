@@ -199,6 +199,18 @@ async function audit(page, where) {
   await page.goto(base + '/lookup/203.0.113.9', { waitUntil: 'networkidle' });
   ok((await page.locator('.worldmap .wm-dot').count()) === 1, 'lookup: location on the world map');
   await page.goto(base + '/', { waitUntil: 'networkidle' });
+  // notification preview: example message, language switch, Escape closes
+  await page.goto(base + '/admin/notify', { waitUntil: 'networkidle' });
+  await page.locator('#notify-events .evname button').first().click();
+  await page.waitForSelector('.pvmsg', { timeout: 5000 }).catch(() => {});
+  const pv1 = await page.locator('.pvmsg .pvtitle b').innerText().catch(() => '');
+  await page.locator('.pvbar .seg button', { hasText: 'English' }).click();
+  await page.waitForLoadState('networkidle');
+  const pv2 = await page.locator('.pvmsg .pvtitle b').innerText().catch(() => '');
+  ok(pv1 && pv2 && pv1 !== pv2 && /^[\x20-\x7e]+$/.test(pv2), 'notify: preview in two languages (' + pv1 + ' / ' + pv2 + ')');
+  await page.keyboard.press('Escape');
+  ok(!(await page.locator('.pvmsg').count()), 'notify: preview closes with Escape');
+  await page.goto(base + '/', { waitUntil: 'networkidle' });
   // hover tooltip on a chart
   const bar = page.locator('.hb-bar').first();
   await bar.hover();

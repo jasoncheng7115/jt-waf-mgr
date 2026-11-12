@@ -56,6 +56,10 @@ the matching secret is stored is refused (`key_required_for_new_host`) unless th
 `POST /notify/test {"channel": "telegram"}` (admin) → 202 Delivery. Works while notifications are off; the
 channel must be set up and saved (409 `channel_not_configured`). Audited `notify.test_requested`.
 
+`GET /notify/preview?event=<event>&lang=zh-TW|en|ja` (admin) → the message the event sends, rendered from made-up
+example data (never real records; nothing is queued or audited):
+`{event, language, severity, title, text, facts: [{label, value}], link, plain}`. 404 `unknown_event`.
+
 `GET /notify/deliveries?channel=&status=&cursor=&limit=` (admin) → `{items: [Delivery], next_cursor}`;
 `GET /notify/deliveries/{id}` (admin) → Delivery
 ```json

@@ -42,6 +42,15 @@ def notify_test(app, req):
     return json_response(202, notify.delivery(r))
 
 
+def notify_preview(app, req):
+    ev = req.query.get('event', '')
+    try:
+        out = notify.preview(app.cfg, ev, req.query.get('lang'))
+    except KeyError:
+        raise ApiError(404, 'unknown_event')
+    return json_response(200, out)
+
+
 def notify_deliveries(app, req):
     limit, cursor = _page(req)
     sql, args = 'SELECT * FROM notifications WHERE 1=1', []
@@ -111,6 +120,7 @@ def register(router):
     admin = ('admin',)
     R('GET', V + '/notify/status', notify_status, admin)
     R('POST', V + '/notify/test', notify_test, admin)
+    R('GET', V + '/notify/preview', notify_preview, admin)
     R('GET', V + '/notify/deliveries', notify_deliveries, admin)
     R('GET', V + '/notify/deliveries/{id}', notify_delivery, admin)
     R('GET', V + '/alerts', alert_list, ('role', 'viewer', 'changes:read'))
