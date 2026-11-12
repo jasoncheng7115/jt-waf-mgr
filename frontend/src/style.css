@@ -745,3 +745,6 @@ label.check + p.muted { margin: 3px 0 10px 26px; }
 .sumlist li:has(.eff-loosens) { background: var(--ok-bg); border-left-color: var(--ok); }
 .sumlist li:has(.eff-not_inspected) { background: var(--warn-bg); border-left-color: var(--warn); }
 .sumlist li:has(.eff-info) { background: var(--guide-bg); border-left-color: var(--accent); }
+.chartsvg .hv-total { fill: var(--text); font-size: 13px; font-weight: 700; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.chartsvg .hv-timebg { fill: var(--text); }
+.chartsvg .hv-time { fill: var(--panel); font-size: 12px; font-weight: 700; }

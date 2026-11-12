@@ -37,7 +37,7 @@
       <!-- actions -->
       <section v-if="canApprove || canReject || canCancel || canRecheck" class="card form">
         <h2>{{ t('change.actions') }}</h2>
-        <p v-if="c.direction !== 'tighten' && c.state === 'pending_approval'" class="muted small">{{ t('wizard.loosen_note') }}</p>
+        <p v-if="c.direction === 'loosen' && c.state === 'pending_approval'" class="muted small">{{ t('wizard.loosen_note') }}</p>
         <p v-if="own && canApprove" class="alert info">{{ t('change.own_note') }}</p>
         <div class="filters inline">
           <label class="field grow"><span>{{ t('change.note') }}</span>
@@ -129,7 +129,7 @@ const canReject = computed(() => c.value && c.value.state === 'pending_approval'
 const canCancel = computed(() => c.value && ['checking', 'pending_approval'].includes(c.value.state) &&
   hasRole('operator') && ownOrAdmin.value)
 const canRecheck = computed(() => c.value && ['failed', 'pending_approval'].includes(c.value.state) &&
-  hasRole('operator') && ownOrAdmin.value && !['adopt', 'rollback'].includes(c.value.op))
+  hasRole('operator') && ownOrAdmin.value && c.value.op !== 'rollback' && (c.value.op !== 'adopt' || hasRole('admin')))
 
 // --- where the change stands (changes.py states, apply.py steps) ---------------------------
 const lastLog = (actions) => ((c.value && c.value.log) || []).filter((l) => actions.includes(l.action)).pop()

@@ -133,7 +133,7 @@ const hitBars = computed(() => {
   const seen = new Set()
   return items.value.filter((r) => r.hits_30d > 0 && !seen.has(r.id) && seen.add(r.id))
     .sort((a, b) => b.hits_30d - a.hits_30d).slice(0, 15)
-    .map((r) => ({ key: String(r.id), label: String(r.id), sub: r.msg || r.comment || '', to: '/rules/' + r.id,
+    .map((r) => ({ key: String(r.id), label: String(r.id) + (r.category ? ' · ' + t('category.' + r.category) : ''), sub: r.msg || r.comment || '', to: '/rules/' + r.id,
                    values: { d7: r.hits_7d || 0, older: Math.max(0, (r.hits_30d || 0) - (r.hits_7d || 0)) } }))
 })
 

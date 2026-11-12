@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.3 (2026-11-12)
+
+- Adoption: the root apply program also validates rule by rule (it re-checks every request itself and
+  refused the 37 KB site file as a whole); a failure names the rule. Verified end to end with the first
+  site's real rule files: both checks pass and the 51 managed rules are identical to the originals.
+- An adoption that failed its checks can be checked again (admin).
+- "This change loosens the WAF" is shown only for loosening changes, not for neutral ones such as adoption.
+- The changes page opens with the list; the workflow explanation is one click away.
+- Hourly chart: the total and the time are shown right at the pointer.
+- Rule charts (overview, IP lookup, rules) show what a rule is: "930120 · local file access", with the rule's message.
+- `doctor` / system check from the command line judge the collector by the service's recorded progress
+  (no more false warning).
+
 ## 0.3.2 (2026-11-12)
 
 - Adoption of real-sized rule files: the static check now runs rule by rule (the per-rule length limit was

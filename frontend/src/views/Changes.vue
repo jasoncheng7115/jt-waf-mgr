@@ -89,7 +89,7 @@ const canPropose = computed(() => hasRole('operator'))
 
 // guide, remembered in this browser
 const GUIDE_KEY = 'jtwaf.guide.changes'
-function readGuide() { try { return localStorage.getItem(GUIDE_KEY) !== '0' } catch { return true } }
+function readGuide() { try { return localStorage.getItem(GUIDE_KEY) === '1' } catch { return false } }   // collapsed until opened: the list comes first
 const showGuide = ref(readGuide())
 watch(showGuide, (v) => { try { localStorage.setItem(GUIDE_KEY, v ? '1' : '0') } catch { /* private mode */ } })
 

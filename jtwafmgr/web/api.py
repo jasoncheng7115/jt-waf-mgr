@@ -240,6 +240,7 @@ def _by_rule(app, since, until, limit=15, fw='', fa=()):
     for r in rows:
         rule = app.site.rule(r['rule_id'])
         out.append({'key': str(r['rule_id']), 'msg': (rule.action('msg') if rule else '') or '',
+                    'family': util.family_of(r['rule_id'], app.cfg['waf']['local_range']),
                     'blocked': r['b'] or 0, 'logged': r['l'] or 0})
     return out
 
@@ -562,7 +563,19 @@ def lookup_ip(app, req):
         'd7': {'events': d7['n'] or 0, 'blocked': d7['b'] or 0}, 'd30': {'events': d30['n'] or 0, 'blocked': d30['b'] or 0},
         'first_seen': util.iso(d30['f']), 'last_seen': util.iso(d30['l']),
         'hosts': [{'key': r['k'], 'events': r['n']} for r in hosts],
-        'rules': [{'key': str(r['k']), 'events': r['n']} for r in rules_], 'blocked_now': False})
+        'rules': [_rule_label(app, r['k'], {'key': str(r['k']), 'events': r['n']}) for r in rules_], 'blocked_now': False})
+
+
+def _rule_label(app, rule_id, out):
+    """What a rule id means: its message and attack family (for charts that would otherwise show bare numbers)."""
+    try:
+        rid = int(rule_id)
+    except (TypeError, ValueError):
+        return out
+    rule = app.site.rule(rid)
+    out['msg'] = ((rule.action('msg') if rule else '') or '')[:200]
+    out['family'] = util.family_of(rid, app.cfg['waf']['local_range'])
+    return out
 
 
 # --- admin ---------------------------------------------------------------------------------

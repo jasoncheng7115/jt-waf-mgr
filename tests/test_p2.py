@@ -432,6 +432,23 @@ class TestApplier(unittest.TestCase):
         with open(os.path.join(self.cfg['managed']['spool'], 'v1-c1.result')) as fh:
             return json.load(fh)
 
+    def test_large_real_world_file_passes_the_root_check(self):
+        """The root program re-validates every rule; a real site file is far larger than one rule's limit."""
+        rules = ''.join('# block %d\nSecRule REQUEST_URI "@beginsWith /p-%03d-%s" "id:%d,phase:1,deny,status:403,log"\n\n'
+                        % (i, i, 'y' * 80, 10400 + i) for i in range(300))
+        rules += 'SecRule REQUEST_HEADERS:User-Agent "@pmFromFile /etc/nginx/modsec/crs/rules/scanners-user-agents.data" "id:10399,phase:1,deny,log"\n'
+        files = self.files(rules)
+        self.assertGreater(len(files['before']), 30000)
+        self.request(files)
+        res = self.result()
+        self.assertEqual(res['result'], 'ok', res)
+
+    def test_root_check_names_the_bad_rule(self):
+        self.request(self.files('SecRule ARGS "@rx x" "id:10150,phase:1,pass,nolog"\n\nSecRule ARGS "@pmFromFile /etc/shadow" "id:10151,phase:1,deny"\n'))
+        res = self.result()
+        self.assertEqual((res['result'], res['step']), ('failed', 'validate'))
+        self.assertIn('10151', res['summary'])
+
     def test_spool_links_cannot_redirect_root_writes(self):
         """A compromised service user owns the spool: links planted there must not make root write elsewhere."""
         victim = os.path.join(self.d, 'victim')

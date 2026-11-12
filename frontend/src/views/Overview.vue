@@ -117,7 +117,7 @@
         </section>
         <section class="card">
           <h2>{{ t('overview.by_rule') }}</h2>
-          <CountList :items="data.by_rule" mono pickable :active-key="filters.rule_id" :open-label="t('filter.open_rule')" :link-for="(it) => ({ path: '/rules/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('rule_id', it.key)" />
+          <CountList :items="data.by_rule" mono pickable :label-for="(it) => it.key + (it.family ? ' · ' + tOr('family.' + it.family, it.family) : '')" :active-key="filters.rule_id" :open-label="t('filter.open_rule')" :link-for="(it) => ({ path: '/rules/' + encodeURIComponent(it.key) })" @pick="(it) => toggleFilter('rule_id', it.key)" />
         </section>
       </div>
       <p class="muted small">{{ t('overview.period', { since: fmtTime(data.since), until: fmtTime(data.until) }) }}</p>

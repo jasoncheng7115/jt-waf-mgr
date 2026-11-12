@@ -46,7 +46,7 @@ import GeoTag from '../components/GeoTag.vue'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { get } from '../api.js'
-import { t } from '../i18n.js'
+import { t, tOr } from '../i18n.js'
 import { hasRole } from '../store.js'
 import { safeText, fmtNum, fmtTime } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
@@ -101,7 +101,8 @@ const hostBars = computed(() => (data.value ? data.value.hosts : []).map((h) => 
   to: { path: '/events', query: { src_ip: data.value.ip, host: h.key } },
 })))
 const ruleBars = computed(() => (data.value ? data.value.rules : []).map((r) => ({
-  key: String(r.key), label: safeText(r.key, 12), values: { events: r.events || 0 }, to: '/rules/' + encodeURIComponent(r.key),
+  key: String(r.key), label: safeText(r.key, 12) + (r.family ? ' · ' + tOr('family.' + r.family, r.family) : ''),
+  sub: r.msg ? safeText(r.msg, 120) : null, values: { events: r.events || 0 }, to: '/rules/' + encodeURIComponent(r.key),
 })))
 
 function go() {

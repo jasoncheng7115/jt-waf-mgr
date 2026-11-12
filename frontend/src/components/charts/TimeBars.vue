@@ -11,6 +11,12 @@
         <path v-for="s in b.segs" :key="s.key" :class="'fill-' + s.tone" :d="s.d" />
       </g>
       <line v-if="hover >= 0" class="crosshair" :x1="bars[hover].cx" :x2="bars[hover].cx" :y1="PADT" :y2="H - PADB" />
+      <!-- the numbers right at the pointer: the total above the column, the time on the axis -->
+      <g v-if="hover >= 0" class="hoverlabels" aria-hidden="true">
+        <text class="hv-total" :x="bars[hover].cx" :y="Math.max(PADT + 12, bars[hover].top - 6)" text-anchor="middle">{{ fmtNum(total(bars[hover].d)) }}</text>
+        <rect class="hv-timebg" :x="bars[hover].cx - 30" :y="H - PADB + 3" width="60" height="18" rx="4" />
+        <text class="hv-time" :x="bars[hover].cx" :y="H - 8" text-anchor="middle">{{ hoverTime }}</text>
+      </g>
       <text v-for="tk in ticks" :key="'t' + tk.x" class="axis-label" :x="tk.x" :y="H - 6" text-anchor="middle">{{ tk.label }}</text>
     </svg>
     <div v-if="series.length > 1" class="legend">
@@ -79,7 +85,7 @@ const bars = computed(() => {
       base -= h
       return p
     })
-    return { cx: x + bw.value / 2, segs, d }
+    return { cx: x + bw.value / 2, segs, d, top: base }
   })
 })
 const ticks = computed(() => {
@@ -115,5 +121,10 @@ function move(e) {
   const d = props.data[i]
   at(e, daily.value ? fmtDay(d.t) : fmtShortTime(d.t), props.series.map((s) => ({ value: fmtNum(d[s.key] || 0), label: s.label, tone: s.tone })))
 }
+const hoverTime = computed(() => {
+  if (hover.value < 0) return ''
+  const t0 = props.data[hover.value].t
+  return daily.value ? fmtDay(t0) : fmtShortTime(t0).slice(-5)
+})
 function leave() { hover.value = -1; hide() }
 </script>

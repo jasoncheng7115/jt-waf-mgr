@@ -395,10 +395,20 @@ def system_check(app):
                          error=last.get('error'), copies=len(mon.backups())))
 
     st = app.tailer.stats if app.tailer else {}
-    readable = os.access(cfg['paths']['audit_log'], os.R_OK)
-    out.append(_item('collector', 'ok' if readable and not st.get('error') and app.tailer else 'warn',
-                     audit_log=cfg['paths']['audit_log'], readable=readable, running=bool(app.tailer),
-                     error=st.get('error'), last_read=util.iso(st.get('last_read'))))
+    if app.tailer:
+        readable = os.access(cfg['paths']['audit_log'], os.R_OK)
+        good = readable and not st.get('error')
+        last_read = st.get('last_read')
+    else:
+        # checked from the command line (a separate process without the log's group): judge the running
+        # service by how recently its collector recorded progress
+        r = app.db.one('SELECT MAX(updated) FROM collector_state')
+        last_read = r[0] if r and r[0] else None
+        readable = None
+        good = last_read is not None and time.time() - last_read < 300
+    out.append(_item('collector', 'ok' if good else 'warn',
+                     audit_log=cfg['paths']['audit_log'], readable=readable, running=bool(app.tailer) or good,
+                     error=st.get('error'), last_read=util.iso(last_read)))
 
     armed = os.path.exists('/etc/systemd/system/multi-user.target.wants/jt-waf-mgr-apply.path')
     m = app.workflow.managed
