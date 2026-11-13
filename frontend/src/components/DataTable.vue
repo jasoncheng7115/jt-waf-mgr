@@ -37,15 +37,20 @@
       <span class="dt-count">{{ t(hasMore ? 'table.rows_more' : 'table.rows', { n: fmtNum(filtered.length) }) }}<template v-if="filtered.length !== rows.length"> / {{ fmtNum(rows.length) }}</template></span>
     </div>
     <div ref="wrap" class="tablewrap" @scroll="syncFromWrap">
-      <table class="grid">
+      <table ref="tbl" class="grid" :class="{ fixedcols: hasWidths }" :style="hasWidths ? { width: tableWidth + 'px' } : null">
         <thead>
           <tr>
-            <th v-for="c in visibleCols" :key="c.key" :class="[c.align, { sortable: c.sortable !== false }]"
+            <th v-for="c in visibleCols" :key="c.key" :class="[c.align, { sortable: c.sortable !== false }]" :data-col="c.key"
+                :style="widths[c.key] ? { width: widths[c.key] + 'px' } : null"
                 :aria-sort="sortKey === c.key ? (sortDir > 0 ? 'ascending' : 'descending') : null">
               <button v-if="c.sortable !== false" type="button" class="dt-sort" @click="sortBy(c)">
                 {{ c.label }}<Icon :name="sortKey === c.key ? (sortDir > 0 ? 'sortUp' : 'sortDown') : 'sort'" class="dt-sorticon" :class="{ on: sortKey === c.key }" />
               </button>
               <template v-else>{{ c.label }}</template>
+              <!-- drag (or arrow keys) to set the column's width; a double click gives every column its own width back -->
+              <span class="dt-resize" role="separator" aria-orientation="vertical" tabindex="0" :aria-label="t('table.resize', { col: c.label || c.key })"
+                    :title="t('table.resize_hint')" @pointerdown.prevent="startResize($event, c)" @dblclick.stop="resetWidths"
+                    @keydown.left.prevent="nudge(c, -16)" @keydown.right.prevent="nudge(c, 16)" @click.stop></span>
             </th>
           </tr>
           <tr v-if="showFilters" class="dt-filters">
@@ -116,6 +121,9 @@ const saved = load()
 const defaultPageSize = props.pageSize
 const pageSize = ref([10, 25, 50, 100, 200].includes(saved.pageSize) ? saved.pageSize : props.pageSize)
 const hiddenSet = ref(Array.isArray(saved.hidden) ? saved.hidden : null)    // null = column defaults
+// column widths the user set (px by column key); none = the browser sizes the columns to their content
+const widths = ref(saved.widths && typeof saved.widths === 'object' && !Array.isArray(saved.widths)
+  ? Object.fromEntries(Object.entries(saved.widths).filter(([, v]) => Number.isFinite(v) && v >= 40 && v <= 2000)) : {})
 const sortKey = ref(saved.sortKey !== undefined ? saved.sortKey : (props.defaultSort ? props.defaultSort.key : null))
 const sortDir = ref(saved.sortDir === -1 || saved.sortDir === 1 ? saved.sortDir : (props.defaultSort ? props.defaultSort.dir || 1 : 1))
 const quick = ref('')
@@ -135,10 +143,36 @@ const colBtn = ref(null), colPop = ref(null)
 
 function persist() {
   try {
-    window.localStorage.setItem(STORE, JSON.stringify({ pageSize: pageSize.value, hidden: hiddenSet.value, sortKey: sortKey.value, sortDir: sortDir.value }))
+    window.localStorage.setItem(STORE, JSON.stringify({ pageSize: pageSize.value, hidden: hiddenSet.value, sortKey: sortKey.value, sortDir: sortDir.value,
+      widths: widths.value }))
   } catch { /* storage unavailable */ }
 }
-watch([pageSize, hiddenSet, sortKey, sortDir], persist, { deep: true })
+watch([pageSize, hiddenSet, sortKey, sortDir, widths], persist, { deep: true })
+
+// --- column widths -----------------------------------------------------------------------------------------------
+const tbl = ref(null)
+const MIN_W = 48
+const hasWidths = computed(() => visibleCols.value.some((c) => widths.value[c.key]))
+const tableWidth = computed(() => visibleCols.value.reduce((a, c) => a + (widths.value[c.key] || 120), 0))
+function freeze() {
+  // the first resize: every visible column keeps the width it has now, so only the dragged one changes
+  if (hasWidths.value || !tbl.value) return
+  const w = {}
+  for (const th of tbl.value.querySelectorAll('thead tr:first-child th')) w[th.dataset.col] = Math.round(th.getBoundingClientRect().width)
+  widths.value = w
+}
+function setWidth(c, px) { widths.value = { ...widths.value, [c.key]: Math.max(MIN_W, Math.min(2000, Math.round(px))) } }
+function startResize(e, c) {
+  freeze()
+  const x0 = e.clientX
+  const w0 = widths.value[c.key] || MIN_W
+  const move = (ev) => setWidth(c, w0 + ev.clientX - x0)
+  const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+function nudge(c, d) { freeze(); setWidth(c, (widths.value[c.key] || MIN_W) + d) }
+function resetWidths() { widths.value = {} }
 
 function isVisible(c) {
   if (c.required) return true

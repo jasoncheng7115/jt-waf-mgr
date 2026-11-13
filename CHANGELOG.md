@@ -2,6 +2,20 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.19 (2026-11-13)
+
+- Log servers (syslog / SIEM): up to 8 destinations, each with its own address, protocol (local socket, UDP, TCP,
+  TLS), record format (JSON, CEF, LEEF 2.0, GELF 1.1, key=value), syslog header and content (audit records, WAF
+  events, alerts), its own queue, retries and counters. WAF events and alerts can now be sent too. "Send a test"
+  sends one sample record as entered and shows exactly what went out. Destination 1 keeps the existing settings.
+  API: `GET /settings/syslog`, `POST /settings/syslog/test`; settings `syslog.payload`, `syslog.content`, `syslog.more`.
+- Tables: drag a column header's edge (or use the arrow keys on it) to set its width, remembered per table; a double
+  click sizes the columns automatically again. Long one-line text in a table ends in "..." (hover shows it all).
+- Changes: a proposal of the event analysis is marked "AI event analysis"; an API token's proposal shows whose token
+  it is and the address it came from. Long summaries are cut, a click unfolds them.
+- Page headers: their buttons have one size.
+- Project site and READMEs: an offline installation and upgrade guide (`docs/OFFLINE*.md`), log servers.
+
 ## 0.4.18 (2026-11-13)
 
 - Rules list: tick rules (or "select all listed") and switch them off or on as one change; or switch a whole category

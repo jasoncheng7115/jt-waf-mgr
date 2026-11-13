@@ -91,6 +91,9 @@ EDITABLE = {
     'syslog.protocol': ('choice', {'choices': ('udp', 'tcp', 'tls')}),
     'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
     'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
+    'syslog.payload': ('choice', {'choices': ('json', 'cef', 'leef', 'gelf', 'kv')}),
+    'syslog.content': ('list', {'choices': ('audit', 'event', 'alert'), 'max_items': 3}),
+    'syslog.more': ('destinations', {}),       # the other log servers (up to 7), each with its own format and content
     # interface, people and policy
     'ui.login_notice': ('str', {'max': 2000, 'multiline': True}),
     'compliance.level': ('choice', {'choices': ('', 'low', 'medium', 'high')}),
@@ -167,7 +170,41 @@ def _validate(key, value):
             if v not in out:
                 out.append(v)
         return out
+    if kind == 'destinations':
+        return _destinations(key, value)
     raise SettingError('unknown_setting', key=key)
+
+
+_ADDR = re.compile(r'/[\w./-]{1,200}|(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]{1,253}):\d{1,5}')
+
+
+def _destinations(key, value):
+    """syslog.more: [{id, name, enabled, address, protocol, format, facility, payload, content}], up to 7."""
+    if not isinstance(value, list) or len(value) > 7:
+        raise SettingError('invalid_value', key=key)
+    out, ids = [], set()
+    for i, d in enumerate(value):
+        if not isinstance(d, dict):
+            raise SettingError('invalid_value', key=key, item=i)
+        did = str(d.get('id') or 'd%d' % (i + 2))
+        addr = str(d.get('address') or '').strip()
+        name = str(d.get('name') or '').strip()
+        content = d.get('content') if isinstance(d.get('content'), list) else []
+        bad = (not re.fullmatch(r'[a-z0-9]{1,12}', did) or did in ids or did == 'main' or len(name) > 60
+               or any(ord(ch) < 32 for ch in name) or not _ADDR.fullmatch(addr)
+               or (not addr.startswith('/') and not 1 <= int(addr.rsplit(':', 1)[1]) <= 65535)
+               or d.get('protocol', 'udp') not in ('udp', 'tcp', 'tls') or d.get('format', 'rfc3164') not in ('rfc3164', 'rfc5424')
+               or d.get('facility', 'local0') not in FACILITIES or d.get('payload', 'json') not in ('json', 'cef', 'leef', 'gelf', 'kv')
+               or not content or not all(c in ('audit', 'event', 'alert') for c in content)
+               or (d.get('payload') == 'gelf' and addr.startswith('/')) or not isinstance(d.get('enabled', True), bool))
+        if bad:
+            raise SettingError('invalid_value', key=key, item=i)
+        ids.add(did)
+        out.append({'id': did, 'name': name, 'enabled': d.get('enabled', True), 'address': addr,
+                    'protocol': d.get('protocol', 'udp'), 'format': d.get('format', 'rfc3164'),
+                    'facility': d.get('facility', 'local0'), 'payload': d.get('payload', 'json'),
+                    'content': [c for c in ('audit', 'event', 'alert') if c in content]})
+    return out
 
 
 LEGACY = {'analyst.interval_hours': ('analyst.interval_minutes', lambda v: max(10, int(v) * 60))}   # 0.3.4

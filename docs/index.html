@@ -151,7 +151,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.18</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.19</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -199,7 +199,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   <div><h2 data-t="n_h"></h2><p class="sub" data-t="n_sub"></p>
     <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
       <span class="chip">Discord</span><span class="chip">Zulip</span><span class="chip">Nextcloud Talk</span><span class="chip">Webhook (HMAC)</span></div>
-    <ul class="ticks"><li data-t="n1"></li><li data-t="n2"></li><li data-t="n3"></li></ul></div>
+    <ul class="ticks"><li data-t="n1"></li><li data-t="n2"></li><li data-t="n3"></li><li data-t="n4"></li></ul></div>
 </div></section>
 
 <section id="security"><div class="wrap">
@@ -230,13 +230,14 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <section id="install"><div class="wrap">
   <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
-  <p class="guide-note"><span data-t="ms_note"></span> <a id="ms-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY.md" data-t="ms_link"></a></p>
+  <p class="guide-note"><span data-t="ms_note"></span> <a id="ms-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY.md" data-t="ms_link"></a><br>
+    <span data-t="off_note"></span> <a id="off-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE.md" data-t="off_link"></a></p>
   <div class="inst">
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
-tar xzf jt-waf-mgr-0.4.18.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.18
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.19.tar.gz.sig jt-waf-mgr-0.4.19.tar.gz
+tar xzf jt-waf-mgr-0.4.19.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.19
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
@@ -313,6 +314,7 @@ const T = {
   ai_disclaimer: 'AI can be wrong, in both directions. The model only suggests: loosening always needs a person, only tightening that passed every check may apply on its own. Check the evidence before you approve.',
   sec5_h: 'Accounts and sign-in', sec5: 'Passwords hashed with scrypt; TOTP two-factor authentication required for approvers and administrators; an account is locked for 15 minutes after 5 failed sign-ins; password length, character classes, history and age are configurable; the previous sign-in and failed attempts are shown after signing in; sessions end after 30 minutes idle or 12 hours (both adjustable).',
   sec6_h: 'Recovery on the host', sec6: 'Locked out or forgot the password: on the host, jt-waf-mgr user unlocks an account, resets its password (TOTP is cleared too and the password must be changed at the next sign-in), sets a password, disables or enables an account. Every action goes into the audit trail.',
+  off_note: 'No internet on the host? Everything installs and upgrades offline (no pip, no Docker).', off_link: 'Offline installation guide →', n4: 'Log servers / SIEM: up to 8 destinations, each with its own protocol, format (JSON, CEF, LEEF, GELF, key=value) and content (audit records, WAF events, alerts)',
   sec_policy: 'Security policy',
   in_h: 'Install, upgrade, uninstall',
   ib_h: 'Install',
@@ -373,6 +375,7 @@ const T = {
   ai_disclaimer: 'AI 可能出錯，兩個方向都會。模型只提供建議：放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。核准前請自行查看證據。',
   sec5_h: '帳號與登入', sec5: '密碼以 scrypt 雜湊；核准者與管理者必須設定 TOTP 雙因素驗證；連續登入失敗 5 次鎖定 15 分鐘；密碼長度、字元種類、歷史與有效期限可設定；登入後顯示上次登入時間與失敗次數；閒置 30 分鐘或滿 12 小時需重新登入（都可調整）。',
   sec6_h: '主機上的救援指令', sec6: '被鎖住或忘記密碼時，在主機上用 jt-waf-mgr user 解鎖帳號、重設密碼（同時清除 TOTP，下次登入必須改密碼）、直接設定密碼、停用或啟用帳號。每個動作都寫進稽核記錄。',
+  off_note: '主機沒有對外網路？安裝與更新都能離線完成（不需要 pip、不需要 Docker）。', off_link: '離線安裝與更新 →', n4: '外送記錄到 SIEM：最多 8 個目的地，各自選協定、格式（JSON、CEF、LEEF、GELF、key=value）與內容（稽核記錄、WAF 事件、警示）',
   sec_policy: '安全政策',
   in_h: '安裝、升級與移除',
   ib_h: '安裝',
@@ -433,6 +436,7 @@ const T = {
   ai_disclaimer: 'AI はどちらの方向にも誤ることがあります。モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した強化だけが自動適用されます。承認する前に証拠を確認してください。',
   sec5_h: 'アカウントとサインイン', sec5: 'パスワードは scrypt でハッシュ化。承認者と管理者は TOTP 二要素認証が必須。サインインに 5 回失敗すると 15 分間ロック。パスワードの長さ・文字種・履歴・有効期限は設定可能。サインイン後に前回のサインインと失敗回数を表示。30 分無操作または 12 時間でセッション終了（いずれも調整可能）。',
   sec6_h: 'ホスト上での復旧', sec6: 'ロックされた、またはパスワードを忘れた場合は、ホスト上で jt-waf-mgr user によりアカウントのロック解除、パスワードの再設定（TOTP も消去され、次回サインインでパスワード変更が必要）、パスワードの設定、無効化・有効化ができます。すべて監査記録に残ります。',
+  off_note: 'ホストがインターネットに接続できなくても、インストールと更新はオフラインでできます（pip も Docker も不要）。', off_link: 'オフラインでのインストールと更新 →', n4: 'ログサーバー / SIEM：最大 8 か所、それぞれプロトコル、形式（JSON、CEF、LEEF、GELF、key=value）、内容（監査記録、WAF イベント、アラート）を選択',
   sec_policy: 'セキュリティポリシー',
   in_h: 'インストール・アップグレード・アンインストール',
   ib_h: 'インストール',
@@ -477,6 +481,7 @@ function apply(lang) {
   }
   document.getElementById('lb-x').setAttribute('aria-label', d.close)
   document.getElementById('ms-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
+  document.getElementById('off-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
 for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))

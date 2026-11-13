@@ -45,6 +45,10 @@ def raise_alert(db, audit, source, kind, severity, dedup, details, link='', noti
               severity='crit' if severity == 'critical' else 'warning', alert_id=aid, kind=kind, alert_severity=severity,
               source=source, notify=notify, link=link or '/alerts',
               **{k: d[k] for k in ('host', 'path', 'reason', 'change_id', 'run_id', 'count') if k in d})
+    try:
+        audit.alert(aid, kind, severity, source, d, link)
+    except Exception:       # noqa: BLE001 -- an alert is never lost because a log server is not there
+        pass
     return aid
 
 

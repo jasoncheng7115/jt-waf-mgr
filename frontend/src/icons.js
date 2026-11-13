@@ -7,7 +7,7 @@ import {
   HalfMoon, Computer, Eye, EyeClosed, Link, OpenNewWindow, InfoCircle, WarningTriangle, Settings, ClockRotateRight,
   Undo, Import, Database, Archive, StatsReport, Globe, Prohibition, Laptop, MoreHoriz, Send, Code, Page,
   Fingerprint, Sort, SortUp, SortDown, Erase, Calendar, Book, HelpCircle, Hashtag, Bell, List, GitFork, Server,
-  Network, Restart, Timer, Wrench, MultiplePages, FastArrowRight, Reports, Map, Mail, ChatLines, BellNotification,
+  Network, Restart, Timer, Wrench, MultiplePages, FastArrowRight, Reports, Map, Mail, ChatLines, BellNotification, Sparks,
 } from '@iconoir/vue'
 
 export const ICONS = {
@@ -23,5 +23,5 @@ export const ICONS = {
   page: Page, fingerprint: Fingerprint, sort: Sort, sortUp: SortUp, sortDown: SortDown, clear: Erase,
   calendar: Calendar, guide: Book, help: HelpCircle, id: Hashtag, bell: Bell, list: List, change: GitFork,
   server: Server, network: Network, timer: Timer, tool: Wrench, versions: MultiplePages, go: FastArrowRight,
-  report: Reports, map: Map, mail: Mail, chat: ChatLines, notify: BellNotification,
+  report: Reports, map: Map, mail: Mail, chat: ChatLines, notify: BellNotification, ai: Sparks,
 }

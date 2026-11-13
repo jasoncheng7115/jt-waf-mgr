@@ -65,6 +65,7 @@ class App:
         if not self.cfg['collector']['enabled']:
             return
         self.tailer = Tailer(self.cfg, self.db)
+        self.tailer.store.on_new = self.audit.events
         th = threading.Thread(target=self.tailer.run, name='collector', daemon=True)
         th.start()
         self._threads.append(th)

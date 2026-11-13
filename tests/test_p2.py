@@ -213,6 +213,20 @@ class TestWorkflow(unittest.TestCase):
             self.wf.propose_adoption('boss')
         self.assertEqual(cm.exception.code, 'nothing_to_import')
 
+    def test_an_api_change_shows_whose_token_and_where_it_came_from(self):
+        self.adopt()
+        self.app.audit.ctx.src_ip = '192.0.2.7'          # set per request by the web layer
+        try:
+            cid = self.wf.propose('add', 'exclusion', {'host': {'mode': 'exact', 'value': 'app.example.com'},
+                                                       'path': {'mode': 'exact', 'value': '/search'},
+                                                       'action': 'remove_target_by_id', 'rule_ids': [941100], 'targets': ['ARGS:q']},
+                                  'from the SIEM', 'siem-token', via='api', owner='boss')
+        finally:
+            self.app.audit.ctx.src_ip = None
+        pub = self.wf.public(self.wf.get(cid))
+        self.assertEqual((pub['proposed_by'], pub['proposed_via'], pub['proposed_owner'], pub['proposed_ip']),
+                         ('siem-token', 'api', 'boss', '192.0.2.7'))
+
     def test_adopt_then_change_flow(self):
         self.adopt()
         self.assertTrue(self.wf.managed.adopted())

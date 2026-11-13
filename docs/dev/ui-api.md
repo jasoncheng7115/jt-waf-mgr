@@ -193,6 +193,27 @@ Also `GET /api/v1/rules/removals` → configure-time removals/updates
  "warnings": []}
 ```
 
+CRS updates (0.4.20; step 1 of 3: check, download, verify, stage — nothing in nginx changes):
+
+`GET /api/v1/crs/updates` (viewer) →
+```json
+{"manage": false, "wait_days": 7, "external_updater": "/etc/cron.d/jt-crs-update" | null,
+ "location": {"path": "/etc/nginx/modsec/crs", "link": true, "target": "/etc/nginx/modsec/crs-4.30.0", "version": "4.30.0"},
+ "versions": ["4.29.0", "4.30.0"],
+ "status": {"checked_at": "…", "state": "current|waiting|ready|error|off", "installed": "4.30.0",
+            "candidate": {"version": "4.31.0", "published_at": "…", "ready_at": "…"},
+            "staged": {"version": "4.31.0", "path": "…/stage/crs-4.31.0", "tarball": "coreruleset-4.31.0-minimal.tar.gz",
+                       "tarball_sha256": "…", "manifest_sha256": "…", "files": 50, "verified_at": "…"},
+            "newer_major": "5.0.0" | null, "error": "…"}}
+```
+`POST /api/v1/crs/updates/check` (admin; 409 `crs_not_managed` while `crs.manage` is off) → 202: asks
+`jt-waf-mgr-crs.service` to check now. Settings: `crs.manage` (default off), `crs.wait_days` (0–60, default 7).
+The unit takes the newest release of the major version in use once it has been out `wait_days`, downloads the
+"minimal" tarball and its `.asc`, keeps it only if the signature is valid and made by the pinned CRS release key
+(primary key `36006F0E0BA167832158821138EEACA1AB8A6E72`, shipped in `jtwafmgr/data/`), unpacks plain files only into
+`/var/lib/jt-waf-mgr/crs/stage/crs-<version>` and opens a `crs_update` alert. A bad signature is audited as
+`crs.signature_bad` (critical).
+
 ## Lookups
 
 `GET /api/v1/lookups/ip/{ip}` (viewer) →

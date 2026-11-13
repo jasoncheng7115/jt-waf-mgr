@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.18
+# jt-waf-mgr v0.4.19
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -63,6 +63,9 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **通知**：メール（SMTP、テキスト＋HTML）、Telegram、Microsoft Teams（Workflows / Adaptive Card）、Slack、Discord、Zulip、
   Nextcloud Talk、汎用 webhook（HMAC-SHA256 署名）。イベント × チャネルのマトリクス、チャネルごとのテスト送信、再送・上限・
   送信記録。リクエスト由来の値が書式・リンク・メンションになることはありません。
+- **ログサーバー（syslog / SIEM）**：最大 8 か所。それぞれプロトコル（ローカルソケット、UDP、TCP、TLS）、メッセージ形式（JSON、
+  CEF、LEEF 2.0、GELF 1.1、key=value）、送信内容（監査記録、WAF イベント、アラート）を選べ、キューと再送も個別。テスト送信で
+  実際に送った内容を表示します。
 - **アカウント**：scrypt パスワード、approver / admin は二要素認証必須、ロックアウト、履歴と期限付きのパスワードポリシー、
   アカウントの期限と見直し。API トークンはスコープと許可送信元ネットワーク付き（提案はできるが承認は不可）。ホスト上での
   復旧：`jt-waf-mgr user unlock | reset | passwd | disable | enable <名前>`（reset は TOTP も消去し、次回サインインで
@@ -84,15 +87,16 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   インストールできます。
 - nginx と ModSecurity-nginx コネクタ、libmodsecurity 3.0.9 以上、OWASP CRS 4.x、`SecAuditLogFormat JSON`。監査ログは
   `copytruncate` でローテーションしてください（libmodsecurity は reload 時にファイルを開き直しません）。nginx を新しく入れる
-  場合や CRS 4 がない場合は [ModSecurity インストールガイド](docs/MODSECURITY.ja.md) を参照してください。サイトのルール
+  場合や CRS 4 がない場合は [ModSecurity インストールガイド](docs/MODSECURITY.ja.md)、インターネットに接続できないホストは
+  [オフラインでのインストールと更新](docs/OFFLINE.ja.md) を参照してください。サイトのルール
   ファイルがなくても取り込めます（CRS ルールの前後に空の管理ファイルを追加します）。
 - 任意：イベント分析用のネットワーク上の OpenAI 互換 LLM サーバー（llama.cpp、vLLM、Ollama など）、GeoIP 用の MaxMind アカウント。
 
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
-tar xzf jt-waf-mgr-0.4.18.tar.gz && cd jt-waf-mgr-0.4.18
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.19.tar.gz.sig jt-waf-mgr-0.4.19.tar.gz
+tar xzf jt-waf-mgr-0.4.19.tar.gz && cd jt-waf-mgr-0.4.19
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

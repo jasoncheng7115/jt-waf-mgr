@@ -120,6 +120,11 @@ DEFAULTS = {
         'format': 'rfc3164',
         # tls: a CA bundle for a SIEM with its own CA (set by root here, never in the web interface); empty = system CAs
         'ca_file': '',
+        # what the record looks like: json (one line) | cef | leef | gelf | kv; and what this destination receives
+        'payload': 'json',
+        'content': ['audit'],
+        # more log servers (Settings): [{id, name, enabled, address, protocol, format, facility, payload, content}]
+        'more': [],
     },
     'ui': {
         'source_url': '',
@@ -263,6 +268,12 @@ class Config:
             raise ConfigError('syslog.address: a socket path (/dev/log) or host:port')
         if not sl['address'].startswith('/') and not 1 <= int(sl['address'].rsplit(':', 1)[1]) <= 65535:
             raise ConfigError('syslog.address: port 1-65535')
+        if sl.get('payload', 'json') not in ('json', 'cef', 'leef', 'gelf', 'kv'):
+            raise ConfigError('syslog.payload: json, cef, leef, gelf or kv')
+        if not isinstance(sl.get('content', ['audit']), list) or not all(c in ('audit', 'event', 'alert') for c in sl.get('content', ['audit'])):
+            raise ConfigError('syslog.content: a list of audit, event, alert')
+        if not isinstance(sl.get('more', []), list) or len(sl.get('more', [])) > 7:
+            raise ConfigError('syslog.more: up to 7 more destinations')
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', data['node']['id']):
             raise ConfigError('node.id: letters, digits, _ . - only')
         host, _, port = data['server']['listen'].rpartition(':')

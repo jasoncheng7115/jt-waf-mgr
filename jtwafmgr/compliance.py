@@ -399,13 +399,19 @@ def system_check(app):
     sl = cfg['syslog']
     plain_remote = not sl['address'].startswith('/') and sl.get('protocol') != 'tls'
     ca_bad = bool(sl.get('ca_file')) and not os.access(sl['ca_file'], os.R_OK)
-    au = app.audit.__dict__
-    out.append(_item('syslog', 'warn' if not sl['enabled'] or app.audit.syslog_errors or plain_remote or au.get('syslog_dropped') or ca_bad else 'ok',
+    au = app.audit
+    dests = au.stats()
+    others_bad = any(d['enabled'] and (d['errors'] or d['dropped']) for d in dests[1:])
+    out.append(_item('syslog', 'warn' if not sl['enabled'] or au.syslog_errors or plain_remote or au.syslog_dropped or ca_bad
+                     or others_bad else 'ok',
                      ca_file_unreadable=ca_bad if sl.get('ca_file') else None,
                      enabled=sl['enabled'], address=sl['address'], protocol=sl.get('protocol'), format=sl.get('format'),
-                     unencrypted_remote=plain_remote, queued=len(au.get('_queue') or ()), dropped=au.get('syslog_dropped', 0),
-                     errors=app.audit.syslog_errors,
-                     last_error=util.iso(app.audit.syslog_last_error[0]) if app.audit.syslog_last_error else None))
+                     payload=sl.get('payload', 'json'), content=sl.get('content', ['audit']),
+                     unencrypted_remote=plain_remote, queued=len(au._queue), dropped=au.syslog_dropped,
+                     errors=au.syslog_errors,
+                     last_error=util.iso(au.syslog_last_error[0]) if au.syslog_last_error else None,
+                     more=[{k: d[k] for k in ('name', 'address', 'protocol', 'payload', 'content', 'enabled', 'sent', 'dropped',
+                                              'errors', 'last_error')} for d in dests[1:]]))
 
     try:
         n = cfg['notify']

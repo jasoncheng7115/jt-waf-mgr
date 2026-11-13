@@ -242,6 +242,16 @@ a.navitem:hover, button.navitem:hover { background: var(--panel-2); text-decorat
 .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
 .card .tablewrap { border-radius: 6px; }
 table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+/* column widths set by the user: fixed layout, a cell's overflow ends in "..." */
+table.grid.fixedcols { table-layout: fixed; min-width: 100%; }
+table.grid.fixedcols td { overflow: hidden; text-overflow: ellipsis; }
+table.grid.fixedcols .trunc { max-width: 100%; }
+table.grid th { position: relative; }
+.dt-resize { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.dt-resize::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: transparent; }
+table.grid th:hover .dt-resize::after, .dt-resize:focus-visible::after { background: var(--border-strong); }
+.dt-resize:focus-visible { outline: none; }
+.dt-resize:focus-visible::after { background: var(--accent); }
 table.grid th { text-align: left; font-weight: 600; color: var(--muted); font-size: 13px; background: var(--panel-2); padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 table.grid td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.grid tr:last-child td { border-bottom: none; }
@@ -264,6 +274,9 @@ table.grid td.empty, .empty { color: var(--muted); text-align: center; padding: 
 .trunc.expandable { cursor: pointer; }
 .trunc.expandable:hover, .trunc.expandable:focus-visible { text-decoration: underline dotted; text-underline-offset: 3px; outline: none; }
 .trunc.open { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+/* in a table a cell grows to fit its text: a one-line text gets a width, so long ones end in "..." instead of
+   pushing the other columns off the screen (a TruncText with its own width keeps it) */
+.tablewrap .trunc:not([style*="max-width"]):not(.open) { max-width: min(46em, 52vw); }
 .c-host .trunc, .c-req .trunc { max-width: 100%; }
 .method { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--muted); flex: none; }
 .reqline { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; font-size: 15px; }
@@ -313,6 +326,8 @@ input[type=checkbox] { padding: 0; }
 .btn.danger { color: var(--blocked); border-color: var(--blocked); background: transparent; }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 3px 9px; font-size: 13px; }
+/* a page header mixes small and normal buttons: one size there, so they line up */
+.pagehead > .btn, .pagehead > a.btn, .pagehead > span > .btn { padding: 5px 11px; font-size: 13.5px; }
 .seg { display: inline-flex; width: fit-content; max-width: 100%; align-self: flex-start; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
 .seg button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13.5px; padding: 4px 12px; border: none; background: var(--panel); color: var(--muted); cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border-strong); }

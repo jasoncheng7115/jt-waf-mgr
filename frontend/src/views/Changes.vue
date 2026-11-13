@@ -42,12 +42,12 @@
       <template #cell-id="{ row }"><RouterLink class="mono" :to="'/changes/' + row.id" @click.stop>{{ row.id }}</RouterLink></template>
       <template #cell-created_at="{ row }">{{ fmtShortTime(row.created_at) }}</template>
       <template #cell-what="{ row }">{{ t('op.' + row.op) }} · {{ t('kind.' + row.kind) }}<span v-if="row.rule_id" class="mono muted"> {{ row.rule_id }}</span></template>
-      <template #cell-summary="{ row }"><TruncText :text="row.summary || ''" :max="160" />
-        <div class="sub"><TruncText :text="row.reason || ''" :max="160" /></div></template>
+      <template #cell-summary="{ row }"><TruncText :text="row.summary || ''" :max="2000" expand />
+        <div class="sub"><TruncText :text="row.reason || ''" :max="2000" expand /></div></template>
       <template #cell-direction="{ row }"><DirectionBadge :direction="row.direction" /></template>
       <template #cell-state="{ row }"><StateBadge :state="row.state" />
         <div v-if="row.error" class="sub warn"><TruncText :text="row.error" :max="80" /></div></template>
-      <template #cell-proposed_by="{ row }">{{ safeText(row.proposed_by, 64) }}<span v-if="row.proposed_via === 'api'" class="chip tag">API</span></template>
+      <template #cell-proposed_by="{ row }"><ProposerTag :by="row.proposed_by" :via="row.proposed_via" :owner="row.proposed_owner || ''" :ip="row.proposed_ip || ''" /></template>
       <template #cell-updated_at="{ row }">{{ fmtShortTime(row.updated_at) }}</template>
     </DataTable>
   </div>
@@ -68,6 +68,7 @@ import TruncText from '../components/TruncText.vue'
 import StateBadge from '../components/StateBadge.vue'
 import DirectionBadge from '../components/DirectionBadge.vue'
 import Icon from '../components/Icon.vue'
+import ProposerTag from '../components/ProposerTag.vue'
 import DataTable from '../components/DataTable.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import HBars from '../components/charts/HBars.vue'
@@ -117,7 +118,8 @@ const cols = computed(() => [
   { key: 'summary', label: t('change.summary'), text: (c) => (c.summary || '') + ' ' + (c.reason || '') },
   { key: 'direction', label: t('change.direction'), value: (c) => t('direction.' + c.direction) },
   { key: 'state', label: t('change.state'), value: (c) => t('cstate.' + c.state), text: (c) => t('cstate.' + c.state) + ' ' + (c.error || '') },
-  { key: 'proposed_by', label: t('change.proposed_by'), nowrap: true, text: (c) => (c.proposed_by || '') + (c.proposed_via === 'api' ? ' API' : '') },
+  { key: 'proposed_by', label: t('change.proposed_by'), nowrap: true, value: (c) => (c.proposed_by === 'analyst' ? t('change.by_analyst') : c.proposed_by || ''),
+    text: (c) => (c.proposed_by === 'analyst' ? t('change.by_analyst') + ' AI LLM analyst' : (c.proposed_by || '') + (c.proposed_via === 'api' ? ' API ' + (c.proposed_owner || '') + ' ' + (c.proposed_ip || '') : '')) },
   { key: 'updated_at', label: t('change.updated'), nowrap: true, hidden: true, text: (c) => fmtShortTime(c.updated_at) },
 ])
 

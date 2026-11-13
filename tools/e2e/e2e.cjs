@@ -215,6 +215,23 @@ async function audit(page, where) {
      'rules: switching off shows the plan or the reason');
   await page.locator('.ruletoggle button.ghost').click();
   ok(!(await page.locator('.ruletoggle').count()), 'rules: the change form closes');
+  // log servers: destination 1 is listed, another can be added (not saved here)
+  await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
+  await page.waitForSelector('#uiset-syslog .dest', { timeout: 5000 }).catch(() => {});
+  const nDest = await page.locator('#uiset-syslog .dest').count();
+  await page.getByRole('button', { name: /新增目的地|Add a destination|送信先を追加/ }).click();
+  ok(nDest >= 1 && (await page.locator('#uiset-syslog .dest').count()) === nDest + 1, 'settings: log servers listed, one more can be added');
+  // column widths: the arrow keys on a header's edge set the width, remembered after a reload
+  await page.goto(base + '/changes?tab=history', { waitUntil: 'networkidle' });
+  const grip = page.locator('table.grid thead th .dt-resize').nth(1);
+  await grip.focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  const w1 = await page.locator('table.grid thead th').nth(1).evaluate((th) => th.style.width);
+  await page.reload({ waitUntil: 'networkidle' });
+  const w2 = await page.locator('table.grid thead th').nth(1).evaluate((th) => th.style.width);
+  ok(/px$/.test(w1) && w1 === w2 && (await page.locator('table.grid.fixedcols').count()) > 0, 'tables: a column width is set and remembered (' + w1 + ')');
+  await page.locator('table.grid thead th .dt-resize').nth(1).dblclick();
+  ok(!(await page.locator('table.grid.fixedcols').count()), 'tables: a double click gives the columns their own width back');
   // /alerts?id=N: that alert selected with its handling form open
   const aid = await page.evaluate(async () => { const r = await (await fetch('/api/v1/alerts?state=open&limit=1')).json(); return r.items[0] && r.items[0].id })
   await page.goto(base + '/alerts?id=' + aid, { waitUntil: 'networkidle' });

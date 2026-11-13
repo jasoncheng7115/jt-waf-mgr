@@ -22,7 +22,8 @@
         <div v-if="busyStates.includes(c.state)" class="alert info">{{ t('change.in_progress.' + c.state) }}</div>
         <div v-if="c.error" class="alert error">{{ safeText(c.error, 2000) }}</div>
         <dl class="kv two">
-          <dt>{{ t('change.proposed_by') }}</dt><dd>{{ safeText(c.proposed_by, 64) }}<span v-if="c.proposed_via === 'api'" class="chip tag">API</span></dd>
+          <dt>{{ t('change.proposed_by') }}</dt><dd><ProposerTag :by="c.proposed_by" :via="c.proposed_via" :owner="c.proposed_owner || ''" :ip="c.proposed_ip || ''" /></dd>
+            <template v-if="c.proposed_ip && c.proposed_via !== 'api'"><dt>{{ t('change.source_ip') }}</dt><dd class="mono">{{ safeText(c.proposed_ip, 45) }}</dd></template>
           <dt>{{ t('change.created') }}</dt><dd>{{ fmtTime(c.created_at) }}</dd>
           <dt>{{ t('wizard.rule_id') }}</dt><dd class="mono"><RouterLink v-if="c.rule_id" :to="'/rules/' + c.rule_id">{{ c.rule_id }}</RouterLink><template v-else>—</template></dd>
           <dt>{{ t('change.updated') }}</dt><dd>{{ fmtTime(c.updated_at) }}</dd>
@@ -123,6 +124,7 @@ import RuleText from '../components/RuleText.vue'
 import ChangeChecks from '../components/ChangeChecks.vue'
 import TestCases from '../components/TestCases.vue'
 import Icon from '../components/Icon.vue'
+import ProposerTag from '../components/ProposerTag.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import DataTable from '../components/DataTable.vue'
 

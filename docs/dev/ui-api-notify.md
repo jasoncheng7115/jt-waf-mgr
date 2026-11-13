@@ -128,3 +128,27 @@ Settings (`PATCH /settings/ui`, admin): `syslog.enabled`, `syslog.address` (`/de
 - A change of a `syslog.*` setting is audited before it applies and sent with the previous settings (switching syslog
   off is critical), so the SIEM always sees where its copy went.
 
+### Several log servers, formats and content (0.4.19)
+
+Destination 1 is `[syslog]` above plus `syslog.payload` (`json` | `cef` | `leef` | `gelf` | `kv`) and `syslog.content`
+(any of `audit`, `event`, `alert`; notices go with `audit`). Up to 7 more: `syslog.more` = `[{"id": "[a-z0-9]{1,12}",
+"name", "enabled", "address", "protocol", "format", "facility", "payload", "content"}]` (GELF needs host:port). Each
+destination has its own queue, thread, retries and counters: a slow or dead one never holds the others up.
+
+- `GET /settings/syslog` (admin) → `{"destinations": [{"key", "name", "enabled", "address", "protocol", "payload",
+  "content", "sent", "dropped", "queued", "errors", "last_error": {"at", "error"} | null}], "max": 8}`.
+- `POST /settings/syslog/test` (admin, audited as `syslog.tested`) `{"destination": {...as in syslog.more...}, "kind":
+  "audit" | "event"}` → `{"ok", "error"?, "sample"}`: one sample record sent now with the settings as entered (saved
+  or not); `sample` is exactly what went out.
+- Records: `audit` (an audit row with its id and hash), `notice` (anchors, checks), `event` (a WAF event the collector
+  just stored: host, method, path, query, src_ip, origin, status, outcome, decided_by, anomaly_score, rule_ids,
+  families, message, unique_id) and `alert` (an alert just opened: alert_id, kind, severity, source, host, path, reason).
+- JSON: `{"jt_waf_mgr": {...}}` as before (`type` added for events and alerts). CEF: `CEF:0|jt-waf-mgr|jt-waf-mgr|<version>|
+  <waf.blocked | alert.<kind> | audit action>|<name>|<severity 0-10>|rt=... src=... dhost=... requestMethod=...
+  request=... outcome=... cs1Label=rule_ids cs1=... cs2Label=families ...`; header `|` and `\` escaped, extension `=`,
+  `\` and line breaks escaped. LEEF 2.0: tab-separated attributes (`sev`, `devTime`, `src`, `dstHost`, `url`, `usrName`,
+  `cat`...), tabs and line breaks in values become spaces. key=value: `type=... event=... level=... src=...`, values
+  quoted and escaped when needed. GELF 1.1: `short_message`, `level`, `_jt_type`, `_jt_event` and every field as
+  `_<name>`; UDP chunked above 8,000 bytes (at most 128 chunks), TCP / TLS frames end with a null byte; no syslog header.
+- Syslog header (`format`) and facility apply to every payload but GELF; RFC 5424's MSGID is `audit`, `event` or `alert`.
+

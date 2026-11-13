@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.18
+# jt-waf-mgr v0.4.19
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -68,6 +68,9 @@ something you can read, and every change into a workflow you can trust:
 - **Notifications**: e-mail (SMTP, text + HTML), Telegram, Microsoft Teams (Workflows / Adaptive Card), Slack,
   Discord, Zulip, Nextcloud Talk and a generic webhook (HMAC-SHA256 signature); a matrix of events × channels; a test
   per channel; retries, rate limits and delivery records. Values from requests are never markup, links or mentions.
+- **Log servers (syslog / SIEM)**: up to 8 destinations, each with its own protocol (local socket, UDP, TCP, TLS),
+  record format (JSON, CEF, LEEF 2.0, GELF 1.1, key=value) and content (audit records, WAF events, alerts); its own
+  queue and retries; a test send that shows exactly what went out.
 - **Accounts**: scrypt passwords, TOTP required for approver / admin, lockout, password policy with history and
   ageing, account expiry and review; API tokens with scopes and allowed source networks (tokens can propose, never
   approve). Recovery on the host: `jt-waf-mgr user unlock | reset | passwd | disable | enable <name>` (reset clears
@@ -89,7 +92,8 @@ something you can read, and every change into a workflow you can trust:
   service installs offline.
 - nginx with the ModSecurity-nginx connector, libmodsecurity 3.0.9+, OWASP CRS 4.x, `SecAuditLogFormat JSON`;
   rotate the audit log with `copytruncate` (libmodsecurity does not reopen it on reload). Starting from a fresh nginx
-  or without CRS 4: see the [ModSecurity installation guide](docs/MODSECURITY.md). Adoption also works without site
+  or without CRS 4: see the [ModSecurity installation guide](docs/MODSECURITY.md); hosts without internet access:
+  the [offline installation guide](docs/OFFLINE.md). Adoption also works without site
   rule files (empty managed files are added next to the CRS rules).
 - Optional: an OpenAI-compatible LLM server on your network (llama.cpp, vLLM, Ollama…) for the event analysis; a
   MaxMind account for GeoIP.
@@ -97,8 +101,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
-tar xzf jt-waf-mgr-0.4.18.tar.gz && cd jt-waf-mgr-0.4.18
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.19.tar.gz.sig jt-waf-mgr-0.4.19.tar.gz
+tar xzf jt-waf-mgr-0.4.19.tar.gz && cd jt-waf-mgr-0.4.19
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

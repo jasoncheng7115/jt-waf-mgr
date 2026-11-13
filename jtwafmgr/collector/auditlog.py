@@ -313,10 +313,13 @@ class Store:
     def __init__(self, db):
         self.db = db
 
+    on_new = None      # set by the app: the events just stored go to the log servers that take them
+
     def insert(self, events):
         if not events:
             return 0
         n = 0
+        new = []
         with self.db.tx() as c:
             for e in events:
                 cur = c.execute(
@@ -331,6 +334,7 @@ class Store:
                 if cur.rowcount != 1:
                     continue
                 n += 1
+                new.append(e)
                 eid = cur.lastrowid
                 day = datetime.date.fromtimestamp(e['ts']).isoformat()
                 for rid in e['rule_ids'] or [0]:
@@ -340,6 +344,11 @@ class Store:
                     c.execute('INSERT INTO stats_daily(day, host, rule_id, origin, outcome, n) VALUES (?,?,?,?,?,1) '
                               'ON CONFLICT(day, host, rule_id, origin, outcome) DO UPDATE SET n=n+1',
                               (day, e['host'], rid, e['origin'], e['outcome']))
+        if new and self.on_new is not None:
+            try:            # never let a log server hold the collector up (the sender only queues)
+                self.on_new(new)
+            except Exception:       # noqa: BLE001
+                pass
         return n
 
     def purge(self, events_days, stats_days):

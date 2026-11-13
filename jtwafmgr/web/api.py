@@ -1537,6 +1537,31 @@ def ui_settings_patch(app, req):
     return json_response(200, {'changed': changed, 'settings': uisettings.public(app.cfg, app.db)})
 
 
+def syslog_destinations(app, req):
+    """Admin: every log server with what was sent, dropped, waits, the last error."""
+    from ..audit import MAX_DESTINATIONS
+    return json_response(200, {'destinations': app.audit.stats(), 'max': MAX_DESTINATIONS})
+
+
+def syslog_test(app, req):
+    """Admin: send one sample record to a destination as entered in the form (saved or not), now; returns what was
+    sent and whether the server took it (UDP cannot tell more than "sent")."""
+    from .. import uisettings
+    b = req.body()
+    d = b.get('destination') if isinstance(b, dict) else None
+    kind = b.get('kind') if isinstance(b, dict) and b.get('kind') in ('audit', 'event', 'alert') else 'audit'
+    if not isinstance(d, dict):
+        raise ApiError(400, 'bad_request', 'destination: {...}')
+    try:
+        clean = uisettings._destinations('syslog.more', [dict(d, id='t', enabled=True, content=d.get('content') or ['audit'])])[0]
+    except uisettings.SettingError as e:
+        raise ApiError(400, e.code, e.code, **e.details)
+    res = app.audit.send_test(clean, 'event' if kind == 'event' else 'audit')
+    app.audit.log('syslog.tested', req.user['username'], 'user', req.client_ip, 'ok' if res['ok'] else 'failed',
+                  address=clean['address'], protocol=clean['protocol'], payload=clean['payload'], error=res.get('error'))
+    return json_response(200, res)
+
+
 def llm_test(app, req):
     """Admin: ask the analysis unit (which may reach the LLM server; the web service may not) for a small
     connection test. The result is read with GET /llm/test."""
@@ -1570,6 +1595,8 @@ def register_compliance(router):
     R('GET', V + '/geoip', geoip_status, admin)
     R('GET', V + '/settings/ui', ui_settings, admin)
     R('PATCH', V + '/settings/ui', ui_settings_patch, admin)
+    R('GET', V + '/settings/syslog', syslog_destinations, admin)
+    R('POST', V + '/settings/syslog/test', syslog_test, admin)
     R('POST', V + '/llm/test', llm_test, admin)
     R('GET', V + '/llm/test', llm_test_result, admin)
     R('POST', V + '/geoip/update', geoip_update, admin)

@@ -84,13 +84,23 @@ class Workflow:
             raise ChangeError('not_found', 404)
         return r
 
+    def _proposed_ip(self, cid):
+        """Where the proposal came from: the source address in its audit row (an API caller's machine, a person's)."""
+        try:
+            row = self.db.one("SELECT src_ip FROM audit WHERE action IN ('change.proposed', 'change.bundle_proposed') "
+                              "AND json_extract(details, '$.change_id')=? ORDER BY id LIMIT 1", (cid,))
+        except Exception:       # noqa: BLE001 -- an old SQLite without JSON: just not shown
+            return None
+        return row['src_ip'] if row else None
+
     def public(self, r, full=False):
         d = {'id': r['id'], 'op': r['op'], 'kind': r['kind'], 'item_id': r['item_id'], 'rule_id': r['rule_id'],
              'direction': r['direction'], 'state': r['state'], 'reason': r['reason'], 'proposed_by': r['proposed_by'],
              'proposed_via': r['proposed_via'], 'created_at': util.iso(r['created_at']),
              'updated_at': util.iso(r['updated_at']), 'spec': json.loads(r['spec']),
              'summary': summarize(r['kind'], json.loads(r['spec']), r['op']), 'error': r['error'],
-             'applied_version': r['applied_version']}
+             'applied_version': r['applied_version'], 'proposed_owner': r['proposed_owner'],
+             'proposed_ip': self._proposed_ip(r['id'])}
         if full:
             checks = json.loads(r['checks'] or '{}')
             d.update({'rule_text': r['rule_text'], 'checks': checks, 'tests': json.loads(r['tests'] or '[]'),

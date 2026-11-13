@@ -4,7 +4,9 @@
     <WorkflowSettings />
     <RegressionSamples />
     <GeoipSettings @saved="load" />
-    <UiSettings :groups="['llm', 'analyst', 'network', 'syslog', 'policy']" @saved="load" />
+    <UiSettings :groups="['llm', 'analyst', 'network']" @saved="load" />
+    <SyslogDestinations />
+    <UiSettings :groups="['policy']" @saved="load" />
     <ErrorBox :error="error" />
     <section v-if="s" class="card">
       <h2><Icon name="page" /> {{ t('settings.config_title') }}</h2>
@@ -36,6 +38,7 @@ import WorkflowSettings from '../components/WorkflowSettings.vue'
 import RegressionSamples from '../components/RegressionSamples.vue'
 import GeoipSettings from '../components/GeoipSettings.vue'
 import UiSettings from '../components/UiSettings.vue'
+import SyslogDestinations from '../components/SyslogDestinations.vue'
 import HBars from '../components/charts/HBars.vue'
 
 const CONFIG_PATH = '/etc/jt-waf-mgr/config.toml'
