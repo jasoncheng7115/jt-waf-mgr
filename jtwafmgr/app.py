@@ -72,6 +72,10 @@ class App:
         hk = threading.Thread(target=self._housekeeping, name='housekeeping', daemon=True)
         hk.start()
         self._threads.append(hk)
+        from . import traffic
+        tr = threading.Thread(target=traffic.run, args=(self, self.tailer._stop), name='traffic', daemon=True)
+        tr.start()
+        self._threads.append(tr)
 
     def _housekeeping(self):
         stop = self.tailer._stop

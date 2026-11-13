@@ -67,6 +67,7 @@ ol.flow li b { display: block; color: var(--ink); } ol.flow li span { color: var
 .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--blue-h); flex: none; }
 .chip:nth-child(3n+2)::before { background: var(--orange); } .chip:nth-child(3n)::before { background: var(--blue-d); }
 .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.shots > figure:last-child:nth-child(odd) { grid-column: 1 / -1; width: calc(50% - 11px); justify-self: center; }
 .shots figure { margin: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); transition: .15s; }
 .shots figure:hover { box-shadow: 0 8px 26px rgba(15, 23, 42, .10); transform: translateY(-2px); }
 .shots img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-bottom: 1px solid var(--border); }
@@ -130,7 +131,7 @@ dialog#lb::backdrop { background: rgba(15, 23, 42, .72); backdrop-filter: blur(3
 .lb-body { flex: 1; overflow: auto; background: var(--bg); padding: 14px; overscroll-behavior: contain; }
 .lb-body img { display: block; width: 100%; height: auto; margin: 0 auto; border-radius: 8px; box-shadow: var(--shadow); }
 body.lb-on { overflow: hidden; }
-@media (max-width: 860px) { .shots, .inst { grid-template-columns: minmax(0, 1fr); } dialog#lb { width: 100vw; height: 100vh; max-height: 100vh; max-width: 100vw; border-radius: 0; } }
+@media (max-width: 860px) { .shots, .inst { grid-template-columns: minmax(0, 1fr); } .shots > figure:last-child:nth-child(odd) { width: auto; } dialog#lb { width: 100vw; height: 100vh; max-height: 100vh; max-width: 100vw; border-radius: 0; } }
 .guide-note { margin: -10px 0 22px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, #ff8a5c 10%, #fff); border: 1px solid color-mix(in srgb, #ff8a5c 35%, #fff); }
 .guide-note a { font-weight: 600; }
 p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59e0b; background: #fffbeb; border-radius: 6px; color: #78350f; font-size: 14.5px; }
@@ -151,7 +152,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.22</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.23</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -175,6 +176,10 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="card"><h3><span class="ic">✉</span><span data-t="f6_h"></span></h3><p data-t="f6"></p></div>
     <div class="card"><h3><span class="ic">⛓</span><span data-t="f7_h"></span></h3><p data-t="f7"></p></div>
     <div class="card"><h3><span class="ic">◐</span><span data-t="f8_h"></span></h3><p data-t="f8"></p></div>
+    <div class="card"><h3><span class="ic">∑</span><span data-t="f9_h"></span></h3><p data-t="f9"></p></div>
+    <div class="card"><h3><span class="ic">✎</span><span data-t="f10_h"></span></h3><p data-t="f10"></p></div>
+    <div class="card"><h3><span class="ic">↻</span><span data-t="f11_h"></span></h3><p data-t="f11"></p></div>
+    <div class="card"><h3><span class="ic">⇆</span><span data-t="f12_h"></span></h3><p data-t="f12"></p></div>
   </div>
 </div></section>
 
@@ -190,6 +195,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 <section id="ai"><div class="wrap two">
   <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
     <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul>
+    <h3 data-t="ai_rec_h"></h3>
+    <ul class="ticks"><li data-t="ai_rec1"></li><li data-t="ai_rec2"></li><li data-t="ai_rec3"></li><li data-t="ai_rec4"></li></ul>
     <p class="disclaimer" data-t="ai_disclaimer"></p></div>
   <a class="shotlink" href="shots/en/analysis.png" data-shot="analysis"><img class="shot" src="shots/en/thumb/analysis.webp" alt="" loading="lazy"></a>
 </div></section>
@@ -224,6 +231,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <figure><a class="shotlink" href="shots/en/alerts.png" data-shot="alerts"><img src="shots/en/thumb/alerts.webp" alt="" loading="lazy"></a><figcaption data-t="sc_alerts"></figcaption></figure>
     <figure><a class="shotlink" href="shots/en/system-check.png" data-shot="system-check"><img src="shots/en/thumb/system-check.webp" alt="" loading="lazy"></a><figcaption data-t="sc_system"></figcaption></figure>
     <figure><a class="shotlink" href="shots/en/lookup.png" data-shot="lookup"><img src="shots/en/thumb/lookup.webp" alt="" loading="lazy"></a><figcaption data-t="sc_lookup"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/traffic.png" data-shot="traffic"><img src="shots/en/thumb/traffic.webp" alt="" loading="lazy"></a><figcaption data-t="sc_traffic"></figcaption></figure>
     <figure><a class="shotlink" href="shots/en/thumb.png" data-shot="overview-dark" data-full="thumb"><img src="shots/en/thumb/overview-dark.webp" alt="" loading="lazy"></a><figcaption data-t="sc_dark"></figcaption></figure>
   </div>
 </div></section>
@@ -231,19 +239,30 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 <section id="install"><div class="wrap">
   <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
   <p class="guide-note"><span data-t="ms_note"></span> <a id="ms-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY.md" data-t="ms_link"></a><br>
-    <span data-t="off_note"></span> <a id="off-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE.md" data-t="off_link"></a></p>
+    <span data-t="off_note"></span> <a id="off-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE.md" data-t="off_link"></a><br>
+    <span data-t="api_note"></span> <a id="api-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/API.md" data-t="api_link"></a></p>
   <div class="inst">
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.22.tar.gz.sig jt-waf-mgr-0.4.22.tar.gz
-tar xzf jt-waf-mgr-0.4.22.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.22
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
+tar xzf jt-waf-mgr-0.4.23.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.23
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
 sudo jt-waf-mgr check
 <span class="c" data-t="c_admin"></span>
 sudo jt-waf-mgr user add alice --role admin</pre></div>
+    </div>
+    <div class="iblock c-install">
+      <div class="ihead"><span class="ic">⇢</span><div><h3 data-t="cn_h"></h3><p data-t="cn_d"></p></div></div>
+      <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_vcopy"></span>
+sudo cp /etc/jt-waf-mgr/nginx-vhost.conf.example /etc/nginx/sites-available/waf.example.com.conf
+sudo ln -s /etc/nginx/sites-available/waf.example.com.conf /etc/nginx/sites-enabled/
+<span class="c" data-t="c_vedit"></span>
+<span class="c" data-t="c_vreload"></span>
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre></div>
+      <ul class="ticks"><li data-t="cn1"></li><li data-t="cn2"></li><li data-t="cn3"></li><li data-t="cn4"></li><li data-t="cn5"></li></ul>
     </div>
     <div class="iblock c-upgrade">
       <div class="ihead"><span class="ic">↻</span><div><h3 data-t="ub_h"></h3><p data-t="ub_d"></p></div></div>
@@ -281,7 +300,7 @@ const T = {
   nav_features: 'Features', nav_flow: 'Change workflow', nav_ai: 'Event analysis', nav_notify: 'Notifications', nav_security: 'Security', nav_screens: 'Screenshots', nav_install: 'Install',
   lead: 'A self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4. Read what the WAF did, tune it through an evidence-checked, sandbox-tested and approved workflow, let your own LLM review the events, and get told what needs a person.',
   releases: 'Releases', get_started: 'Get started',
-  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one, without touching nginx until you adopt your rule files.',
+  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one. It writes nothing until you adopt your rule files, and even then only ModSecurity files, never the nginx configuration.',
   f1_h: 'Events you can read', f1: 'Blocked and logged requests by site, attack type, source country and network (with a world map drawn in the page, no map service), rule and time. "Blocked only by the CRS score" first: the likely false positives.',
   f2_h: 'Safe rule changes', f2: 'Exclusions, confident blocks, redactions, plugin toggles and expert rules, checked against the access logs and a sandbox, approved, applied by a small root program that restores on failure.',
   f3_h: 'WAF model', f3: 'How a request is decided on your sites, drawn from the live configuration: engine per site, scoring, thresholds, exclusions and blocks.',
@@ -309,16 +328,16 @@ const T = {
   sc_h: 'Screenshots', sc_sub: 'From a synthetic test environment (example.com and documentation addresses).',
   sc_events: 'Events with a timeline you can drag', sc_waf: 'How a request is decided', sc_changes: 'Change workflow', sc_rules: 'Rules and where they come from',
   sc_alerts: 'Alerts to follow up', sc_system: 'System check', sc_dark: 'Dark theme',
-  in_sub: 'Debian 12 / 13 or Ubuntu 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
-  ms_note: 'Starting from a fresh nginx, or ModSecurity without CRS 4?', ms_link: 'ModSecurity installation guide →',
+  in_sub: 'Debian 12 / 13 or Ubuntu 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x (jt-waf-mgr can install it for you).',
+  ms_note: 'Starting from a fresh nginx? You need nginx, the ModSecurity module and a few lines of configuration; jt-waf-mgr installs and updates the OWASP CRS itself.', ms_link: 'ModSecurity installation guide →',
   ai_disclaimer: 'AI can be wrong, in both directions. The model only suggests: loosening always needs a person, only tightening that passed every check may apply on its own. Check the evidence before you approve.',
   sec5_h: 'Accounts and sign-in', sec5: 'Passwords hashed with scrypt; TOTP two-factor authentication required for approvers and administrators; an account is locked for 15 minutes after 5 failed sign-ins; password length, character classes, history and age are configurable; the previous sign-in and failed attempts are shown after signing in; sessions end after 30 minutes idle or 12 hours (both adjustable).',
-  sec6_h: 'Recovery on the host', sec6: 'Locked out or forgot the password: on the host, jt-waf-mgr user unlocks an account, resets its password (TOTP is cleared too and the password must be changed at the next sign-in), sets a password, disables or enables an account. Every action goes into the audit trail.',
+  sec6_h: 'Recovery on the host', sec6: 'Locked out, forgot the password or lost the phone: on the host, jt-waf-mgr user lists and adds accounts, unlocks an account, resets its password (TOTP is cleared too and the password must be changed at the next sign-in), sets a password, disables or enables an account. Every change goes into the audit trail.',
   off_note: 'No internet on the host? Everything installs and upgrades offline (no pip, no Docker).', off_link: 'Offline installation guide →', n4: 'Log servers / SIEM: up to 8 destinations, each with its own protocol, format (JSON, CEF, LEEF, GELF, key=value) and content (audit records, WAF events, alerts)',
   sec_policy: 'Security policy',
   in_h: 'Install, upgrade, uninstall',
   ib_h: 'Install',
-  ib_d: 'Verify the release signature, unpack and install. Then add the management vhost (internal networks only), sign in, change the password and set up two-factor authentication. Adopting your rule files is described in the README.',
+  ib_d: 'Verify the release signature, unpack and install. Then connect the management interface (below), sign in, change the password and set up two-factor authentication. Adopting your rule files is described in the README.',
   c_verify: '# verify the release signature and unpack',
   c_install: '# install: checks every file and the signature first',
   c_check: '# read the nginx / ModSecurity configuration',
@@ -337,12 +356,38 @@ const T = {
   close: 'Close',
   open_full: 'Open the whole page',
   sc_lookup: 'Address lookup with its location',
+  sc_traffic: 'Request volume next to what the WAF blocked',
+  f9_h: 'Request volume',
+  f9: 'Every request in the nginx access logs per site and hour (2xx to 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF blocked: the WAF numbers get a denominator. Optional alerts for a traffic spike or many 5xx answers.',
+  f10_h: 'Who wrote each rule',
+  f10: 'OWASP CRS, a CRS plugin, a third-party plugin, ModSecurity base settings, Jason Tools (rules generated from a form, and the Jason Tools rule pack) or this site (hand-written), with a filter and per-author counts.',
+  f11_h: 'OWASP CRS kept current',
+  f11: 'jt-waf-mgr downloads the newest CRS 4.x after a waiting period, verifies it against the pinned CRS signing key, compares it in the sandbox and installs it once a person approves; 3 versions are kept to roll back. A host without the CRS gets it the same way.',
+  f12_h: 'API for integrations',
+  f12: 'A SIEM, a SOAR playbook or a script uses API tokens with scopes and allowed source addresses: read events and alerts, propose changes. Tokens can never approve. See the API manual.',
+  ai_rec_h: 'Which LLM',
+  ai_rec1: 'Always self-hosted: an OpenAI-compatible server (llama.cpp server, vLLM, Ollama) with JSON-schema-constrained answers; without them plain JSON mode is used and answers are less reliable',
+  ai_rec2: 'An instruction model of about 14B parameters or more, at 4-bit quantization or better; 27–32B dense or 30B-class MoE recommended, for example Qwen3 32B or Qwen3 30B-A3B, Gemma 3 27B, gpt-oss-20b, Llama 3.3 70B',
+  ai_rec3: 'A context window of at least 16k tokens: one batch of 11 candidates used about 3k input and 3.5k output tokens and took about 85 seconds on the production server',
+  ai_rec4: 'Models of 8B and below or 2–3-bit quantizations contradict themselves more between runs (in production a 3-bit model called the same probe an attack twice and a false positive once); program-side scanner rules and a verdict history counter this, a stronger model helps. On slow hardware, raise the LLM timeout (up to 900 s)',
+  cn_h: 'Connect to the management interface',
+  cn_d: 'The service listens on 127.0.0.1:8095 only ([server] listen in /etc/jt-waf-mgr/config.toml) and is never exposed directly: nginx proxies a management vhost to it. Copy the example vhost into the nginx vhost directory (sites-available plus a link in sites-enabled, or conf.d). It has modsecurity off on purpose: the interface shows attack strings and would trigger the WAF on itself.',
+  c_vcopy: '# copy the example vhost (or to /etc/nginx/conf.d/)',
+  c_vedit: '# edit server_name, ssl_certificate / ssl_certificate_key and the allow lines',
+  c_vreload: '# test and reload nginx',
+  cn1: 'Set server_name (for example waf.example.com), the certificate, and allow lines for internal networks only; the rest stays deny all',
+  cn2: 'Certificate: your organisation\'s internal CA, or an existing wildcard certificate',
+  cn3: 'Or Let\'s Encrypt with the DNS-01 challenge (certbot with your DNS provider\'s plugin): HTTP-01 usually cannot reach an internal-only site. Or issue it on a public host and copy it over',
+  cn4: 'For a lab only, a self-signed certificate (browsers will warn; the openssl command is in the README)',
+  cn5: 'Open https://waf.example.com and sign in with the temporary password from jt-waf-mgr user add: the first sign-in forces a new password and TOTP setup. Optional: the commented limit_req block in the example adds a brute-force brake',
+  api_note: 'Connecting a SIEM, a SOAR playbook or a script?',
+  api_link: 'API manual →',
  },
  'zh-TW': {
   nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
   lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
   releases: '下載發行版', get_started: '開始使用',
-  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它，而且在你納管規則檔之前完全不動 nginx。',
+  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，永遠不寫 nginx 設定。',
   f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路（頁面內繪製的世界地圖，不使用地圖服務）、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
   f2_h: '安全的規則變更', f2: '排除、確定阻擋、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
   f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
@@ -353,11 +398,11 @@ const T = {
   f8_h: '到哪裡都能裝', f8: '只用 Python 標準函式庫：離線安裝，不需要 pip、不需要 Docker。英文、繁體中文、日文；淺色與深色；手機與平板。',
   flow_h: '可以信任的變更', flow_sub: '不論變更來自人員、API 權杖或事件分析，都走同一條路。',
   s1: '提出', s1d: '從範本、事件、上傳的規則檔或分析結果', s2: '靜態檢查', s2d: '允許的指令、正規表示式、ReDoS 形狀與實測',
-  s3: '證據', s3d: '存取記錄：會不會擋到外部成功的請求，或任何內部使用者？', s4: '沙箱', s4d: '用正式設定、測試案例與回歸樣本的拋棄式 nginx',
+  s3: '證據', s3d: '存取記錄：會不會封鎖外部成功的請求，或任何內部使用者？', s4: '沙箱', s4d: '用正式設定、測試案例與回歸樣本的拋棄式 nginx',
   s5: '核准', s5d: '提出者不能核准；放寬一律由人核准，必要時要重新輸入一次性驗證碼', s6: '套用', s6d: 'root 程式：nginx -t、reload、健康檢查、失敗自動還原；一鍵退回',
   ai_h: '讓模型幫忙，但不讓它自己決定', ai_sub: '用你自己的 LLM 伺服器排程分析。請求內容是攻擊者可控的：模型只負責判斷，一切由程式驗證。',
   ai1: '依規則看到的路徑分組候選；分批送出、以 schema 限制回答格式', ai2: '封鎖只用錨定且很窄的正規表示式，不可符合常見路徑、回歸樣本或組織自己在用的路徑',
-  ai3: '誤判只提出範圍最小的排除：單一精確路徑、特定規則與欄位；核准要一次性驗證碼', ai4: '攻擊可能沒被封鎖、使用者被誤擋時發出警示',
+  ai3: '誤判只提出範圍最小的排除：單一精確路徑、特定規則與欄位；核准要一次性驗證碼', ai4: '攻擊可能沒被封鎖、使用者被誤判封鎖時發出警示',
   ai5: '每次執行都有摘要：分析事件數、耗時、判斷、提案與警示',
   n_h: '需要有人處理時就通知你', n_sub: '網頁服務只把通知排入佇列，由獨立的受限程序發送、重試，並提醒待處理警示。',
   n1: '事件 × 管道矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結', n2: '來自請求的內容永遠不會變成格式、連結或提及；金鑰只能寫入',
@@ -370,16 +415,16 @@ const T = {
   sc_h: '截圖', sc_sub: '來自合成測試環境（example.com 與文件用位址）。',
   sc_events: '事件與可拖曳的時間軸', sc_waf: '請求怎麼被判定', sc_changes: '變更流程', sc_rules: '規則與來源',
   sc_alerts: '待處理警示', sc_system: '系統檢查', sc_dark: '深色主題',
-  in_sub: 'Debian 12 / 13 或 Ubuntu 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
-  ms_note: '全新的 nginx，或還沒有 CRS 4 的 ModSecurity？', ms_link: 'ModSecurity 安裝手冊 →',
+  in_sub: 'Debian 12 / 13 或 Ubuntu 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x（可以由 jt-waf-mgr 安裝）。',
+  ms_note: '全新的 nginx？只要 nginx、ModSecurity 模組與幾行設定；OWASP CRS 由 jt-waf-mgr 自己安裝與更新。', ms_link: 'ModSecurity 安裝手冊 →',
   ai_disclaimer: 'AI 可能出錯，兩個方向都會。模型只提供建議：放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。核准前請自行查看證據。',
   sec5_h: '帳號與登入', sec5: '密碼以 scrypt 雜湊；核准者與管理者必須設定 TOTP 雙因素驗證；連續登入失敗 5 次鎖定 15 分鐘；密碼長度、字元種類、歷史與有效期限可設定；登入後顯示上次登入時間與失敗次數；閒置 30 分鐘或滿 12 小時需重新登入（都可調整）。',
-  sec6_h: '主機上的救援指令', sec6: '被鎖住或忘記密碼時，在主機上用 jt-waf-mgr user 解鎖帳號、重設密碼（同時清除 TOTP，下次登入必須改密碼）、直接設定密碼、停用或啟用帳號。每個動作都寫進稽核記錄。',
+  sec6_h: '主機上的救援指令', sec6: '被鎖住、忘記密碼或手機遺失時，在主機上用 jt-waf-mgr user 列出與新增帳號、解鎖帳號、重設密碼（同時清除 TOTP，下次登入必須改密碼）、直接設定密碼、停用或啟用帳號。每項變更都寫進稽核記錄。',
   off_note: '主機沒有對外網路？安裝與更新都能離線完成（不需要 pip、不需要 Docker）。', off_link: '離線安裝與更新 →', n4: '外送記錄到 SIEM：最多 8 個目的地，各自選協定、格式（JSON、CEF、LEEF、GELF、key=value）與內容（稽核記錄、WAF 事件、警示）',
   sec_policy: '安全政策',
   in_h: '安裝、升級與移除',
   ib_h: '安裝',
-  ib_d: '驗證發行檔簽章、解開後安裝。接著加上管理介面的 vhost（只允許內部網路），登入後改密碼並設定雙因素驗證。納管現有規則檔的方式請見 README。',
+  ib_d: '驗證發行檔簽章、解開後安裝。接著連到管理介面（見下方），登入後改密碼並設定雙因素驗證。納管現有規則檔的方式請見 README。',
   c_verify: '# 驗證發行檔簽章並解開',
   c_install: '# 安裝：先驗證每個檔案與簽章',
   c_check: '# 解析 nginx / ModSecurity 設定',
@@ -398,12 +443,38 @@ const T = {
   close: '關閉',
   open_full: '開啟整頁原圖',
   sc_lookup: '查詢位址與所在位置',
+  sc_traffic: '請求量與 WAF 封鎖並列',
+  f9_h: '請求量',
+  f9: '依站台與小時統計 nginx 存取記錄裡的每一個請求（2xx 到 5xx、403、444、429、外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量並列，讓 WAF 的數字有分母。可選用流量暴增或大量 5xx 的警示。',
+  f10_h: '規則的撰寫者',
+  f10: 'OWASP CRS、CRS 外掛、第三方外掛、ModSecurity 基本設定、Jason Tools（依表單產生的規則與 Jason Tools 規則包）或站台自寫（手寫的規則）；可篩選並顯示各撰寫者的規則數。',
+  f11_h: 'OWASP CRS 保持最新',
+  f11: 'jt-waf-mgr 在新版 CRS 4.x 發布滿一段時間後下載，用釘選的 CRS 簽章金鑰驗證、在沙箱比對，由人核准後安裝；保留 3 個版本可以退回。還沒有 CRS 的主機也用同樣的流程安裝。',
+  f12_h: '介接 API',
+  f12: 'SIEM、SOAR 劇本或指令稿使用有範圍、限制來源位址的 API 權杖：讀取事件與警示、提出變更。權杖永遠不能核准。詳見 API 介接手冊。',
+  ai_rec_h: '建議的 LLM',
+  ai_rec1: '一律用地端伺服器：OpenAI 相容（llama.cpp server、vLLM、Ollama），並支援以 JSON schema 限制回答格式；不支援時改用一般 JSON 模式，回答比較不可靠',
+  ai_rec2: '約 14B 參數以上的指令模型，4-bit 量化或更好；建議 27–32B 的 dense 模型或 30B 級 MoE，例如 Qwen3 32B 或 Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B',
+  ai_rec3: '上下文長度至少 16k tokens：實測一批 11 個候選約用 3k 輸入與 3.5k 輸出 tokens，在正式機上約 85 秒',
+  ai_rec4: '8B 以下的模型或 2–3-bit 量化，每次的判斷比較容易前後矛盾（正式環境曾有 3-bit 量化模型把同一個探測兩次判為攻擊、一次判為誤判）；程式端的掃描器規則與判斷歷史可以抵銷，但模型強一點有幫助。硬體較慢時請把 LLM 逾時調高（最多 900 秒）',
+  cn_h: '連到管理介面',
+  cn_d: '服務只聽 127.0.0.1:8095（/etc/jt-waf-mgr/config.toml 的 [server] listen），不會直接對外開放，而是由 nginx 的管理介面 vhost 轉送。把範例 vhost 複製到 nginx 的 vhost 目錄（sites-available 加上 sites-enabled 的連結，或 conf.d）。它刻意設成 modsecurity off：介面會顯示攻擊字串，開著 WAF 會讓它自己觸發 WAF。',
+  c_vcopy: '# 複製範例 vhost（或放到 /etc/nginx/conf.d/）',
+  c_vedit: '# 修改 server_name、ssl_certificate 與 ssl_certificate_key、allow 那幾行',
+  c_vreload: '# 測試並 reload nginx',
+  cn1: '設定 server_name（例如 waf.example.com）與憑證；allow 只放內部網路，其餘維持 deny all',
+  cn2: '憑證：組織內部的 CA，或既有的萬用字元憑證',
+  cn3: '或用 Let\'s Encrypt 的 DNS-01 驗證（certbot 加上 DNS 業者的外掛）：只開放內部的站台通常收不到 HTTP-01 驗證；也可以在對外的主機申請後複製過來',
+  cn4: '只限測試環境：自簽憑證（瀏覽器會出現警告；openssl 指令在 README）',
+  cn5: '開啟 https://waf.example.com，用 jt-waf-mgr user add 印出的臨時密碼登入：第一次登入必須改密碼並設定 TOTP。選用：範例裡加了註解的 limit_req 區塊可以防暴力破解',
+  api_note: '要接 SIEM、SOAR 劇本或指令稿？',
+  api_link: 'API 介接手冊 →',
  },
  ja: {
   nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
   lead: 'nginx + libmodsecurity v3 + OWASP CRS 4 のためのセルフホスト型 Web 管理ツール。WAF が何をしたかを読み取り、証拠確認・サンドボックス試験・承認を経るフローで調整し、自前の LLM にイベントを確認させ、人の対応が必要なことを知らせます。',
   releases: 'リリース', get_started: 'はじめる',
-  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補い、ルールファイルを取り込むまで nginx には一切触れません。',
+  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補います。ルールファイルを取り込むまで何も書き込まず、その後も書き込むのは ModSecurity のファイルだけで、nginx の設定には決して書き込みません。',
   f1_h: '読めるイベント', f1: 'ブロック・記録のみのリクエストを、サイト、攻撃の種類、送信元の国とネットワーク（ページ内で描画する世界地図、地図サービスは不使用）、ルール、時間ごとに表示。「CRS スコアだけでブロック」を先頭に：誤検知の可能性が高いものです。',
   f2_h: '安全なルール変更', f2: '除外、確定ブロック、マスク、プラグイン切替、エキスパートルールを、アクセスログとサンドボックスで確認し、承認後、失敗時に復元する小さな root プログラムが適用。',
   f3_h: 'WAF 判定フロー', f3: '現在の設定から、サイトでリクエストがどう判定されるか（サイトごとのエンジン、スコア、しきい値、除外、ブロック）を図示。',
@@ -431,16 +502,16 @@ const T = {
   sc_h: 'スクリーンショット', sc_sub: '合成テスト環境（example.com とドキュメント用アドレス）より。',
   sc_events: 'ドラッグできるタイムライン付きのイベント', sc_waf: 'リクエストの判定方法', sc_changes: '変更フロー', sc_rules: 'ルールとその出所',
   sc_alerts: '対応待ちアラート', sc_system: 'システムチェック', sc_dark: 'ダークテーマ',
-  in_sub: 'Debian 12 / 13 または Ubuntu 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
-  ms_note: 'nginx を新しく入れる場合や、CRS 4 のない ModSecurity の場合は', ms_link: 'ModSecurity インストールガイド →',
+  in_sub: 'Debian 12 / 13 または Ubuntu 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x（jt-waf-mgr がインストール可能）。',
+  ms_note: 'nginx を新しく入れる場合も、必要なのは nginx、ModSecurity モジュール、数行の設定だけです。OWASP CRS は jt-waf-mgr がインストールし更新します。', ms_link: 'ModSecurity インストールガイド →',
   ai_disclaimer: 'AI はどちらの方向にも誤ることがあります。モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した強化だけが自動適用されます。承認する前に証拠を確認してください。',
   sec5_h: 'アカウントとサインイン', sec5: 'パスワードは scrypt でハッシュ化。承認者と管理者は TOTP 二要素認証が必須。サインインに 5 回失敗すると 15 分間ロック。パスワードの長さ・文字種・履歴・有効期限は設定可能。サインイン後に前回のサインインと失敗回数を表示。30 分無操作または 12 時間でセッション終了（いずれも調整可能）。',
-  sec6_h: 'ホスト上での復旧', sec6: 'ロックされた、またはパスワードを忘れた場合は、ホスト上で jt-waf-mgr user によりアカウントのロック解除、パスワードの再設定（TOTP も消去され、次回サインインでパスワード変更が必要）、パスワードの設定、無効化・有効化ができます。すべて監査記録に残ります。',
+  sec6_h: 'ホスト上での復旧', sec6: 'ロックされた、パスワードを忘れた、スマートフォンをなくした場合は、ホスト上で jt-waf-mgr user によりアカウントの一覧と追加、ロック解除、パスワードの再設定（TOTP も消去され、次回サインインでパスワード変更が必要）、パスワードの設定、無効化・有効化ができます。すべての変更が監査記録に残ります。',
   off_note: 'ホストがインターネットに接続できなくても、インストールと更新はオフラインでできます（pip も Docker も不要）。', off_link: 'オフラインでのインストールと更新 →', n4: 'ログサーバー / SIEM：最大 8 か所、それぞれプロトコル、形式（JSON、CEF、LEEF、GELF、key=value）、内容（監査記録、WAF イベント、アラート）を選択',
   sec_policy: 'セキュリティポリシー',
   in_h: 'インストール・アップグレード・アンインストール',
   ib_h: 'インストール',
-  ib_d: 'リリースの署名を検証し、展開してインストールします。続いて管理画面の vhost（内部ネットワークのみ）を追加し、サインインしてパスワード変更と二要素認証を設定します。既存ルールファイルの取り込みは README を参照してください。',
+  ib_d: 'リリースの署名を検証し、展開してインストールします。続いて管理画面に接続し（下記）、サインインしてパスワード変更と二要素認証を設定します。既存ルールファイルの取り込みは README を参照してください。',
   c_verify: '# リリースの署名を検証して展開',
   c_install: '# インストール：先にすべてのファイルと署名を検証',
   c_check: '# nginx / ModSecurity の設定を解析',
@@ -459,6 +530,32 @@ const T = {
   close: '閉じる',
   open_full: 'ページ全体を開く',
   sc_lookup: 'アドレスの照会と所在地',
+  sc_traffic: 'リクエスト量と WAF のブロックを並べて表示',
+  f9_h: 'リクエスト量',
+  f9: 'nginx のアクセスログにあるすべてのリクエストをサイトと時間ごとに集計し（2xx から 5xx、403、444、429、外部、バイト数。数値のみで IP・URL・User-Agent は保存しない）、WAF がブロックした数と並べて WAF の数字に分母を与えます。トラフィックの急増や 5xx 多発のアラートも任意で設定できます。',
+  f10_h: 'ルールの作成元',
+  f10: 'OWASP CRS、CRS プラグイン、サードパーティのプラグイン、ModSecurity 基本設定、Jason Tools（フォームから生成したルールと Jason Tools のルールパック）、サイト独自（手書きのルール）。絞り込みと作成元ごとの件数付き。',
+  f11_h: 'OWASP CRS を最新に',
+  f11: 'jt-waf-mgr は CRS 4.x の新版を一定期間の後にダウンロードし、固定した CRS 署名鍵で検証し、サンドボックスで比較して、人の承認後にインストールします。ロールバック用に 3 バージョンを保持。CRS のないホストも同じ流れで導入できます。',
+  f12_h: '連携用 API',
+  f12: 'SIEM、SOAR のプレイブック、スクリプトは、スコープと許可する送信元アドレス付きの API トークンで、イベントやアラートの取得、変更の提案ができます。トークンは承認できません。API 連携マニュアルを参照してください。',
+  ai_rec_h: '推奨する LLM',
+  ai_rec1: '常にオンプレミス：OpenAI 互換サーバー（llama.cpp server、vLLM、Ollama）で、JSON スキーマで形式を制約した回答に対応しているもの。非対応なら通常の JSON モードとなり、回答の信頼性が下がります',
+  ai_rec2: '約 14B パラメータ以上の指示モデル、4 ビット量子化以上。27–32B の dense か 30B 級 MoE を推奨。例：Qwen3 32B または Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B',
+  ai_rec3: 'コンテキスト長は 16k トークン以上：実測では候補 11 件の 1 バッチで入力約 3k・出力約 3.5k トークン、本番サーバーで約 85 秒',
+  ai_rec4: '8B 以下のモデルや 2–3 ビット量子化は実行ごとの判定が矛盾しやすくなります（本番では 3 ビット量子化のモデルが同じ探査を 2 回は攻撃、1 回は誤検知と判定）。プログラム側のスキャナー規則と判定履歴で補いますが、強いモデルのほうが有利です。遅いハードウェアでは LLM のタイムアウトを延ばしてください（最大 900 秒）',
+  cn_h: '管理画面への接続',
+  cn_d: 'サービスは 127.0.0.1:8095 だけで待ち受け（/etc/jt-waf-mgr/config.toml の [server] listen）、直接公開せず、nginx の管理用 vhost から転送します。vhost の例を nginx の vhost ディレクトリ（sites-available と sites-enabled のリンク、または conf.d）にコピーします。管理画面は攻撃文字列を表示し、WAF を有効にすると自分自身で引っかかるため、意図的に modsecurity off にしています。',
+  c_vcopy: '# vhost の例をコピー（または /etc/nginx/conf.d/ へ）',
+  c_vedit: '# server_name、ssl_certificate と ssl_certificate_key、allow の行を編集',
+  c_vreload: '# nginx を検査して reload',
+  cn1: 'server_name（例：waf.example.com）と証明書を設定し、allow は内部ネットワークのみ、それ以外は deny all のまま',
+  cn2: '証明書：組織内部の CA、または既存のワイルドカード証明書',
+  cn3: 'または Let\'s Encrypt の DNS-01 チャレンジ（certbot と DNS 事業者のプラグイン）：内部専用のサイトには通常 HTTP-01 が届きません。公開ホストで発行してコピーする方法もあります',
+  cn4: '検証環境に限り自己署名証明書（ブラウザに警告が出ます。openssl のコマンドは README にあります）',
+  cn5: 'https://waf.example.com を開き、jt-waf-mgr user add が表示した一時パスワードでサインインします。初回は新しいパスワードと TOTP の設定が必須です。任意：例のコメントアウトされた limit_req ブロックで総当たり対策を追加できます',
+  api_note: 'SIEM、SOAR のプレイブック、スクリプトを接続するなら',
+  api_link: 'API 連携マニュアル →',
  },
 }
 function pick() {
@@ -482,6 +579,7 @@ function apply(lang) {
   document.getElementById('lb-x').setAttribute('aria-label', d.close)
   document.getElementById('ms-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   document.getElementById('off-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
+  document.getElementById('api-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/API' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
 for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))

@@ -69,6 +69,9 @@ class TempEnv:
              'integrity': {'anchor_file': os.path.join(self.dir, 'anchors.jsonl')},
              'backup': {'dir': os.path.join(self.dir, 'backups')},
              'managed': {'apply_state': os.path.join(self.dir, 'apply-state')},
+             # never the development host's own nginx logs
+             'traffic': {'logs': [os.path.join(self.dir, 'traffic', '*access.log')]},
+             'evidence': {'access_logs': [os.path.join(self.dir, 'nginx', '*access.log')]},
              'geoip': {'dir': os.path.join(self.dir, 'geoip'), 'license_key_file': os.path.join(self.dir, 'maxmind.key')}}
         for k, v in over.items():
             o.setdefault(k, {}).update(v)

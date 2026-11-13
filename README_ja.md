@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.22
+# jt-waf-mgr v0.4.23
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -44,10 +44,17 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   トークンなどの機密項目は**保存前に**マスクします。
 - **概要とイベント**：タイムラインをドラッグして拡大、または最長 31 日の期間を指定。絞り込み条件は URL に保持。イベント詳細で
   一致したすべてのルールを表示し、ワンクリックで除外やブロックを起案。
+- **リクエスト量**（0.4.23 で追加）：nginx のアクセスログにあるすべてのリクエストを、サイトと時間ごとに集計します（2xx、
+  3xx、4xx、5xx、403、444、429、外部、バイト数。数値のみで、IP・URL・User-Agent は保存しません）。WAF がブロックした数と
+  並べて表示し、WAF の数字に分母を与えます。管理の「設定」→「リクエスト量」で有効・無効とアラートを設定します。任意の
+  アラート（既定はオフ）：トラフィックの急増（そのサイトの過去 7 日間の同じ時間帯の通常量の N 倍）、または 5xx 応答の多発。
 - **WAF 判定フロー**：現在の設定から、これらのサイトでリクエストがどう判定されるか（サイトごとのエンジン、スコア、しきい値、
   除外、確定ブロック）を図示。
 - **ルール**：各ルールの出所（OWASP CRS とバージョン、CRS プラグイン、取り込み時のインポート、人・API トークン・イベント分析
-  による変更）、日ごとのヒット数、シンタックスハイライト。
+  による変更）、日ごとのヒット数、シンタックスハイライト。0.4.23 で「作成元」を追加（絞り込みと作成元ごとの件数付き）：
+  OWASP CRS、OWASP CRS プラグイン、サードパーティのプラグイン、ModSecurity 基本設定、Jason Tools（jt-waf-mgr がフォームから
+  生成するルールと Jason Tools のルールパック）、サイト独自（手書きのルール：取り込み時にインポートしたもの、raw ルール、
+  nginx の vhost ファイル）。
 - **変更フロー**：単独の変更または一括（1 回の承認・1 バージョン・1 回の reload）、ルールファイルのアップロード、証拠、
   サンドボックス、ヘルスチェック URL、承認ルール（提案者は承認不可。シングル管理者モードで自分の緩和を承認するにはワンタイム
   コードを再入力）、厳しい条件付きの自動強化、ロールバック。
@@ -57,7 +64,7 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   機密・バックアップ・設定のファイル名を探る要求や、同じアドレスが多くのパスを試す要求はプログラム自身の規則で偵察と判定し、
   以前に攻撃と判定したパスは一度の「誤検知」判定では緩和しません。実行ごとの要約。
   **AI はどちらの方向にも誤ることがあります**：モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した
-  強化だけが自動適用されます。
+  強化だけが自動適用されます。使う LLM については[イベント分析：推奨する LLM](#イベント分析推奨する-llm) を参照してください。
 - **対応待ちアラート**：防がれていない可能性のある攻撃、利用者に影響する誤検知、進行中の攻撃、設定の外部変更、完全性の問題、
   適用やバックアップの失敗。承認者が対応内容を記入するまで開いたままで、定期的に再通知します。
 - **通知**：メール（SMTP、テキスト＋HTML）、Telegram、Microsoft Teams（Workflows / Adaptive Card）、Slack、Discord、Zulip、
@@ -66,15 +73,14 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **OWASP CRS の更新**（任意、既定はオフ）：制限付きの毎日の確認で、使用中のメジャーバージョンの最新リリースを公開から 1 週間後に
   取得し、固定した CRS リリース鍵による有効な署名があるものだけを保管します。CRS ページで使用中・最新・検証済みのバージョンを表示します。
   切り替え（または保持している旧バージョンへの戻し）は変更として扱い、両バージョンにサンドボックスで同じ最近の要求を通して比較し、人が承認し、
-  root プログラムが署名を再検証して自ら展開し、crs リンクを切り替え、失敗すれば元に戻します。CRS のないホストも同じ流れで CRS 4 を
-  インストールできます（Include は modsecurity.conf の直後に追加）。
+  root プログラムが署名を再検証して自ら展開し、crs リンクを切り替え、失敗すれば元に戻します。ロールバック用に 3 バージョンを
+  保持します。CRS のないホストも同じ流れで CRS 4 をインストールできます（Include は modsecurity.conf の直後に追加）。
 - **ログサーバー（syslog / SIEM）**：最大 8 か所。それぞれプロトコル（ローカルソケット、UDP、TCP、TLS）、メッセージ形式（JSON、
   CEF、LEEF 2.0、GELF 1.1、key=value）、送信内容（監査記録、WAF イベント、アラート）を選べ、キューと再送も個別。テスト送信で
   実際に送った内容を表示します。
 - **アカウント**：scrypt パスワード、approver / admin は二要素認証必須、ロックアウト、履歴と期限付きのパスワードポリシー、
   アカウントの期限と見直し。API トークンはスコープと許可送信元ネットワーク付き（提案はできるが承認は不可）。ホスト上での
-  復旧：`jt-waf-mgr user unlock | reset | passwd | disable | enable <名前>`（reset は TOTP も消去し、次回サインインで
-  パスワード変更が必要）。すべて監査記録に残ります。
+  復旧は[アカウントと復旧](#アカウントと復旧)を参照してください。
 - **完全性とコンプライアンス**：システムチェック、コンプライアンス、毎日検証されるバックアップとダウンロード（ワンタイム
   コード）、設定変更の履歴と原因判定（jt-waf-mgr、登録済みの自動化、外部）。
 - **画面**：English・繁體中文・日本語、ライト / ダーク、スマートフォンとタブレット、GeoIP（MaxMind GeoLite2、専用の制限付き
@@ -90,30 +96,108 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 
 - Debian 12 / 13 または Ubuntu 24.04（22.04 の libmodsecurity パッケージは古いため 3.0.9 以上を自分でビルド）、**Python 3.11 以上（標準ライブラリのみ、pip もパッケージも不要）**：オフラインで
   インストールできます。
-- nginx と ModSecurity-nginx コネクタ、libmodsecurity 3.0.9 以上、OWASP CRS 4.x、`SecAuditLogFormat JSON`。監査ログは
+- nginx と ModSecurity-nginx コネクタ、libmodsecurity 3.0.9 以上、`SecAuditLogFormat JSON`。OWASP CRS 4.x は jt-waf-mgr が
+  ダウンロード・検証・インストールできます（[OWASP CRS](#owasp-crs) を参照）。監査ログは
   `copytruncate` でローテーションしてください（libmodsecurity は reload 時にファイルを開き直しません）。nginx を新しく入れる
   場合や CRS 4 がない場合は [ModSecurity インストールガイド](docs/MODSECURITY.ja.md)、インターネットに接続できないホストは
   [オフラインでのインストールと更新](docs/OFFLINE.ja.md) を参照してください。サイトのルール
   ファイルがなくても取り込めます（CRS ルールの前後に空の管理ファイルを追加します）。
-- 任意：イベント分析用のネットワーク上の OpenAI 互換 LLM サーバー（llama.cpp、vLLM、Ollama など）、GeoIP 用の MaxMind アカウント。
+- 任意：イベント分析用のネットワーク上の OpenAI 互換オンプレミス LLM サーバー（llama.cpp、vLLM、Ollama など。
+  [推奨する LLM](#イベント分析推奨する-llm) を参照）、GeoIP 用の MaxMind アカウント。
 
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.22.tar.gz.sig jt-waf-mgr-0.4.22.tar.gz
-tar xzf jt-waf-mgr-0.4.22.tar.gz && cd jt-waf-mgr-0.4.22
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
+tar xzf jt-waf-mgr-0.4.23.tar.gz && cd jt-waf-mgr-0.4.23
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
 ```
 
-管理画面の vhost（`/etc/jt-waf-mgr/nginx-vhost.conf.example`：内部ネットワークのみ、`127.0.0.1:8095` へ転送）を追加し、
-`nginx -t`、reload、サインインしてパスワード変更と二要素認証の設定を行います。運用設定（GeoIP、LLM、分析、通知、ネットワーク、
-ポリシー）は Web 画面で行い、`/etc/jt-waf-mgr/config.toml` には起動に必要な項目だけを置きます。
+### 管理画面への接続
+
+サービスは `127.0.0.1:8095` だけで待ち受けます（`/etc/jt-waf-mgr/config.toml` の `[server] listen`）。直接公開することは
+なく、nginx の管理用 vhost から転送します。リリースは vhost の例を `/etc/jt-waf-mgr/nginx-vhost.conf.example` に
+インストールします。nginx の vhost ディレクトリにコピーしてください。例：
+
+```sh
+sudo cp /etc/jt-waf-mgr/nginx-vhost.conf.example /etc/nginx/sites-available/waf.example.com.conf
+sudo ln -s /etc/nginx/sites-available/waf.example.com.conf /etc/nginx/sites-enabled/
+# （または /etc/nginx/conf.d/waf.example.com.conf にコピー）
+```
+
+コピーしたファイルで次を設定します：
+
+- `server_name`：開くときの名前（例：`waf.example.com`）。
+- `ssl_certificate` と `ssl_certificate_key`：証明書（下記参照）。
+- `allow` の行：内部ネットワークのみ（さらに絞るなら管理者のネットワーク）。それ以外は `deny all` のままにします。
+
+続いて `sudo nginx -t && sudo systemctl reload nginx` を実行します。この vhost は意図的に `modsecurity off` にしています。
+管理画面は攻撃文字列を表示するため、WAF を有効にすると自分自身で WAF に引っかかるからです。任意：例にあるコメントアウト
+された `limit_req` ブロックで、サインインの前に総当たり攻撃への歯止めを追加できます。
+
+証明書は次のいずれか：
+
+- 組織内部の CA、または既存のワイルドカード証明書。
+- Let's Encrypt：管理サイトは内部専用なので、HTTP-01 チャレンジは通常届きません。DNS-01 チャレンジ（certbot と DNS
+  事業者のプラグイン）を使うか、公開ホストで発行してコピーしてください。
+- 検証環境に限り、自己署名証明書（ブラウザに警告が出ます）：
+
+```sh
+sudo openssl req -x509 -newkey rsa:3072 -nodes -days 825 -keyout /etc/ssl/private/waf.key -out /etc/ssl/certs/waf.crt -subj "/CN=waf.example.com" -addext "subjectAltName=DNS:waf.example.com"
+```
+
+その後 `https://waf.example.com`（設定した名前）を開き、`jt-waf-mgr user add` が表示した一時パスワードでサインインします。
+初回のサインインでは新しいパスワードと TOTP 二要素認証の設定が必須です。運用設定（GeoIP、LLM、分析、通知、リクエスト量、
+ネットワーク、ポリシー）は Web 画面で行い、`/etc/jt-waf-mgr/config.toml` には起動に必要な項目だけを置きます。
+
+### jt-waf-mgr にルールを変更させる
+
+jt-waf-mgr が書き込むのは ModSecurity のファイルだけで、nginx の設定は決して書き込みません。nginx の設定を読み（サイトと
+ModSecurity のメイン設定ファイルを見つけるため）、`nginx -t` を実行し、nginx を reload します。管理用 vhost と nginx の
+`modsecurity on;` は、管理者自身が一度だけ行う編集です。
 
 jt-waf-mgr にルールを変更させるには、適用プログラムを有効にし（`sudo ./install.sh --enable-apply`）、ヘルスチェック URL を
-設定し、「ルール → 管理対象ルール」で既存のルールファイルを取り込みます（通常の変更と同様に admin が承認）。それまで nginx には
-一切触れません。
+設定し、「ルール → 管理対象ルール」で既存のルールファイルを取り込みます（通常の変更と同様に admin が承認）。それまでは何も
+書き込みません。サイトのルールファイルがなくても取り込めます。
+
+### OWASP CRS
+
+CRS は jt-waf-mgr が扱います。新しいホストに必要なのは、nginx と ModSecurity モジュール、`SecAuditLogFormat JSON` を含む
+`modsecurity.conf`、`modsecurity.conf` を Include するメイン設定ファイル、nginx の `modsecurity on;` と
+`modsecurity_rules_file …` だけです（[ModSecurity インストールガイド](docs/MODSECURITY.ja.md)）。その後：
+
+1. CRS ページで「ここで CRS を最新に保つ」をオンにします。
+2. jt-waf-mgr は最新の CRS 4.x を公開から `wait_days`（既定 7 日）経ってからダウンロードし、固定した CRS 署名鍵で検証します。
+3. 「サンドボックスで比較してインストールを提案」で変更が作成されます。
+4. 人が承認すると、jt-waf-mgr が `crs-<バージョン>`、`crs` リンク、`crs-setup.conf` をインストールし、`modsecurity.conf` の
+   直後に Include を挿入します。
+5. 続いて既存ルールの取り込みを行うと、CRS ルールの前後に jt-waf-mgr の管理ルールファイルが追加されます。
+
+以後の CRS 更新も同じ流れです：ダウンロード、検証、サンドボックスでの比較、人による承認、インストール。ロールバック用に
+3 バージョンを保持します。CRS を手動でインストールすることもできます（ガイドを参照）。
+
+### アカウントと復旧
+
+ホスト上で root として実行します：
+
+```sh
+sudo jt-waf-mgr user list                       # アカウント、ロール、状態（disabled、totp、must-change）
+sudo jt-waf-mgr user add alice --role approver  # ロール：viewer（既定）、operator、approver、admin
+sudo jt-waf-mgr user unlock alice
+sudo jt-waf-mgr user reset alice
+sudo jt-waf-mgr user passwd alice
+sudo jt-waf-mgr user disable alice              # および enable
+```
+
+- `add`：一時パスワードを表示します。初回サインインで変更が必要です。
+- `unlock`：サインイン失敗によるロックを解除します。
+- `reset`：新しい一時パスワードを発行し、TOTP を消去し、サインイン時にパスワード変更を強制します。スマートフォンを
+  なくしたときの復旧方法です。
+- `passwd`：対話形式でパスワードを設定します。
+- `disable` と `enable`：アカウントを無効化・再度有効化します。
+- これらの変更はすべて監査記録に残ります。
 
 ### アップグレード
 
@@ -136,6 +220,28 @@ sudo ./uninstall.sh --purge   # /var/lib/jt-waf-mgr、/etc/jt-waf-mgr と jtwaf 
 
 nginx の設定には触れません。管理画面の vhost はご自身で削除してください。既存のルールファイルを取り込んでいた場合、
 `/etc/nginx/modsec/jt-waf-mgr/` の管理ファイルはそのまま残り、nginx は引き続き読み込みます。以後は手動で保守してください。
+
+## イベント分析：推奨する LLM
+
+分析は常に自前のオンプレミス LLM サーバーで行います。
+
+- **サーバー**：OpenAI 互換（llama.cpp server、vLLM、Ollama）で、JSON スキーマで形式を制約した回答に対応しているもの。
+  対応していない場合は通常の JSON モードを使い、回答の信頼性が下がります。
+- **モデル**：約 14B パラメータ以上の指示（instruct）モデルで、4 ビット量子化以上。27–32B の dense モデルか 30B 級の MoE を
+  推奨します。例：Qwen3 32B または Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B。
+- **コンテキスト長**：16k トークン以上。実測：候補 11 件の 1 バッチで入力約 3k、出力約 3.5k トークンを使い、本番サーバーで
+  約 85 秒かかりました。
+- **小さなモデル**（8B 以下）や 2–3 ビット量子化は、実行ごとの判定が矛盾しやすくなります。本番では 3 ビット量子化のモデルが
+  同じ探査を 2 回は攻撃、1 回は誤検知と判定しました。jt-waf-mgr はスキャナーのパターンに対するプログラム側の規則と判定履歴で
+  これを補いますが、より強いモデルのほうが有利です。
+- **遅いハードウェア**：「設定」で LLM のタイムアウトを延ばしてください（最大 900 秒）。
+
+AI は誤ることがあります。自動適用は強化（許可 → ブロック）だけで、緩和は必ず人が承認します。
+
+## 連携用 API
+
+SIEM、SOAR のプレイブック、スクリプトは API トークンで接続します（admin が作成し、スコープと許可する送信元アドレス付き。
+トークンは変更を提案できますが、承認はできません）。[API 連携マニュアル](docs/API.ja.md)を参照してください。
 
 ## セキュリティ（OWASP Top 10:2025）
 

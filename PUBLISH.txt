@@ -51,6 +51,9 @@ docs/MODSECURITY.ja.md
 docs/OFFLINE.md
 docs/OFFLINE.zh-TW.md
 docs/OFFLINE.ja.md
+docs/API.md
+docs/API.zh-TW.md
+docs/API.ja.md
 docs/index.html
 docs/shots/
 docs/logo-mark.svg

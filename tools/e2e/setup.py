@@ -1,6 +1,7 @@
 """Synthetic environment for tools/e2e/e2e.cjs: events, GeoIP test databases, accounts with TOTP, a token.
 Test data only (documentation address ranges, example.com)."""
-import json, sys, time, os, random
+import json
+import sys, time, os, random
 import os.path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 from jtwafmgr import config, auth
@@ -79,5 +80,19 @@ alerts.raise_alert(app.db, app.audit, 'analyst', 'attack_passed', 'critical', 'a
                    {'path': '/.env', 'host': 'app.example.com', 'count': 3, 'reason': '<b>not markup</b> probe answered 200'}, link='/analysis')
 alerts.raise_alert(app.db, app.audit, 'analyst', 'false_positive', 'warning', 'false_positive:shop.example.com/api/notes',
                    {'path': '/api/notes', 'host': 'shop.example.com', 'count': 12, 'reason': 'rich text editor content'}, link='/changes')
+# request volume (traffic.py): a week of hourly counts for three synthetic sites, with a daily rhythm
+import math
+h0 = int(now // 3600) * 3600
+for i in range(7 * 24, 0, -1):
+    hr = h0 - i * 3600
+    day = 0.55 + 0.45 * math.sin((time.localtime(hr).tm_hour - 6) / 24 * 2 * math.pi)
+    for host, base, err in (('www.example.com', 900, 2), ('shop.example.com', 420, 6), ('api.example.com', 260, 1)):
+        tot = int(base * day) + (i * 37 % 41)
+        s4, s5 = tot // 12 + i % 7, err + (i % 5 == 0) * err * 3
+        s3 = tot // 9
+        app.db.x('INSERT INTO traffic_hourly(hour, host, total, s2xx, s3xx, s4xx, s5xx, s403, s444, s429, external, bytes) '
+                 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (hr, host, tot, tot - s3 - s4 - s5, s3, s4, s5, s4 // 3, i % 4, i % 3,
+                                                       int(tot * 0.8), tot * 18000))
+app.db.set_meta('traffic_polled_at', now - 30)
 json.dump(sec, open(R + '/totp.json', 'w'))
 print('events', app.db.one('SELECT COUNT(*) n FROM events')['n'])

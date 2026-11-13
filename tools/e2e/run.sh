@@ -26,6 +26,8 @@ sandbox_dir = "$W/sandbox"
 apply_state = "$W/apply-state"
 [evidence]
 access_logs = ["$W/access.log"]
+[traffic]
+logs = ["$W/traffic/*access.log"]
 [waf]
 focus_sites = ["sso.example.com"]
 [auth]

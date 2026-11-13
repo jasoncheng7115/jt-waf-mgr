@@ -112,6 +112,7 @@ const GROUPS = [
   { key: 'n_zulip', icon: 'chat', channel: 'zulip', keys: ['notify.zulip_enabled', 'notify.zulip_site', 'notify.zulip_bot_email', 'notify.zulip_api_key', 'notify.zulip_stream', 'notify.zulip_topic'] },
   { key: 'n_nextcloud', icon: 'chat', channel: 'nextcloud', keys: ['notify.nextcloud_enabled', 'notify.nextcloud_url', 'notify.nextcloud_token', 'notify.nextcloud_secret'] },
   { key: 'n_webhook', icon: 'link', channel: 'webhook', keys: ['notify.webhook_enabled', 'notify.webhook_url', 'notify.webhook_secret', 'notify.webhook_token'] },
+  { key: 'traffic', icon: 'chart', keys: ['traffic.enabled', 'traffic.logs', 'traffic.keep_days', 'traffic.alert', 'traffic.spike_factor', 'traffic.min_requests', 'traffic.error_percent'] },
   { key: 'network', icon: 'network', keys: ['waf.focus_sites', 'network.known_scanners', 'evidence.catch_all_hosts', 'integrity.automation_paths'] },
   { key: 'syslog', icon: 'send', keys: ['syslog.enabled', 'syslog.address', 'syslog.protocol', 'syslog.format', 'syslog.facility'] },
   { key: 'policy', icon: 'lock', keys: ['ui.login_notice', 'compliance.level', 'auth.password_max_age_days', 'auth.password_min_age_hours', 'auth.password_history', 'auth.dormant_days', 'auth.max_sessions_per_user', 'auth.lockout_threshold', 'auth.lockout_minutes'] },

@@ -9,6 +9,8 @@
     <form class="filters" @submit.prevent="apply">
       <div class="field" :class="fieldClass('source')"><label for="rules-f-source">{{ t('rules.source') }}</label>
         <SelectBox id="rules-f-source" v-model="f.source" :options="sourceOpts" /></div>
+      <div class="field" :class="fieldClass('author')"><label for="rules-f-author">{{ t('rules.author') }}</label>
+        <SelectBox id="rules-f-author" v-model="f.author" :options="authorOpts" /></div>
       <div v-if="f.source !== 'crs'" class="field" :class="fieldClass('category')"><label for="rules-f-category">{{ t('rules.category') }}</label>
         <SelectBox id="rules-f-category" v-model="f.category" :options="categoryOpts" /></div>
       <div v-else class="field" :class="fieldClass('family')"><label for="rules-f-family">{{ t('rules.family') }}</label>
@@ -23,6 +25,12 @@
     </form>
     <ErrorBox :error="error" />
     <Loading v-if="loading && !items.length" />
+    <div v-if="authors.length" class="authorbar" role="group" :aria-label="t('rules.author')">
+      <span class="muted small" :title="t('author.hint')"><Icon name="user" /> {{ t('rules.author_counts') }}</span>
+      <button v-for="a in authors" :key="a.key" type="button" class="authchip" :class="{ on: f.author === a.key }" :aria-pressed="f.author === a.key ? 'true' : 'false'"
+              @click="pickAuthor(a.key)"><Icon :name="f.author === a.key ? 'check' : 'filter'" /><span class="badge" :class="AUTHOR_BADGE[a.key]">{{ t('author.' + a.key) }}</span> <b>{{ fmtNum(a.n) }}</b></button>
+      <span class="muted small authhint">{{ t('author.hint') }}</span>
+    </div>
     <section v-if="summary.length" class="card">
       <h2><Icon name="chart" /> {{ t('rules.by_category_state') }}</h2>
       <p class="muted small">{{ t('rules.by_category_state_hint') }}</p>
@@ -58,6 +66,7 @@
         <span v-if="!row.managed" class="chip tag" :title="t('rules.unmanaged_hint')">{{ t('rules.unmanaged') }}</span></template>
       <template #cell-sel="{ row }"><input v-if="row.id" type="checkbox" class="rowsel" :checked="selected.has(row.id)" :aria-label="t('toggle.pick_rule', { id: row.id })"
                @change="pickRow(row.id, $event.target.checked)"></template>
+      <template #cell-author="{ row }"><span class="badge" :class="AUTHOR_BADGE[row.author || 'site']">{{ t('author.' + (row.author || 'site')) }}</span></template>
       <template #cell-state="{ row }"><span class="badge" :class="'b-' + STATE_BADGE[row.state || 'on']" :title="stateTitle(row)">{{ t('rulestate.' + (row.state || 'on')) }}</span></template>
       <template #cell-family="{ row }">{{ row.family ? tOr('family.' + row.family, row.family) : '—' }}</template>
       <template #cell-phase="{ row }"><span class="mono">{{ row.phase ?? '—' }}</span></template>
@@ -110,12 +119,15 @@ const SOURCES = ['local', 'vhost_inline', 'crs', 'plugin', 'base', 'all']
 const CATEGORIES = ['exclusion', 'confident_block', 'system', 'redaction', 'plugin_toggle', 'other']
 const FAMILIES = ['protocol', 'lfi', 'rfi', 'rce', 'php', 'generic', 'xss', 'sqli', 'session', 'java', 'scanner', 'method', 'data_leak', 'other']
 const STATES = ['on', 'partial', 'off', 'inactive']
+const AUTHORS = ['owasp_crs', 'owasp_crs_plugin', 'third_party', 'modsecurity', 'jason_tools', 'site']
+const AUTHOR_BADGE = { owasp_crs: 'b-int', owasp_crs_plugin: 'b-int', third_party: 'b-warn', modsecurity: 'b-logged', jason_tools: 'b-ok', site: 'b-ext' }
 const STATE_TONE = { on: 'good', partial: 'warning', off: 'blocked', inactive: 'muted' }
 const STATE_BADGE = { on: 'ok', partial: 'warn', off: 'blocked', inactive: 'logged' }
 const STATE_ICON = { on: 'check', partial: 'warning', off: 'hide', inactive: 'timer' }
 const route = useRoute()
 const router = useRouter()
-const f = reactive({ source: 'local', category: '', family: '', state: '', q: '' })
+const f = reactive({ source: 'local', author: '', category: '', family: '', state: '', q: '' })
+const authors = ref([])
 const summary = ref([])
 const items = ref([])
 const cursor = ref(null)
@@ -139,6 +151,8 @@ const flow = computed(() => [
 ])
 
 const sourceOpts = computed(() => SOURCES.map((s) => ({ value: s, label: t('source.' + s) })))
+const authorOpts = computed(() => [{ value: '', label: t('author.all') }, ...AUTHORS.map((a) => ({ value: a, label: t('author.' + a) }))])
+function pickAuthor(k) { f.author = f.author === k ? '' : k; apply() }
 const familyOpts = computed(() => [{ value: '', label: t('filter.all_categories') }, ...FAMILIES.map((c) => ({ value: c, label: tOr('family.' + c, c) }))])
 const stateOpts = computed(() => [{ value: '', label: t('rulestate.all') }, ...STATES.map((s) => ({ value: s, label: t('rulestate.' + s) }))])
 const categoryOpts = computed(() => [{ value: '', label: t('filter.all_categories') }, ...CATEGORIES.map((c) => ({ value: c, label: t('category.' + c) }))])
@@ -146,15 +160,16 @@ const categoryOpts = computed(() => [{ value: '', label: t('filter.all_categorie
 const cols = computed(() => [
   ...(canToggle.value ? [{ key: 'sel', label: '', nowrap: true, required: true, sortable: false, text: () => '' }] : []),
   { key: 'id', label: t('rule.id'), nowrap: true, required: true, text: (r) => r.id + (r.managed ? '' : ' ' + t('rules.unmanaged')) },
+  { key: 'author', label: t('rules.author'), nowrap: true, value: (r) => t('author.' + (r.author || 'site')) },
   { key: 'state', label: t('rules.state'), nowrap: true, value: (r) => STATES.indexOf(r.state || 'on'), text: (r) => t('rulestate.' + (r.state || 'on')) },
   ...(f.source === 'crs' ? [{ key: 'family', label: t('rules.family'), nowrap: true, value: (r) => (r.family ? tOr('family.' + r.family, r.family) : '') }]
     : [{ key: 'category', label: t('rules.category'), nowrap: true, value: (r) => t('category.' + (r.category || 'other')) }]),
-  { key: 'phase', label: t('rule.phase'), align: 'num' },
+  { key: 'phase', label: t('rule.phase'), align: 'num', hidden: true },
   { key: 'disruptive', label: t('rule.action') },
   { key: 'msg', label: t('rule.description'), value: (r) => r.msg || r.comment || r.directive || '', text: (r) => [r.msg, r.comment, r.directive, r.file].filter(Boolean).join(' ') },
   { key: 'hosts', label: t('rule.hosts'), text: (r) => ((r.hosts || []).length ? r.hosts.join(' ') : t('rules.global')) },
   { key: 'provenance', label: t('prov.title'), value: (r) => (r.provenance ? tOr('prov.' + r.provenance.channel, r.provenance.channel) : '') },
-  { key: 'hits_7d', label: t('rule.hits_7d'), align: 'num' },
+  { key: 'hits_7d', label: t('rule.hits_7d'), align: 'num', hidden: true },
   { key: 'hits_30d', label: t('rule.hits_30d'), align: 'num' },
   { key: 'last_hit', label: t('rule.last_hit'), nowrap: true, text: (r) => (r.last_hit ? fmtShortTime(r.last_hit) : '') },
 ])
@@ -233,7 +248,7 @@ const { dirty, fieldClass } = useFilterState(f, () => {
   const q = route.query
   return { source: SOURCES.includes(q.source) ? q.source : 'local', category: typeof q.category === 'string' ? q.category : '',
     family: typeof q.family === 'string' ? q.family : '', state: STATES.includes(q.state) ? q.state : '',
-    q: typeof q.q === 'string' ? q.q : '' }
+    author: AUTHORS.includes(q.author) ? q.author : '', q: typeof q.q === 'string' ? q.q : '' }
 }, { source: 'local' })
 function fromQuery() {
   const q = route.query
@@ -241,6 +256,7 @@ function fromQuery() {
   f.category = typeof q.category === 'string' ? q.category : ''
   f.family = typeof q.family === 'string' ? q.family : ''
   f.state = STATES.includes(q.state) ? q.state : ''
+  f.author = AUTHORS.includes(q.author) ? q.author : ''
   f.q = typeof q.q === 'string' ? q.q : ''
 }
 
@@ -248,11 +264,11 @@ async function load(fresh) {
   loading.value = true
   error.value = null
   try {
-    const p = { source: f.source, category: f.source === 'crs' ? '' : f.category, family: f.source === 'crs' ? f.family : '', state: f.state, q: f.q, limit: 200 }
+    const p = { source: f.source, category: f.source === 'crs' ? '' : f.category, family: f.source === 'crs' ? f.family : '', state: f.state, author: f.author, q: f.q, limit: 200 }
     if (!fresh && cursor.value) p.cursor = cursor.value
     const data = await get('/rules', p)
     items.value = fresh ? data.items : items.value.concat(data.items)
-    if (fresh) summary.value = data.summary || []
+    if (fresh) { summary.value = data.summary || []; authors.value = data.authors || [] }
     cursor.value = data.next_cursor || null
   } catch (e) {
     error.value = e
@@ -267,6 +283,7 @@ function apply() {
   if (f.category && f.source !== 'crs') q.category = f.category
   if (f.family && f.source === 'crs') q.family = f.family
   if (f.state) q.state = f.state
+  if (f.author) q.author = f.author
   if (f.q) q.q = f.q
   router.push({ query: q })
 }
@@ -282,4 +299,9 @@ onMounted(async () => {
   padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow, none); }
 .groupacts { margin-top: 10px; align-items: center; }
 .rowsel { width: 16px; height: 16px; cursor: pointer; }
+.authorbar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.authchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--panel); color: var(--text); cursor: pointer; font: inherit; }
+.authhint { flex-basis: 100%; }
+.authchip.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 </style>

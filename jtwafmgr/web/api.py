@@ -549,6 +549,7 @@ class _Provenance:
         self.items = {it['rule_id']: it for it in mg.items()} if mg else {}
         self.app = app
         self._changes = {}
+        self._plugin_hdr = {}
 
     def _change(self, cid):
         if cid not in self._changes:
@@ -556,7 +557,44 @@ class _Provenance:
             self._changes[cid] = dict(r) if r else None
         return self._changes[cid]
 
+    # rule ids of the jt-modsecurity rule pack (Jason Tools' application exclusions)
+    JT_PACK_IDS = (13501, 13599)
+
+    def _plugin_author(self, f):
+        """A plugin from the OWASP CRS project (its file header says so) or from someone else."""
+        if f not in self._plugin_hdr:
+            try:
+                with open(f, encoding='utf-8', errors='replace') as fh:
+                    head = fh.read(600)
+            except OSError:
+                head = ''
+            self._plugin_hdr[f] = 'owasp_crs_plugin' if re.search(r'OWASP (?:CRS|ModSecurity Core Rule Set) Plugin', head, re.I) \
+                else 'third_party'
+        return self._plugin_hdr[f]
+
     def of(self, d):
+        out = self._of(d)
+        out['author'] = self._author(d, out)
+        return out
+
+    def _author(self, d, p):
+        """Who wrote the rule: owasp_crs, owasp_crs_plugin, third_party, modsecurity, jason_tools (jt-waf-mgr's
+        generated rules and the jt-modsecurity pack) or site (written for this site: imported, raw, vhost, files)."""
+        ch, rid, f = p['channel'], d.get('id'), d.get('file') or ''
+        if ch == 'crs':
+            return 'owasp_crs'
+        if ch == 'plugin':
+            return self._plugin_author(f)
+        if ch == 'base':
+            return 'modsecurity'
+        if rid and self.JT_PACK_IDS[0] <= rid <= self.JT_PACK_IDS[1] or os.path.basename(f).startswith('jt-modsecurity'):
+            return 'jason_tools'
+        if ch in ('change', 'person', 'token', 'analyst'):
+            it = self.items.get(rid) or {}
+            return 'site' if it.get('kind') == 'raw' else 'jason_tools'
+        return 'site'
+
+    def _of(self, d):
         src, f = d['source'], d.get('file') or ''
         auto = any(self.fn(f, pat) or self.fn(os.path.realpath(f), pat) for pat in self.auto)
         if src == 'crs':
@@ -586,6 +624,7 @@ MANAGED_CHANNELS = ('managed', 'adopted', 'change', 'person', 'token', 'analyst'
 _KIND_CATEGORY = {'exclusion': 'exclusion', 'confident_block': 'confident_block', 'redaction': 'redaction',
                   'plugin': 'plugin_toggle', 'raw': 'other'}
 RULE_STATES = ('on', 'off', 'partial', 'inactive')
+RULE_AUTHORS = ('owasp_crs', 'owasp_crs_plugin', 'third_party', 'modsecurity', 'jason_tools', 'site')
 
 
 def _disabled_managed(app):
@@ -606,7 +645,7 @@ def _disabled_managed(app):
                     'source': 'local', 'managed': True, 'category': _KIND_CATEGORY.get(it['kind'], 'other'),
                     'hosts': [], 'comment': it.get('comment') or '', 'text': it.get('text') or '', 'family': None,
                     'state': 'off', 'state_detail': {'state': 'off', 'managed_item': it['id']},
-                    'provenance': {'channel': 'managed'}})
+                    'provenance': {'channel': 'managed', 'author': 'site' if it['kind'] == 'raw' else 'jason_tools'}})
     return out
 
 
@@ -635,6 +674,17 @@ def rules(app, req):
         rows.append(d)
     if src in ('local', 'all'):
         rows += _disabled_managed(app)
+    # who wrote each rule (filter and counts): computed for every row, not only the page
+    author = req.query.get('author')
+    if author and author not in RULE_AUTHORS:
+        raise ApiError(400, 'bad_request', 'author: ' + ', '.join(RULE_AUTHORS))
+    authors = {}
+    for d in rows:
+        if 'provenance' not in d:
+            d['provenance'] = prov.of(d)
+            d['managed'] = d['provenance'].get('channel') in MANAGED_CHANNELS
+        d['author'] = d['provenance'].get('author') or 'site'
+        authors[d['author']] = authors.get(d['author'], 0) + 1
     # counts per category (CRS: attack family) and state, over the source, before the other filters
     summary = {}
     for d in rows:
@@ -644,6 +694,8 @@ def rules(app, req):
     out = []
     for d in rows:
         if cat and d['category'] != cat or fam and (d['family'] or 'other') != fam or state and d['state'] != state:
+            continue
+        if author and d['author'] != author:
             continue
         if q and not (q in str(d['id']) or q in d['msg'].lower() or q in d['comment'].lower()
                       or any(q in h for h in d['hosts'])):
@@ -664,7 +716,8 @@ def rules(app, req):
             d['last_hit'] = None
     nxt = str(start + limit) if start + limit < len(out) else None
     return json_response(200, {'items': page, 'next_cursor': nxt, 'total': len(out),
-                               'summary': sorted(summary.values(), key=lambda c: -sum(c[k] for k in RULE_STATES))})
+                               'summary': sorted(summary.values(), key=lambda c: -sum(c[k] for k in RULE_STATES)),
+                               'authors': [{'key': k, 'n': authors[k]} for k in RULE_AUTHORS if authors.get(k)]})
 
 
 def _rule_id(req):
@@ -717,6 +770,23 @@ def vhosts(app, req):
 def crs(app, req):
     _, m = app.site.load()
     return json_response(200, m.crs_status())
+
+
+def traffic_report(app, req):
+    """Request counts from the nginx access logs (per site and hour) next to the WAF's numbers.
+    range: 24h, 7d, 30d or custom (since / until); host: one site."""
+    from .. import traffic
+    if req.query.get('range') == '30d':
+        rng, until = '30d', util.now()
+        since = until - 30 * 86400
+    else:
+        rng, since, until = _range(req)
+    host = (req.query.get('host') or '').strip().lower()
+    if host and host not in ('(default)', '(other)') and not traffic.HOST_RE.fullmatch(host):
+        raise ApiError(400, 'bad_request', 'host')
+    out = traffic.report(app, since, until, host or None)
+    out['range'] = rng
+    return json_response(200, out)
 
 
 def crs_updates(app, req):
@@ -995,6 +1065,7 @@ def register(router):
     R('GET', V + '/rules/{id}/hits', rule_hits, viewer('rules:read'))
     R('GET', V + '/vhosts', vhosts, viewer('rules:read'))
     R('GET', V + '/crs', crs, viewer('rules:read'))
+    R('GET', V + '/traffic', traffic_report, viewer('events:read'))
     R('GET', V + '/crs/updates', crs_updates, viewer('rules:read'))
     R('POST', V + '/crs/updates/check', crs_check, ('admin',))
     R('POST', V + '/crs/updates/propose', crs_propose, ('role', 'approver', None))

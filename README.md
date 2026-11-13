@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.22
+# jt-waf-mgr v0.4.23
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -47,10 +47,18 @@ something you can read, and every change into a workflow you can trust:
   passwords, tokens and other sensitive fields are masked **before** anything is stored.
 - **Overview and events**: drag across the timeline to zoom in, or pick any range up to 31 days; filters stay in the
   URL; event detail with every matched rule; one click to draft an exclusion or a block.
+- **Request volume** (new in 0.4.23): every request in the nginx access logs, counted per site and hour (2xx, 3xx,
+  4xx, 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF
+  blocked, so the WAF numbers have a denominator. Switched on or off, and its alerts set, in the admin Settings
+  ("Request volume"); optional alerts, off by default: a traffic spike (N times the site's usual hour over the
+  previous 7 days) or many 5xx answers.
 - **WAF model**: how a request is decided on these sites (engine per site, scoring, thresholds, exclusions,
   confident blocks), drawn from the live configuration.
 - **Rules**: every rule with where it comes from (OWASP CRS and its version, a CRS plugin, imported at adoption, a
-  change by a person, an API token or the event analysis), hits per day, syntax-highlighted text.
+  change by a person, an API token or the event analysis), hits per day, syntax-highlighted text. New in 0.4.23: who
+  wrote each rule, with a filter and per-author counts: OWASP CRS, an OWASP CRS plugin, a third-party plugin,
+  ModSecurity base settings, Jason Tools (rules jt-waf-mgr generates from a form, and the Jason Tools rule pack) or
+  this site (hand-written: imported at adoption, raw rules, nginx vhost files).
 - **Change workflow**: single changes or one bundle (one approval, one version, one reload), upload of rule files,
   evidence, sandbox, health URLs, approval rules (the proposer cannot approve; single-admin mode with a fresh one-time
   code for loosening), automatic tightening within strict limits, rollback.
@@ -61,7 +69,8 @@ something you can read, and every change into a workflow you can trust:
   file names, or one address trying many paths, are probes by the program's own rule; a path called an attack before
   is not loosened on one "false positive" verdict; summaries of every run.
   **AI can be wrong, in both directions**: the model only suggests; loosening always needs a person, only tightening
-  that passed every check may apply on its own.
+  that passed every check may apply on its own. Which LLM to use: see
+  [Event analysis: which LLM](#event-analysis-which-llm).
 - **Alerts to follow up**: an attack the site may have answered, users hit by a false positive, an attack in progress,
   outside configuration changes, integrity problems, failed applies or backups — open until an approver marks them
   handled with a note; reminded until then.
@@ -72,15 +81,15 @@ something you can read, and every change into a workflow you can trust:
   version in use once it has been out a week, keeps it only with a valid signature by the pinned CRS release key and
   stages it; the CRS page shows what is in use, what is new and what is verified. Switching to it (or back to a kept
   version) is a change: both versions run the same recent requests in the sandbox, a person approves, the root
-  program re-verifies the signature, unpacks it itself, switches the crs link and switches back on any failure. A host
-  without the CRS can install CRS 4 the same way (its Includes go right after modsecurity.conf).
+  program re-verifies the signature, unpacks it itself, switches the crs link and switches back on any failure; 3
+  versions are kept to roll back. A host without the CRS can install CRS 4 the same way (its Includes go right after
+  modsecurity.conf).
 - **Log servers (syslog / SIEM)**: up to 8 destinations, each with its own protocol (local socket, UDP, TCP, TLS),
   record format (JSON, CEF, LEEF 2.0, GELF 1.1, key=value) and content (audit records, WAF events, alerts); its own
   queue and retries; a test send that shows exactly what went out.
 - **Accounts**: scrypt passwords, TOTP required for approver / admin, lockout, password policy with history and
   ageing, account expiry and review; API tokens with scopes and allowed source networks (tokens can propose, never
-  approve). Recovery on the host: `jt-waf-mgr user unlock | reset | passwd | disable | enable <name>` (reset clears
-  TOTP and forces a new password at the next sign-in); every action is in the audit trail.
+  approve). Recovery on the host: see [Accounts and recovery](#accounts-and-recovery).
 - **Integrity and compliance**: system check page, compliance page, daily verified backups with download (one-time
   code), configuration change history with attribution (jt-waf-mgr, registered automation, or outside).
 - **Interface**: English, 繁體中文 and 日本語; light and dark; phones and tablets; GeoIP (MaxMind GeoLite2, downloaded
@@ -96,32 +105,109 @@ something you can read, and every change into a workflow you can trust:
 
 - Debian 12 / 13 or Ubuntu 24.04 (22.04's libmodsecurity package is too old: build 3.0.9 or later yourself), **Python 3.11 or newer — standard library only, no pip, no wheels**: the
   service installs offline.
-- nginx with the ModSecurity-nginx connector, libmodsecurity 3.0.9+, OWASP CRS 4.x, `SecAuditLogFormat JSON`;
+- nginx with the ModSecurity-nginx connector, libmodsecurity 3.0.9+, `SecAuditLogFormat JSON`; OWASP CRS 4.x, which
+  jt-waf-mgr can download, verify and install for you (see [The OWASP CRS](#the-owasp-crs));
   rotate the audit log with `copytruncate` (libmodsecurity does not reopen it on reload). Starting from a fresh nginx
   or without CRS 4: see the [ModSecurity installation guide](docs/MODSECURITY.md); hosts without internet access:
   the [offline installation guide](docs/OFFLINE.md). Adoption also works without site
   rule files (empty managed files are added next to the CRS rules).
-- Optional: an OpenAI-compatible LLM server on your network (llama.cpp, vLLM, Ollama…) for the event analysis; a
-  MaxMind account for GeoIP.
+- Optional: an OpenAI-compatible LLM server on your network (llama.cpp, vLLM, Ollama…) for the event analysis (see
+  [which LLM](#event-analysis-which-llm)); a MaxMind account for GeoIP.
 
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.22.tar.gz.sig jt-waf-mgr-0.4.22.tar.gz
-tar xzf jt-waf-mgr-0.4.22.tar.gz && cd jt-waf-mgr-0.4.22
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
+tar xzf jt-waf-mgr-0.4.23.tar.gz && cd jt-waf-mgr-0.4.23
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
 ```
 
-Add the management vhost (`/etc/jt-waf-mgr/nginx-vhost.conf.example`: internal networks only, proxies to
-`127.0.0.1:8095`), `nginx -t`, reload, sign in, change the password and set up TOTP. Operational settings (GeoIP,
-LLM, analysis, notifications, networks, policy) are made in the web interface; `/etc/jt-waf-mgr/config.toml` only
-holds what the program needs to start.
+### Connect to the management interface
+
+The service listens on `127.0.0.1:8095` only (`[server] listen` in `/etc/jt-waf-mgr/config.toml`) and is never exposed
+directly: nginx proxies a management vhost to it. The release installs an example vhost at
+`/etc/jt-waf-mgr/nginx-vhost.conf.example`. Copy it to the nginx vhost directory, for example:
+
+```sh
+sudo cp /etc/jt-waf-mgr/nginx-vhost.conf.example /etc/nginx/sites-available/waf.example.com.conf
+sudo ln -s /etc/nginx/sites-available/waf.example.com.conf /etc/nginx/sites-enabled/
+# (or copy it to /etc/nginx/conf.d/waf.example.com.conf)
+```
+
+In the copy, set:
+
+- `server_name`: the name you will open, for example `waf.example.com`;
+- `ssl_certificate` / `ssl_certificate_key`: the certificate (see below);
+- the `allow` lines: your internal networks only (or narrower: your admin network); the rest stays `deny all`.
+
+Then `sudo nginx -t && sudo systemctl reload nginx`. The vhost has `modsecurity off` on purpose: the interface shows
+attack strings and would trigger the WAF on itself. Optional: the commented `limit_req` block in the example adds a
+brute-force brake in front of the sign-in.
+
+The certificate, one of:
+
+- your organisation's internal CA, or an existing wildcard certificate;
+- Let's Encrypt: the management site is internal-only, so the HTTP-01 challenge usually can't reach it; use the
+  DNS-01 challenge (certbot with your DNS provider's plugin), or issue it on a public host and copy it over;
+- for a lab only, a self-signed certificate (browsers will warn):
+
+```sh
+sudo openssl req -x509 -newkey rsa:3072 -nodes -days 825 -keyout /etc/ssl/private/waf.key -out /etc/ssl/certs/waf.crt -subj "/CN=waf.example.com" -addext "subjectAltName=DNS:waf.example.com"
+```
+
+Then open `https://waf.example.com` (the name you set) and sign in with the temporary password that
+`jt-waf-mgr user add` printed. The first sign-in forces a new password and the TOTP two-factor setup. Operational
+settings (GeoIP, LLM, analysis, notifications, request volume, networks, policy) are made in the web interface;
+`/etc/jt-waf-mgr/config.toml` only holds what the program needs to start.
+
+### Let jt-waf-mgr change rules
+
+jt-waf-mgr writes only ModSecurity files and never writes nginx configuration. It reads nginx's configuration (to
+find the sites and ModSecurity's main file), runs `nginx -t` and reloads nginx. The management vhost and
+`modsecurity on;` in nginx are your own one-time edits.
 
 To let jt-waf-mgr change rules: arm the apply program (`sudo ./install.sh --enable-apply`), set the health check URLs,
 and adopt the existing rule files under Rules → Managed rules (an admin approves the adoption like any change).
-Nothing touches nginx before that.
+Nothing is written before that. Adoption also works without site rule files.
+
+### The OWASP CRS
+
+jt-waf-mgr handles the CRS. A new host only needs nginx with the ModSecurity module, a `modsecurity.conf` with
+`SecAuditLogFormat JSON`, a main file that Includes `modsecurity.conf`, and `modsecurity on;` plus
+`modsecurity_rules_file …` in nginx ([ModSecurity installation guide](docs/MODSECURITY.md)). Then:
+
+1. Switch on "Keep the CRS current from here" on the CRS page.
+2. jt-waf-mgr downloads the newest CRS 4.x once it has been out `wait_days` (default 7) and verifies it against the
+   pinned CRS signing key.
+3. "Compare in the sandbox and propose installing" creates a change.
+4. After a person approves it, jt-waf-mgr installs `crs-<version>`, the `crs` link and `crs-setup.conf`, and inserts
+   the Includes right after `modsecurity.conf`.
+5. Adoption then adds jt-waf-mgr's managed rule files around the CRS rules.
+
+Later CRS updates work the same way: download, verify, compare in the sandbox, a person approves, install; 3 versions
+are kept to roll back. Installing the CRS by hand also works (see the guide).
+
+### Accounts and recovery
+
+On the host, as root:
+
+```sh
+sudo jt-waf-mgr user list                       # accounts, roles and state (disabled, totp, must-change)
+sudo jt-waf-mgr user add alice --role approver  # roles: viewer (default), operator, approver, admin
+sudo jt-waf-mgr user unlock alice
+sudo jt-waf-mgr user reset alice
+sudo jt-waf-mgr user passwd alice
+sudo jt-waf-mgr user disable alice              # and: enable
+```
+
+- `add` prints a temporary password, which must be changed at the first sign-in.
+- `unlock` clears the failed sign-in lock.
+- `reset` gives a new temporary password, clears TOTP and forces a change at sign-in: the recovery for a lost phone.
+- `passwd` sets a password interactively.
+- `disable` / `enable` switch an account off and on again.
+- Every one of these changes is written to the audit trail.
 
 ### Upgrade
 
@@ -145,6 +231,28 @@ sudo ./uninstall.sh --purge   # also remove /var/lib/jt-waf-mgr, /etc/jt-waf-mgr
 
 The nginx configuration is never touched: remove the management vhost yourself. If the rule files were adopted, the
 managed files in `/etc/nginx/modsec/jt-waf-mgr/` stay in place and nginx keeps loading them; maintain them by hand from then on.
+
+## Event analysis: which LLM
+
+The analysis always runs on your own, self-hosted LLM server.
+
+- **Server**: OpenAI-compatible (llama.cpp server, vLLM, Ollama) with JSON-schema-constrained answers. Without them,
+  plain JSON mode is used and answers are less reliable.
+- **Model**: an instruction model of about 14B parameters or more, at 4-bit quantization or better; 27–32B dense or a
+  30B-class MoE is recommended. Examples: Qwen3 32B or Qwen3 30B-A3B, Gemma 3 27B, gpt-oss-20b, Llama 3.3 70B.
+- **Context window**: at least 16k tokens. Measured: one batch of 11 candidates used about 3k input and 3.5k output
+  tokens and took about 85 seconds on the production server.
+- **Smaller models** (8B and below) or 2–3-bit quantizations contradict themselves more between runs: in production a
+  3-bit-quantized model called the same probe an attack twice and a false positive once. jt-waf-mgr counters this with
+  program-side rules for scanner patterns and a verdict history, but a stronger model helps.
+- **Slow hardware**: raise the LLM timeout in Settings (up to 900 s).
+
+The AI may be wrong. Automatic application only ever tightens (allow → block); loosening always needs a person.
+
+## API for integrations
+
+A SIEM, a SOAR playbook or a script connects with an API token (created by an admin, with scopes and allowed source
+addresses; a token can propose changes, never approve them). See the [API manual](docs/API.md).
 
 ## Security (OWASP Top 10:2025)
 

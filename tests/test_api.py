@@ -1,6 +1,7 @@
 import hashlib
 import http.client
 import json
+import os
 import time
 import unittest
 
@@ -242,6 +243,19 @@ class TestApi(unittest.TestCase):
         st, obj, _ = c.req('GET', '/api/v1/rules?source=crs&q=traversal')
         self.assertEqual([r['id'] for r in obj['items']], [930110])
         self.assertEqual(c.req('GET', '/api/v1/rules/10111')[1]['hosts'], ['sso.example.com'])
+        # who wrote each rule, with counts and a filter
+        st, obj, _ = c.req('GET', '/api/v1/rules?source=all')
+        by = {r['id']: r['author'] for r in obj['items']}
+        self.assertEqual(by[930110], 'owasp_crs')
+        self.assertEqual(by[10203], 'site')               # a site rule jt-waf-mgr does not manage
+        authors = {a['key']: a['n'] for a in obj['authors']}
+        self.assertEqual(sum(authors.values()), obj['total'])
+        st, obj, _ = c.req('GET', '/api/v1/rules?source=all&author=owasp_crs')
+        self.assertTrue(obj['items'] and all(r['author'] == 'owasp_crs' for r in obj['items']))
+        self.assertEqual(c.req('GET', '/api/v1/rules?author=nobody')[0], 400)
+        st, obj, _ = c.req('GET', '/api/v1/rules?source=plugin')
+        if obj['items']:
+            self.assertIn(obj['items'][0]['author'], ('owasp_crs_plugin', 'third_party'))
         self.assertEqual(c.req('GET', '/api/v1/rules/1')[0], 404)
         self.assertEqual(len(c.req('GET', '/api/v1/rules/10203/hits')[1]['items']), 1)
         self.assertEqual(c.req('GET', '/api/v1/rules/removals')[0], 200)
@@ -329,3 +343,30 @@ class TestApi(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RuleAuthorTest(unittest.TestCase):
+    def test_author_of_each_origin(self):
+        import tempfile
+        from jtwafmgr.web import api as api_mod
+        p = api_mod._Provenance.__new__(api_mod._Provenance)
+        p.items = {10301: {'kind': 'confident_block'}, 10302: {'kind': 'raw'}}
+        p._plugin_hdr = {}
+        a = p._author
+        self.assertEqual(a({'id': 930110, 'file': '/x/crs/rules/R.conf'}, {'channel': 'crs'}), 'owasp_crs')
+        self.assertEqual(a({'id': 200002, 'file': '/x/modsecurity.conf'}, {'channel': 'base'}), 'modsecurity')
+        self.assertEqual(a({'id': 10301, 'file': '/m/before-crs.conf'}, {'channel': 'person'}), 'jason_tools')
+        self.assertEqual(a({'id': 10301, 'file': '/m/before-crs.conf'}, {'channel': 'analyst'}), 'jason_tools')
+        self.assertEqual(a({'id': 10302, 'file': '/m/before-crs.conf'}, {'channel': 'token'}), 'site')       # raw rule
+        self.assertEqual(a({'id': 10100, 'file': '/m/before-crs.conf'}, {'channel': 'adopted'}), 'site')
+        self.assertEqual(a({'id': 13510, 'file': '/m/before-crs.conf'}, {'channel': 'adopted'}), 'jason_tools')  # the pack
+        self.assertEqual(a({'id': 9, 'file': '/e/jt-modsecurity-app-exclusions.conf'}, {'channel': 'site_file'}), 'jason_tools')
+        self.assertEqual(a({'id': 10111, 'file': '/e/vhost/a.conf'}, {'channel': 'vhost'}), 'site')
+        with tempfile.TemporaryDirectory(prefix='jtwaf-test-') as d:
+            own, other = os.path.join(d, 'a-config.conf'), os.path.join(d, 'b-config.conf')
+            with open(own, 'w') as fh:
+                fh.write('# ---\n# OWASP CRS Plugin\n# Copyright (c) 2022 CRS project.\n')
+            with open(other, 'w') as fh:
+                fh.write('# my own plugin\n')
+            self.assertEqual(a({'id': 1, 'file': own}, {'channel': 'plugin'}), 'owasp_crs_plugin')
+            self.assertEqual(a({'id': 2, 'file': other}, {'channel': 'plugin'}), 'third_party')

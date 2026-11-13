@@ -153,6 +153,19 @@ DEFAULTS = {
         'hour': 3,
         'keep_days': 14,
     },
+    'traffic': {
+        # request counts from the nginx access logs (traffic.py): per site and hour, counts only -- no address,
+        # no URL is kept. logs: the live access logs (the rotated copies are finished through their inode).
+        'enabled': True,
+        'logs': ['/var/log/nginx/*access.log'],
+        'keep_days': 400,
+        # alerts on a site's traffic: an hour with spike_factor times its usual requests (at least
+        # min_requests), or with error_percent % or more answered 5xx (at least 50 of them)
+        'alert': False,
+        'spike_factor': 5,
+        'min_requests': 1000,
+        'error_percent': 20,
+    },
     'crs': {
         # OWASP CRS updates by jt-waf-mgr (jt-waf-mgr-crs.service): off = another program (or a person) keeps the
         # CRS current. On: check daily, download and verify the newest release of the major version in use once it
@@ -282,6 +295,14 @@ class Config:
             raise ConfigError('syslog.content: a list of audit, event, alert')
         if not isinstance(sl.get('more', []), list) or len(sl.get('more', [])) > 7:
             raise ConfigError('syslog.more: up to 7 more destinations')
+        tr = data['traffic']
+        for k, lo, hi in (('keep_days', 1, 3650), ('spike_factor', 2, 100), ('min_requests', 10, 10 ** 9),
+                          ('error_percent', 1, 100)):
+            if not isinstance(tr[k], int) or isinstance(tr[k], bool) or not lo <= tr[k] <= hi:
+                raise ConfigError('traffic.%s: %d-%d' % (k, lo, hi))
+        if not isinstance(tr['logs'], list) or len(tr['logs']) > 20 or not all(
+                isinstance(x, str) and re.fullmatch(r'/[\w./*-]{1,300}', x) for x in tr['logs']):
+            raise ConfigError('traffic.logs: up to 20 absolute paths (globs allowed)')
         if not isinstance(data['crs']['wait_days'], int) or not 0 <= data['crs']['wait_days'] <= 60:
             raise ConfigError('crs.wait_days: 0-60')
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', data['node']['id']):

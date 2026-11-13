@@ -63,9 +63,9 @@ async function setLang(page, lang) {
 
 const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
-  '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/nope'];
+  '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/traffic', '/nope'];
 
-const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9'];
+const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9', '/traffic'];
 
 async function audit(page, where) {
   const r = await page.evaluate(() => {
@@ -205,6 +205,17 @@ async function audit(page, where) {
   await page.goto(base + '/crs', { waitUntil: 'networkidle' });
   ok((await page.locator('.statetotals a.stchip').count()) === 4 && (await page.locator('.hb-row').count()) > 0, 'crs: rules per attack type and state');
   ok((await page.locator('.crsupd').innerText()).includes('4.30.0'), 'crs: the version in use and the update card');
+  // who wrote each rule: counts per author, a badge per rule, the filter
+  await page.goto(base + '/rules?source=all', { waitUntil: 'networkidle' });
+  ok((await page.locator('.authorbar .authchip').count()) >= 3 && (await page.locator('.datatable td .badge').count()) > 0, 'rules: counts and a badge per author');
+  await page.goto(base + '/rules?source=all&author=owasp_crs', { waitUntil: 'networkidle' });
+  ok((await page.locator('.authorbar .authchip.on').count()) === 1, 'rules: filter by author');
+  // request volume: tiles, the two charts, sites, one site
+  await page.goto(base + '/traffic', { waitUntil: 'networkidle' });
+  ok((await page.locator('.tiles .tile').count()) === 5 && (await page.locator('.timebars').count()) === 2 && (await page.locator('.datatable tbody tr').count()) === 3,
+     'traffic: tiles, charts and one row per site');
+  await page.goto(base + '/traffic?range=7d&host=shop.example.com', { waitUntil: 'networkidle' });
+  ok((await page.locator('.datatable tbody tr').count()) === 1, 'traffic: one site');
   // several rules at once: tick, "switch off" opens the change form with its preview (or why it cannot)
   await page.goto(base + '/rules', { waitUntil: 'networkidle' });
   await page.locator('input.rowsel').first().check();
@@ -269,7 +280,7 @@ async function audit(page, where) {
   // Thumbnails for the project site (docs/index.html): one screen of each page, rendered at twice the resolution
   // so they stay sharp when shown small (tools/make_thumbs.py scales them down). Same session, its own window size.
   const THUMBS = { overview: '/', events: '/events', 'waf-model': '/waf', analysis: '/analysis', notifications: '/admin/notify',
-    alerts: '/alerts', 'system-check': '/admin/system', changes: '/changes', rules: '/rules', lookup: '/lookup/203.0.113.9' };
+    alerts: '/alerts', 'system-check': '/admin/system', changes: '/changes', rules: '/rules', lookup: '/lookup/203.0.113.9', traffic: '/traffic' };
   const state = await ctx.storageState();
   for (const scheme of ['light', 'dark']) {
     const tc = await browser.newContext({ storageState: state, viewport: { width: 1200, height: 900 }, deviceScaleFactor: 2, colorScheme: scheme });

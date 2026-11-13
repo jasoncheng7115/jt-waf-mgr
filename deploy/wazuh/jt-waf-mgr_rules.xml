@@ -113,7 +113,7 @@
 
   <rule id="133575" level="8">
     <if_sid>133560</if_sid>
-    <field name="jt_waf_mgr.action">_denied$</field>
+    <field name="jt_waf_mgr.action" type="pcre2">[._]denied$</field>
     <description>jt-waf-mgr: refused $(jt_waf_mgr.action) for $(jt_waf_mgr.actor)</description>
   </rule>
 
@@ -193,6 +193,20 @@
     <if_sid>133560</if_sid>
     <field name="jt_waf_mgr.action">^notify\.failed$</field>
     <description>jt-waf-mgr: notification to $(jt_waf_mgr.channel) failed: $(jt_waf_mgr.error)</description>
+  </rule>
+
+  <!-- a downloaded CRS release did not verify against the pinned CRS signing key: nothing was installed -->
+  <rule id="133588" level="12">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^crs\.signature_bad$</field>
+    <description>jt-waf-mgr: CRS release $(jt_waf_mgr.version) failed signature verification</description>
+  </rule>
+
+  <!-- a new CRS release is downloaded, verified and waiting for a person to propose and approve it -->
+  <rule id="133589" level="3">
+    <if_sid>133560</if_sid>
+    <field name="jt_waf_mgr.action">^crs\.staged$</field>
+    <description>jt-waf-mgr: CRS $(jt_waf_mgr.version) is ready to be proposed</description>
   </rule>
 
   <!-- anything at crit that the rules above do not name -->

@@ -20,3 +20,12 @@ if they stop, either jt-waf-mgr or the syslog path is down.
 
 Requirements on the jt-waf-mgr host: `[syslog] enabled = true` (the default) and an agent that reads
 `/var/log/syslog` or journald.
+
+The reviewed and sandbox-tested version of these rules ships in the jt-modsecurity rule pack (jt-wazuh-mgr); this
+directory keeps the draft that matches each jt-waf-mgr release. Changes from that review: refusals match `[._]denied$`
+(`token.denied` uses a dot), the login rules carry only the cross-pack groups (not Wazuh's `authentication_*`, whose
+built-in night-time rules would raise every login), and sibling decoders copy `src_ip` / `actor` into `srcip` / `user`.
+
+If the Wazuh agent on the jt-waf-mgr host reads both `/var/log/syslog` and `/var/log/messages`, every line arrives twice
+and the frequency rules (5 failed logins in 5 minutes) fire at half the count. Send jt-waf-mgr's records to a facility
+that only one of those files gets, or have the agent read just one of them.

@@ -21,6 +21,7 @@ import AdminAudit from './views/AdminAudit.vue'
 import AdminSettings from './views/AdminSettings.vue'
 import Notifications from './views/Notifications.vue'
 import Alerts from './views/Alerts.vue'
+import Traffic from './views/Traffic.vue'
 import NotFound from './views/NotFound.vue'
 import Changes from './views/Changes.vue'
 import ChangeNew from './views/ChangeNew.vue'
@@ -67,6 +68,7 @@ const routes = [
   { path: '/admin/settings', name: 'admin-settings', component: AdminSettings, meta: { role: 'admin' } },
   { path: '/admin/notify', name: 'admin-notify', component: Notifications, meta: { role: 'admin' } },
   { path: '/alerts', name: 'alerts', component: Alerts },
+  { path: '/traffic', name: 'traffic', component: Traffic },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound },
 ]
 

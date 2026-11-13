@@ -2,6 +2,25 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.23 (2026-11-13)
+
+- Request volume (Events > Request volume): every request in the nginx access logs counted per site and hour (2xx,
+  3xx, 4xx, 5xx, 403, 444, 429, external, bytes) next to what the WAF blocked and logged, so the WAF numbers have a
+  denominator. Numbers only: no address, URL or user agent is kept. The web service reads the live logs where it
+  stopped (inode and offset, stored with the counts in one transaction), finishes a renamed file through its inode,
+  re-reads one truncated in place, takes the site from the file name and caps the sites a forged Host header can
+  create. On by default; switched off, and its optional alerts (a site at N times its usual hour, or many 5xx
+  answers) set, under Settings > Request volume. API: `GET /api/v1/traffic`.
+- The rule list shows who wrote each rule: OWASP CRS, an OWASP CRS plugin, a third-party plugin, ModSecurity base
+  settings, Jason Tools (rules generated from a form and the Jason Tools rule pack) or this site (hand-written), with
+  a filter and counts. API: `author` on `GET /api/v1/rules`.
+- API manual for integrations (docs/API.md, three languages): tokens and scopes, errors, every endpoint a token can
+  call with examples, and a script that proposes a confident block.
+- Documentation: connecting to the management interface (port, the example vhost, TLS certificate options, first
+  login); jt-waf-mgr installs the OWASP CRS itself (a new host needs only nginx and ModSecurity) and never writes nginx
+  configuration; the recommended LLM for the event analysis; account recovery commands.
+- Wazuh rule drafts: rules for a failed CRS signature and a staged CRS release; refusals now match `token.denied` too.
+
 ## 0.4.22 (2026-11-13)
 
 - OWASP CRS updates, step 3: a host without the CRS. The check stages the newest 4.x release that has waited; the CRS

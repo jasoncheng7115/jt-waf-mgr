@@ -298,6 +298,25 @@ SCHEMA = [
     ALTER TABLE analyst_runs ADD COLUMN alerts TEXT NOT NULL DEFAULT '[]';
     ALTER TABLE analyst_runs ADD COLUMN events_scanned INTEGER NOT NULL DEFAULT 0;
     """,
+    # 8: request counts from the nginx access logs (traffic.py): per site and hour, numbers only
+    """
+    CREATE TABLE traffic_hourly (
+        hour INTEGER NOT NULL,
+        host TEXT NOT NULL,
+        total INTEGER NOT NULL DEFAULT 0,
+        s2xx INTEGER NOT NULL DEFAULT 0,
+        s3xx INTEGER NOT NULL DEFAULT 0,
+        s4xx INTEGER NOT NULL DEFAULT 0,
+        s5xx INTEGER NOT NULL DEFAULT 0,
+        s403 INTEGER NOT NULL DEFAULT 0,
+        s444 INTEGER NOT NULL DEFAULT 0,
+        s429 INTEGER NOT NULL DEFAULT 0,
+        external INTEGER NOT NULL DEFAULT 0,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (hour, host)
+    );
+    CREATE INDEX traffic_hourly_host ON traffic_hourly(host, hour);
+    """,
 ]
 
 

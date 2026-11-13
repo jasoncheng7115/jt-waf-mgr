@@ -2,6 +2,20 @@
 
 [English](CHANGELOG.md) · **繁體中文** · [日本語](CHANGELOG_ja.md)
 
+## 0.4.23 (2026-11-13)
+
+- 請求量（事件 > 請求量）：從 nginx 的 access log 統計每個站台每小時的全部請求（2xx、3xx、4xx、5xx、403、444、429、
+  外部來源、傳送量），與 WAF 封鎖、只記錄的數量並列，讓 WAF 的數字有分母。只存數字，不存 IP、網址或 User-Agent。
+  網頁服務從上次停下的位置讀目前的記錄檔（inode 與位置，與統計在同一個交易寫入），被改名的檔案依 inode 讀完、
+  原地截斷的檔案重新讀起，站台取自檔名，偽造的 Host 標頭能產生的站台數有上限。預設啟用；在「設定 > 請求量統計」
+  停用，或設定選用的警示（某站台達平常每小時的 N 倍，或 5xx 回應變多）。API：`GET /api/v1/traffic`。
+- 規則清單顯示每條規則的撰寫者：OWASP CRS、OWASP CRS 外掛、第三方外掛、ModSecurity 基本設定、Jason Tools（依表單
+  產生的規則與 Jason Tools 規則包）或站台自寫，可篩選並有數量統計。API：`GET /api/v1/rules` 的 `author`。
+- 介接用的 API 手冊（docs/API.zh-TW.md，三語）：權杖與範圍、錯誤、權杖能呼叫的每個端點與範例，以及提出確定阻擋的腳本。
+- 文件：安裝後怎麼連到管理介面（port、範例 vhost、TLS 憑證的做法、第一次登入）；OWASP CRS 由 jt-waf-mgr 安裝
+  （新主機只要 nginx 與 ModSecurity），jt-waf-mgr 不寫 nginx 設定；事件分析建議的 LLM；帳號救援指令。
+- Wazuh 規則草稿：CRS 簽章驗證失敗、新版 CRS 已備妥兩條規則；拒絕類規則也比對得到 `token.denied`。
+
 ## 0.4.22 (2026-11-13)
 
 - OWASP CRS 更新第三階段：還沒有 CRS 的主機。檢查服務會準備最新且已等滿天數的 4.x 版；CRS 頁提供「在沙箱比對並提出安裝 CRS
