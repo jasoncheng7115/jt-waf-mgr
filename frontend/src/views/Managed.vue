@@ -43,6 +43,11 @@
             <template v-for="(s, k) in m.import.sources" :key="k">
               <dt>{{ t('placement.' + k) }}</dt><dd class="mono breakall">{{ safeText(s.path, 300) }} → {{ safeText(m.files[k] && m.files[k].path, 300) }}</dd>
             </template>
+            <template v-for="x in m.import.insert || []" :key="'i' + x.placement">
+              <dt>{{ t('placement.' + x.placement) }}</dt>
+              <dd><span class="muted">{{ t('managed.no_site_file') }}</span>
+                <span class="mono breakall">{{ t(x.where === 'before' ? 'managed.insert_before' : 'managed.insert_after', { file: safeText(x.file, 300), anchor: safeText(x.anchor, 300) }) }}</span></dd>
+            </template>
             <dt>{{ t('managed.import_rules') }}</dt><dd class="mono">{{ m.import.rules }}</dd>
             <dt>{{ t('managed.import_comments') }}</dt><dd class="mono">{{ m.import.comment_blocks }}</dd>
           </dl>
@@ -53,9 +58,11 @@
           <RouterLink :to="'/changes/' + m.adoption_change.id" class="mono">#{{ m.adoption_change.id }}</RouterLink>
           <StateBadge :state="m.adoption_change.state" />
         </div>
+        <div v-if="m.import && m.import.possible === false" class="alert warn">{{ t('managed.no_crs') }}
+          <a :href="guideUrl" target="_blank" rel="noopener">{{ t('managed.install_guide') }}</a></div>
         <ErrorBox :error="actionError" />
         <div v-if="isAdmin" class="actions">
-          <button type="button" class="btn primary" :disabled="busy || adoptionOpen || !(m.import && m.import.sources)" @click="adopt"><Icon name="adopt" />{{ t('managed.adopt') }}</button>
+          <button type="button" class="btn primary" :disabled="busy || adoptionOpen || !(m.import && m.import.possible)" @click="adopt"><Icon name="adopt" />{{ t('managed.adopt') }}</button>
         </div>
         <p v-else class="muted small">{{ t('managed.adopt_admin_only') }}</p>
       </section>
@@ -120,7 +127,7 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { get, post } from '../api.js'
-import { t } from '../i18n.js'
+import { t, lang } from '../i18n.js'
 import { hasRole, refreshPending } from '../store.js'
 import { safeText } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
@@ -162,6 +169,8 @@ const pendingOp = ref(null)
 const opReason = ref('')
 const reasonBox = ref(null)
 const isAdmin = computed(() => hasRole('admin'))
+const GUIDE = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY'
+const guideUrl = computed(() => GUIDE + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang.value] || '') + '.md')
 const canPropose = computed(() => hasRole('operator'))
 const adoptionOpen = computed(() => !!(m.value && m.value.adoption_change && !FINAL.includes(m.value.adoption_change.state)))
 

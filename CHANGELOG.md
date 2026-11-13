@@ -2,6 +2,28 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.14 (2026-11-13)
+
+- Event analysis is harder to fool, after a small model called the same probes an attack, then a false positive,
+  then an attack again in three runs:
+  - blocked requests for names attackers look for (secrets, backups, credentials, deployment, cloud and CI files)
+    from a few outside sources only, or from sources that also tried other paths, are reconnaissance by the program's
+    own rule: never proposed as a false positive, never an alert, not sent to the model;
+  - a path called an attack in one of the last six runs is not loosened on a "false positive" verdict ("unstable");
+  - the model also sees how many paths the sources tried, the attack families they triggered elsewhere and whether the
+    name is a sensitive one, with explicit guidance; the analysis asks with temperature 0.
+- A disclaimer on the analysis page, in the analysis settings, the READMEs and the project site: AI can be wrong in
+  both directions; loosening always needs a person, only tightening that passed every check applies on its own.
+- Adoption works on a fresh ModSecurity: a side without a site rule file gets its managed file included right before
+  the first / after the last CRS rules Include (the root program checks the anchor is a CRS rules Include of the main
+  file and that nothing is included twice). Before, adoption failed without site files, and with only one of the two a
+  managed file was written but never loaded. The page explains it, or links the installation guide when no main file
+  loads the CRS rules.
+- ModSecurity installation guide (`docs/MODSECURITY*.md`, three languages); Ubuntu 22.04's libmodsecurity package is
+  too old (3.0.9 or later needed).
+- Tests: the notification tests no longer depend on the time of day (from 8 o'clock on, the daily report added one
+  message and five of them failed).
+
 ## 0.4.13 (2026-11-13)
 
 - Tabs and segmented controls (changes, alerts and others) are as wide as their buttons instead of the whole row.

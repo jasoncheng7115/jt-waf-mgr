@@ -151,7 +151,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.13</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.14</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -233,8 +233,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
-tar xzf jt-waf-mgr-0.4.13.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.13
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.14.tar.gz.sig jt-waf-mgr-0.4.14.tar.gz
+tar xzf jt-waf-mgr-0.4.14.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.14
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
@@ -306,7 +306,7 @@ const T = {
   sc_h: 'Screenshots', sc_sub: 'From a synthetic test environment (example.com and documentation addresses).',
   sc_events: 'Events with a timeline you can drag', sc_waf: 'How a request is decided', sc_changes: 'Change workflow', sc_rules: 'Rules and where they come from',
   sc_alerts: 'Alerts to follow up', sc_system: 'System check', sc_dark: 'Dark theme',
-  in_sub: 'Debian 12 / 13 or Ubuntu 22.04 / 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
+  in_sub: 'Debian 12 / 13 or Ubuntu 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
   ms_note: 'Starting from a fresh nginx, or ModSecurity without CRS 4?', ms_link: 'ModSecurity installation guide →',
   ai_disclaimer: 'AI can be wrong, in both directions. The model only suggests: loosening always needs a person, only tightening that passed every check may apply on its own. Check the evidence before you approve.',
   sec_policy: 'Security policy',
@@ -364,7 +364,7 @@ const T = {
   sc_h: '截圖', sc_sub: '來自合成測試環境（example.com 與文件用位址）。',
   sc_events: '事件與可拖曳的時間軸', sc_waf: '請求怎麼被判定', sc_changes: '變更流程', sc_rules: '規則與來源',
   sc_alerts: '待處理警示', sc_system: '系統檢查', sc_dark: '深色主題',
-  in_sub: 'Debian 12 / 13 或 Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  in_sub: 'Debian 12 / 13 或 Ubuntu 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
   ms_note: '全新的 nginx，或還沒有 CRS 4 的 ModSecurity？', ms_link: 'ModSecurity 安裝手冊 →',
   ai_disclaimer: 'AI 可能出錯，兩個方向都會。模型只提供建議：放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。核准前請自行查看證據。',
   sec_policy: '安全政策',
@@ -422,7 +422,7 @@ const T = {
   sc_h: 'スクリーンショット', sc_sub: '合成テスト環境（example.com とドキュメント用アドレス）より。',
   sc_events: 'ドラッグできるタイムライン付きのイベント', sc_waf: 'リクエストの判定方法', sc_changes: '変更フロー', sc_rules: 'ルールとその出所',
   sc_alerts: '対応待ちアラート', sc_system: 'システムチェック', sc_dark: 'ダークテーマ',
-  in_sub: 'Debian 12 / 13 または Ubuntu 22.04 / 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
+  in_sub: 'Debian 12 / 13 または Ubuntu 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
   ms_note: 'nginx を新しく入れる場合や、CRS 4 のない ModSecurity の場合は', ms_link: 'ModSecurity インストールガイド →',
   ai_disclaimer: 'AI はどちらの方向にも誤ることがあります。モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した強化だけが自動適用されます。承認する前に証拠を確認してください。',
   sec_policy: 'セキュリティポリシー',

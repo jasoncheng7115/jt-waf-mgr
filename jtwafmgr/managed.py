@@ -197,14 +197,11 @@ class Managed:
         return n
 
     # --- import (adoption) ----------------------------------------------------------------
-    def detect_import_files(self):
-        """The local rule files of the main ModSecurity file: last local Include before the CRS rules,
-        first local Include after them (plugins excluded)."""
-        b, a = self.cfg['managed']['import_before'], self.cfg['managed']['import_after']
-        if b or a:
-            return b or None, a or None
+    def _crs_layout(self):
+        """(main file, its Include paths (absolute), indexes of the CRS rules Includes) of the first main
+        ModSecurity file that loads the CRS rules; None when there is none."""
         if self.site is None:
-            return None, None
+            return None
         _, m = self.site.load()
         for main in m.main_files:
             try:
@@ -214,16 +211,48 @@ class Managed:
                 continue
             incs = [p if os.path.isabs(p) else os.path.join(os.path.dirname(main), p) for p in incs]
             crs = [i for i, p in enumerate(incs) if re.search(r'/rules/\*\.conf$|REQUEST-\d', p)]
-            if not crs:
-                continue
+            if crs:
+                return main, incs, crs
+        return None
 
-            def local(p):
-                return not re.search(r'/plugins/|crs-setup|modsecurity\.conf$|/rules/|\*', p) and \
-                    not p.startswith(self.dir)
-            before = [p for p in incs[:crs[0]] if local(p)]
-            after = [p for p in incs[crs[-1] + 1:] if local(p)]
-            return (before[-1] if before else None), (after[0] if after else None)
-        return None, None
+    def detect_import_files(self):
+        """The local rule files of the main ModSecurity file: last local Include before the CRS rules,
+        first local Include after them (plugins excluded)."""
+        b, a = self.cfg['managed']['import_before'], self.cfg['managed']['import_after']
+        if b or a:
+            return b or None, a or None
+        lay = self._crs_layout()
+        if not lay:
+            return None, None
+        _, incs, crs = lay
+
+        def local(p):
+            return not re.search(r'/plugins/|crs-setup|modsecurity\.conf$|/rules/|\*', p) and \
+                not p.startswith(self.dir)
+        before = [p for p in incs[:crs[0]] if local(p)]
+        after = [p for p in incs[crs[-1] + 1:] if local(p)]
+        return (before[-1] if before else None), (after[0] if after else None)
+
+    def adopt_plan(self):
+        """How adoption wires the managed files into the main ModSecurity file:
+        {'main_conf', 'replace': {site file: managed file}, 'insert': {managed file: {'anchor', 'where'}}}.
+        A side without a site rule file (a fresh ModSecurity) gets its managed file included right before the
+        first / after the last CRS rules Include, so both managed files are always loaded. None when no main file
+        loads the CRS rules and there is no site file either."""
+        b, a = self.detect_import_files()
+        lay = self._crs_layout()
+        replace = {k: self.path(p) for k, p in ((b, 'before'), (a, 'after')) if k}
+        insert = {}
+        if lay:
+            _, incs, crs = lay
+            if not b:
+                insert[self.path('before')] = {'anchor': incs[crs[0]], 'where': 'before'}
+            if not a:
+                insert[self.path('after')] = {'anchor': incs[crs[-1]], 'where': 'after'}
+        if not replace and not insert:
+            return None
+        main = lay[0] if lay else (self.site.load()[1].main_files or [None])[0]
+        return {'main_conf': main, 'replace': replace, 'insert': insert}
 
     def import_preview(self):
         """Items that adoption would create from the existing local files (not saved)."""

@@ -176,6 +176,43 @@ class TestWorkflow(unittest.TestCase):
             self.wf.propose('add', 'exclusion', {}, 'x', 'op')
         self.assertEqual(cm.exception.code, 'not_adopted')
 
+    def test_adopting_a_fresh_modsecurity_without_site_files(self):
+        import shutil
+        site = os.path.join(self.env.dir, 'fresh')
+        shutil.copytree(FIXTURE_SITE, site, symlinks=True)
+        main = os.path.join(site, 'modsec', 'main.conf')
+        wr(main, ''.join(l + '\n' for l in rd(main).splitlines() if 'local-' not in l))
+        self.app.cfg.data['paths']['nginx_conf'] = os.path.join(site, 'nginx.conf')
+        self.app.site._nginx = None
+        plan = self.wf.managed.adopt_plan()
+        self.assertEqual((plan['main_conf'], plan['replace']), (main, {}))
+        crs = os.path.join(site, 'modsec', 'crs', 'rules', '*.conf')
+        self.assertEqual(plan['insert'], {os.path.join(self.mdir, 'before-crs.conf'): {'anchor': crs, 'where': 'before'},
+                                          os.path.join(self.mdir, 'after-crs.conf'): {'anchor': crs, 'where': 'after'}})
+        sent = []
+        real = self.wf._write_request
+        self.wf._write_request = lambda req: (sent.append(req), real(req))[1]
+        self.adopt()
+        self.assertEqual(sent[0]['adopt'], plan)
+        self.assertEqual([i for i in self.wf.managed.items() if i['rule_id']], [])     # nothing to import, still managed
+        cid = self.wf.propose('add', 'exclusion', {'host': {'mode': 'exact', 'value': 'app.example.com'},
+                                                   'path': {'mode': 'exact', 'value': '/search'},
+                                                   'action': 'remove_target_by_id', 'rule_ids': [941100], 'targets': ['ARGS:q']},
+                              'first rule on a fresh site', 'op')
+        self.assertEqual(self.wf.get(cid)['state'], 'checking')
+
+    def test_nothing_to_adopt_without_crs_or_site_files(self):
+        import shutil
+        site = os.path.join(self.env.dir, 'bare')
+        shutil.copytree(FIXTURE_SITE, site, symlinks=True)
+        main = os.path.join(site, 'modsec', 'main.conf')
+        wr(main, 'Include modsecurity.conf\n')
+        self.app.cfg.data['paths']['nginx_conf'] = os.path.join(site, 'nginx.conf')
+        self.app.site._nginx = None
+        with self.assertRaises(ChangeError) as cm:
+            self.wf.propose_adoption('boss')
+        self.assertEqual(cm.exception.code, 'nothing_to_import')
+
     def test_adopt_then_change_flow(self):
         self.adopt()
         self.assertTrue(self.wf.managed.adopted())
@@ -508,6 +545,36 @@ class TestApplier(unittest.TestCase):
         self.assertIn('Include %s/before-crs.conf' % self.cfg['managed']['dir'], text)
         self.assertNotIn('local-before-crs.conf', text)
         self.assertFalse(os.path.exists(os.path.join(self.cfg['managed']['spool'], 'v1-c1.req')))
+
+    def test_adopt_inserts_next_to_the_crs_rules_without_site_files(self):
+        # a fresh ModSecurity: no site rule files, so both managed files are included around the CRS rules
+        main = os.path.join(self.site, 'modsec', 'main.conf')
+        wr(main, ''.join(l + '\n' for l in rd(main).splitlines() if 'local-' not in l).rstrip('\n'))   # no final newline
+        crs = os.path.join(self.site, 'modsec', 'crs', 'rules', '*.conf')
+        md = self.cfg['managed']['dir']
+        self.request(self.files(), adopt={'main_conf': main, 'replace': {}, 'insert': {
+            os.path.join(md, 'before-crs.conf'): {'anchor': crs, 'where': 'before'},
+            os.path.join(md, 'after-crs.conf'): {'anchor': crs, 'where': 'after'}}})
+        res = self.result()
+        self.assertEqual(res['result'], 'ok', res)
+        self.assertEqual([l for l in rd(main).splitlines() if 'crs/rules' in l or md in l],
+                         ['Include %s/before-crs.conf' % md, 'Include crs/rules/*.conf', 'Include %s/after-crs.conf' % md])
+
+    def test_refuses_bad_inserts_in_adopt(self):
+        main = os.path.join(self.site, 'modsec', 'main.conf')
+        md = self.cfg['managed']['dir']
+        crs = os.path.join(self.site, 'modsec', 'crs', 'rules', '*.conf')
+        before = os.path.join(md, 'before-crs.conf')
+        for ins in ({'/etc/shadow': {'anchor': crs, 'where': 'before'}},                        # not a managed file
+                    {before: {'anchor': os.path.join(self.site, 'modsec', 'modsecurity.conf'), 'where': 'after'}},  # not CRS
+                    {before: {'anchor': '/etc/nginx/x.conf', 'where': 'before'}},                # not in the main file
+                    {before: {'anchor': crs, 'where': 'inside'}}):
+            self.request(self.files(), adopt={'main_conf': main, 'replace': {}, 'insert': ins})
+            self.assertEqual(self.result()['step'], 'request', ins)
+        self.request(self.files(), adopt={'main_conf': main, 'insert': {before: {'anchor': crs, 'where': 'before'}},
+                                          'replace': {os.path.join(self.site, 'modsec', 'local-before-crs.conf'): before}})
+        self.assertEqual(self.result()['step'], 'request')                                       # included twice
+        self.assertIn('local-before-crs.conf', rd(main))
 
     def test_refuses_forbidden_content_and_bad_checksum(self):
         self.request(self.files('SecRuleEngine Off\n'), adopt=None)

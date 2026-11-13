@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.13
+# jt-waf-mgr v0.4.14
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -50,7 +50,9 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   （提出者不能核准；單人模式核准自己的放寬要重新輸入一次性驗證碼）、嚴格條件下的自動收緊、退回。
 - **事件分析（地端 LLM）**：依規則看到的路徑分組候選；每批一次、以 JSON schema 限制格式的請求；由程式而不是模型決定提什麼
   （錨定且很窄的正規表示式，不可符合常見路徑、回歸樣本或組織自己在用的路徑；排除只限單一精確路徑、特定規則與欄位，核准
-  要一次性驗證碼）；每次執行都有摘要。
+  要一次性驗證碼）；外部來源探測機密、備份或設定檔名，或同一位址掃過很多路徑，由程式直接判為探測；之前判為攻擊的路徑
+  不會因為一次「誤判」就放寬；每次執行都有摘要。
+  **AI 可能出錯，兩個方向都會**：模型只提供建議；放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。
 - **待處理警示**：可能沒被封鎖的攻擊、影響使用者的誤判、進行中的攻擊、設定被外部修改、完整性問題、套用或備份失敗——在核准者
   寫下處理說明之前一直保持開啟，並定期提醒。
 - **通知**：Email（SMTP，純文字＋HTML）、Telegram、Microsoft Teams（Workflows / Adaptive Card）、Slack、Discord、Zulip、
@@ -70,16 +72,17 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 
 ## 需求
 
-- Debian 12 / 13 或 Ubuntu 22.04 / 24.04，**Python 3.11 以上，只用標準函式庫，不需要 pip 或任何套件**：可以離線安裝。
+- Debian 12 / 13 或 Ubuntu 24.04（22.04 的 libmodsecurity 套件太舊，要自行編譯 3.0.9 以上），**Python 3.11 以上，只用標準函式庫，不需要 pip 或任何套件**：可以離線安裝。
 - nginx 加 ModSecurity-nginx 連接器、libmodsecurity 3.0.9 以上、OWASP CRS 4.x、`SecAuditLogFormat JSON`；稽核記錄請用
-  `copytruncate` 輪替（libmodsecurity 在 reload 時不會重開檔案）。
+  `copytruncate` 輪替（libmodsecurity 在 reload 時不會重開檔案）。從全新的 nginx 開始，或還沒有 CRS 4：請看
+  [ModSecurity 安裝手冊](docs/MODSECURITY.zh-TW.md)。沒有站台規則檔也能納管（會在 CRS 規則前後加入空的受管理檔案）。
 - 選用：網路上的 OpenAI 相容 LLM 伺服器（llama.cpp、vLLM、Ollama…）供事件分析；GeoIP 需要 MaxMind 帳號。
 
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
-tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.14.tar.gz.sig jt-waf-mgr-0.4.14.tar.gz
+tar xzf jt-waf-mgr-0.4.14.tar.gz && cd jt-waf-mgr-0.4.14
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼

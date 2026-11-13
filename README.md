@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.13
+# jt-waf-mgr v0.4.14
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -57,7 +57,11 @@ something you can read, and every change into a workflow you can trust:
 - **Event analysis (self-hosted LLM)**: candidates grouped by the path a rule sees; one schema-constrained request per
   batch; the program, not the model, decides what is proposed (narrow anchored regex, never matching common paths,
   regression samples or paths the organisation itself uses; exclusions are one exact path, specific rules and
-  request parts only, and need a one-time code to approve); summaries of every run.
+  request parts only, and need a one-time code to approve); outside sources probing for secret, backup or configuration
+  file names, or one address trying many paths, are probes by the program's own rule; a path called an attack before
+  is not loosened on one "false positive" verdict; summaries of every run.
+  **AI can be wrong, in both directions**: the model only suggests; loosening always needs a person, only tightening
+  that passed every check may apply on its own.
 - **Alerts to follow up**: an attack the site may have answered, users hit by a false positive, an attack in progress,
   outside configuration changes, integrity problems, failed applies or backups — open until an approver marks them
   handled with a note; reminded until then.
@@ -80,18 +84,20 @@ something you can read, and every change into a workflow you can trust:
 
 ## Requirements
 
-- Debian 12 / 13 or Ubuntu 22.04 / 24.04, **Python 3.11 or newer — standard library only, no pip, no wheels**: the
+- Debian 12 / 13 or Ubuntu 24.04 (22.04's libmodsecurity package is too old: build 3.0.9 or later yourself), **Python 3.11 or newer — standard library only, no pip, no wheels**: the
   service installs offline.
 - nginx with the ModSecurity-nginx connector, libmodsecurity 3.0.9+, OWASP CRS 4.x, `SecAuditLogFormat JSON`;
-  rotate the audit log with `copytruncate` (libmodsecurity does not reopen it on reload).
+  rotate the audit log with `copytruncate` (libmodsecurity does not reopen it on reload). Starting from a fresh nginx
+  or without CRS 4: see the [ModSecurity installation guide](docs/MODSECURITY.md). Adoption also works without site
+  rule files (empty managed files are added next to the CRS rules).
 - Optional: an OpenAI-compatible LLM server on your network (llama.cpp, vLLM, Ollama…) for the event analysis; a
   MaxMind account for GeoIP.
 
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
-tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.14.tar.gz.sig jt-waf-mgr-0.4.14.tar.gz
+tar xzf jt-waf-mgr-0.4.14.tar.gz && cd jt-waf-mgr-0.4.14
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

@@ -9,6 +9,7 @@
       <RouterLink class="btn small ghost" to="/changes"><Icon name="change" />{{ t('nav.changes') }}</RouterLink>
     </div>
     <p class="muted">{{ t('analysis.intro') }}</p>
+    <div class="alert info aidisclaimer" role="note"><Icon name="info" /> {{ t('analysis.disclaimer') }}</div>
     <section v-if="showGuide" class="card">
       <FlowSteps :title="t('guide.analysis.title')" :steps="guideSteps" :note="t('guide.analysis.note')" />
     </section>

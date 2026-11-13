@@ -129,8 +129,9 @@ class Applier:
         if main not in self.main_files():
             raise Fail('request', 'adopt: %r is not the main ModSecurity file' % main)
         rep = adopt.get('replace') or {}
-        if not isinstance(rep, dict) or not rep:
-            raise Fail('request', 'adopt: nothing to replace')
+        ins = adopt.get('insert') or {}
+        if not isinstance(rep, dict) or not isinstance(ins, dict) or not (rep or ins):
+            raise Fail('request', 'adopt: nothing to replace or insert')
         allowed = {os.path.join(self.dir, f) for f in FILES.values()}
         with open(main, encoding='utf-8') as fh:
             text = fh.read()
@@ -140,6 +141,16 @@ class Applier:
                 raise Fail('request', 'adopt: %r is not a managed file' % new)
             if old not in includes:
                 raise Fail('request', 'adopt: %r is not included by %s' % (old, main))
+        # a fresh ModSecurity without site rule files: the managed file goes right next to a CRS rules Include
+        for new, how in ins.items():
+            if new not in allowed:
+                raise Fail('request', 'adopt: %r is not a managed file' % new)
+            if new in includes or new in rep.values():
+                raise Fail('request', 'adopt: %r would be included twice' % new)
+            if not isinstance(how, dict) or how.get('where') not in ('before', 'after') or how.get('anchor') not in includes:
+                raise Fail('request', 'adopt: insert %r needs an Include of %s to stand before or after' % (new, main))
+            if not re.search(r'/rules/\*\.conf$|REQUEST-\d', how['anchor']):
+                raise Fail('request', 'adopt: %r is not a CRS rules Include' % how['anchor'])
 
     @staticmethod
     def includes(main, text):
@@ -311,9 +322,16 @@ class Applier:
                     text = fh.read()
                 lines = text.splitlines(keepends=True)
                 inc = self.includes(main, text)
-                for old, new in adopt['replace'].items():
+                for old, new in (adopt.get('replace') or {}).items():
                     n = inc[old]
                     lines[n] = 'Include %s\n' % new
+                # inserts from the bottom up, so the line numbers of the ones above stay right
+                at = sorted(((inc[h['anchor']] + (1 if h['where'] == 'after' else 0), new)
+                             for new, h in (adopt.get('insert') or {}).items()), reverse=True)
+                for pos, new in at:
+                    if pos > 0 and not lines[pos - 1].endswith('\n'):
+                        lines[pos - 1] += '\n'
+                    lines.insert(pos, 'Include %s\n' % new)
                 write_atomic(main, ''.join(lines).encode('utf-8'), os.stat(main).st_mode & 0o777)
                 log.append('main file now includes the managed files')
             nt = self.test_config()

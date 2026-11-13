@@ -17,7 +17,10 @@ Raw (expert) rules: admin only.
  "items": [ManagedItem],                      // empty until adopted
  "import": {"sources": {"before": {"path": "/etc/nginx/modsec/site-before-crs.conf", "sha256": "…"},
                         "after":  {"path": "…", "sha256": "…"}},
-            "rules": 50, "comment_blocks": 6},     // only while not adopted
+            "rules": 50, "comment_blocks": 6,     // only while not adopted
+            "possible": true,                    // false: no main file loads the CRS rules and there are no site files
+            "insert": [{"placement": "after", "file": "…/after-crs.conf",       // a side without a site rule file:
+                        "anchor": "/etc/nginx/modsec/crs/rules/*.conf", "where": "after"}]},  // included next to CRS
  "adoption_change": {"id": 3, "state": "checking"} | null}     // only while not adopted
 ```
 `ManagedItem`

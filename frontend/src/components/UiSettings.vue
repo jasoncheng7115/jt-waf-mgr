@@ -7,6 +7,7 @@
     <section v-for="g in shownGroups" :id="'uiset-' + g.key" :key="g.key" class="card form uiset" :class="{ flash: flash === 'uiset-' + g.key }">
       <h2><Icon :name="g.icon" /> {{ t('uiset.group.' + g.key) }}</h2>
       <p class="ghint">{{ t('uiset.group.' + g.key + '.hint') }}</p>
+      <p v-if="g.key === 'analyst'" class="alert info aidisclaimer" role="note"><Icon name="info" /> {{ t('analysis.disclaimer') }}</p>
       <FlowSteps v-if="g.key === 'llm'" compact :steps="llmSteps" />
       <div class="srows">
         <template v-for="k in g.keys" :key="k">

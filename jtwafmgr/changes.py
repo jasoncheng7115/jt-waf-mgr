@@ -359,16 +359,19 @@ class Workflow:
         if open_:
             raise ChangeError('adoption_pending', 409, change_id=open_[0])
         items, sources = self.managed.import_preview()
-        if not sources:
+        plan = self.managed.adopt_plan()
+        if not plan:            # neither site rule files nor a main file that loads the CRS rules
             raise ChangeError('nothing_to_import', 409)
         t = util.now()
         with self.db.tx() as c:
             cur = c.execute('INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at) '
                             "VALUES ('adopt', 'system', ?, 'neutral', 'checking', ?, ?, ?, ?)",
-                            (json.dumps({'sources': sources, 'items': len(items)}),
+                            (json.dumps({'sources': sources, 'items': len(items),
+                                         'insert': {p: dict(w) for p, w in plan['insert'].items()}}),
                              'Adopt the existing site rule files as jt-waf-mgr managed files', actor, t, t))
             cid = cur.lastrowid
-        self.log(cid, actor, 'proposed', 'adoption of %s' % ', '.join(s['path'] for s in sources.values()))
+        self.log(cid, actor, 'proposed', 'adoption of %s' % (', '.join(s['path'] for s in sources.values())
+                                                           or 'no site rule files (empty managed files next to the CRS rules)'))
         self.app.audit.log('change.proposed', actor, 'user', None, 'ok', change_id=cid, op='adopt')
         self._wake.set()
         return cid
@@ -649,10 +652,11 @@ class Workflow:
                'health_urls': self.setting('health.urls'), 'nginx_bin': self.cfg['paths']['nginx_bin'],
                'wait_old_workers': self.setting('apply.wait_old_workers_seconds')}
         if r['op'] == 'adopt':
-            b, a = self.managed.detect_import_files()
-            _, mods = self.app.site.load()
-            req['adopt'] = {'main_conf': mods.main_files[0], 'replace': {k: v for k, v in (
-                (b, self.managed.path('before')), (a, self.managed.path('after'))) if k}}
+            req['adopt'] = self.managed.adopt_plan()
+            if not req['adopt']:         # the main file changed since the proposal
+                self._state(cid, 'apply_failed', 'adoption: no main ModSecurity file that loads the CRS rules any more')
+                self.log(cid, 'system', 'apply_blocked', 'nothing to adopt')
+                return
         self._write_version(version, cid, 'adopt' if r['op'] == 'adopt' else 'change', files, items, 'pending')
         self._write_request(req)
         self._state(cid, 'applying')

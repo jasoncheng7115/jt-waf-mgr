@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.13
+# jt-waf-mgr v0.4.14
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -53,7 +53,11 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   コードを再入力）、厳しい条件付きの自動強化、ロールバック。
 - **イベント分析（オンプレミス LLM）**：ルールが見るパスで候補をまとめ、バッチごとに JSON スキーマで形式を制約したリクエストを
   送信。提案内容はモデルではなくプログラムが決めます（アンカー付きの狭い正規表現で、一般的なパス・回帰サンプル・組織自身が
-  使うパスには一致しない。除外は一つの完全一致パスと特定のルール・項目のみで、承認にはワンタイムコードが必要）。実行ごとの要約。
+  使うパスには一致しない。除外は一つの完全一致パスと特定のルール・項目のみで、承認にはワンタイムコードが必要）。外部から
+  機密・バックアップ・設定のファイル名を探る要求や、同じアドレスが多くのパスを試す要求はプログラム自身の規則で偵察と判定し、
+  以前に攻撃と判定したパスは一度の「誤検知」判定では緩和しません。実行ごとの要約。
+  **AI はどちらの方向にも誤ることがあります**：モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した
+  強化だけが自動適用されます。
 - **対応待ちアラート**：防がれていない可能性のある攻撃、利用者に影響する誤検知、進行中の攻撃、設定の外部変更、完全性の問題、
   適用やバックアップの失敗。承認者が対応内容を記入するまで開いたままで、定期的に再通知します。
 - **通知**：メール（SMTP、テキスト＋HTML）、Telegram、Microsoft Teams（Workflows / Adaptive Card）、Slack、Discord、Zulip、
@@ -74,17 +78,19 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 
 ## 要件
 
-- Debian 12 / 13 または Ubuntu 22.04 / 24.04、**Python 3.11 以上（標準ライブラリのみ、pip もパッケージも不要）**：オフラインで
+- Debian 12 / 13 または Ubuntu 24.04（22.04 の libmodsecurity パッケージは古いため 3.0.9 以上を自分でビルド）、**Python 3.11 以上（標準ライブラリのみ、pip もパッケージも不要）**：オフラインで
   インストールできます。
 - nginx と ModSecurity-nginx コネクタ、libmodsecurity 3.0.9 以上、OWASP CRS 4.x、`SecAuditLogFormat JSON`。監査ログは
-  `copytruncate` でローテーションしてください（libmodsecurity は reload 時にファイルを開き直しません）。
+  `copytruncate` でローテーションしてください（libmodsecurity は reload 時にファイルを開き直しません）。nginx を新しく入れる
+  場合や CRS 4 がない場合は [ModSecurity インストールガイド](docs/MODSECURITY.ja.md) を参照してください。サイトのルール
+  ファイルがなくても取り込めます（CRS ルールの前後に空の管理ファイルを追加します）。
 - 任意：イベント分析用のネットワーク上の OpenAI 互換 LLM サーバー（llama.cpp、vLLM、Ollama など）、GeoIP 用の MaxMind アカウント。
 
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.13.tar.gz.sig jt-waf-mgr-0.4.13.tar.gz
-tar xzf jt-waf-mgr-0.4.13.tar.gz && cd jt-waf-mgr-0.4.13
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.14.tar.gz.sig jt-waf-mgr-0.4.14.tar.gz
+tar xzf jt-waf-mgr-0.4.14.tar.gz && cd jt-waf-mgr-0.4.14
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

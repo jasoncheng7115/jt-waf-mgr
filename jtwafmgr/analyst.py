@@ -55,6 +55,17 @@ FP_MAX_RULES = 5
 FP_MAX_TARGETS = 5
 ALERT_KINDS = ('attack_in_progress',)        # what the model may raise; the others are decided here
 SCAN_PATHS = 5                                # one outside address blocked on this many paths: a scanner, not a user
+RECON_MAX_SOURCES = 5                         # more outside sources than this, each on few paths: maybe real visitors
+HISTORY_RUNS = 6                              # earlier runs whose verdicts a loosening verdict must agree with
+# Names attackers look for: secrets, backups, deployment and cloud configuration, source control, CI files. Blocked
+# requests for them from outside only (no internal user) are reconnaissance, never users hit by a false positive.
+RECON_NAME = re.compile(
+    r'(?:^|/)(?:\.?env(?:\.[a-z0-9_-]+)?|[^/]*\.(?:bak|backup|old|orig|save|swp|sql|tar|tgz|gz|zip|7z|rar|dump|pem|key|p12|pfx|kdbx)'
+    r'|[^/]*(?:credential|secret|passw|private[_-]?key|id_rsa|service[_-]?account|aws|gcloud|azure)[^/]*\.[a-z0-9]{2,5}'
+    r'|(?:docker-compose|dockerfile|bitbucket-pipelines|\.gitlab-ci|\.travis|jenkinsfile|circleci|appveyor)[^/]*'
+    r'|(?:wp-config|configuration|settings|config|database|db|local|parameters|application|appsettings|ai_config)'
+    r'(?:\.[a-z0-9_-]+)*\.(?:php|py|js|json|ya?ml|xml|ini|conf|cfg|toml|properties|inc|txt|bak|old)'
+    r'|\.(?:git|svn|hg|aws|ssh|docker|vscode|idea|npmrc|pypirc|htpasswd|ds_store)(?:/.*)?)$')
 MAX_ALERTS_PER_KIND = 5                       # per run: a flood of candidates is not a flood of notifications
 BATCH = 15                                    # candidates per LLM request
 REPLY_EXCERPT = 4000
@@ -375,9 +386,57 @@ def gather_fp(app, window_hours, min_events):
                 s = _clean(m.get('data') or m.get('match') or '', 160)
                 if s and s not in g['samples'][rid]:
                     g['samples'][rid].append(s)
+    # what the outside sources of each group did elsewhere in the window: how many different paths one of them was
+    # blocked on (a scanner tries many) and which attack families they triggered (shown to the model)
+    paths_of, fams_of = collections.defaultdict(set), collections.defaultdict(collections.Counter)
+    for key, g in groups.items():
+        for ip in g['sources'] - g['internal']:
+            paths_of[ip].add(key)
+            fams_of[ip].update(g['families'])
+    for g in groups.values():
+        ext = g['sources'] - g['internal']
+        g['src_paths_max'] = max((len(paths_of[ip]) for ip in ext), default=0)
+        fam = collections.Counter()
+        for ip in ext:
+            fam.update(fams_of[ip])
+        g['src_families'] = [f for f, _ in fam.most_common(6)]
+        g['recon_name'] = bool(RECON_NAME.search(g['path']))
     out = [g for g in groups.values() if g['events'] >= min_events and g['rules']]
     out.sort(key=lambda g: (-len(g['internal']), -len(g['sources']), -g['events'], g['host'], g['path']))
     return out
+
+
+def recon_groups(groups):
+    """Blocked requests for names attackers look for (RECON_NAME) from outside only: reconnaissance, never a false
+    positive, whatever the model says, when the sources are few or also probed other paths (a public file many
+    visitors are blocked on still goes to the model). Marks them g['recon'] = True and returns them."""
+    out = []
+    for g in groups:
+        few = len(g['sources']) <= RECON_MAX_SOURCES or g.get('src_paths_max', 0) >= 3
+        if g.get('recon_name') and not g['internal'] and not g.get('scanner') and few:
+            g['recon'] = True
+            out.append(g)
+    return out
+
+
+def verdict_history(app, runs=HISTORY_RUNS):
+    """(host, path) -> verdicts of the latest finished runs, newest first: a loosening verdict that contradicts an
+    earlier 'attack' is not stable enough to act on (a small model can flip on the same requests)."""
+    hist = collections.defaultdict(list)
+    for r in app.db.q('SELECT candidates, verdicts FROM analyst_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT ?',
+                      (runs,)):
+        try:
+            cands = {c.get('id'): c for c in json.loads(r['candidates'] or '[]') if isinstance(c, dict)}
+            vs = json.loads(r['verdicts'] or '[]')
+        except ValueError:
+            continue
+        for v in vs if isinstance(vs, list) else []:
+            c = cands.get(v.get('id')) if isinstance(v, dict) else None
+            if c and v.get('verdict'):
+                # probe candidates are per path across sites: they count for every site
+                host = '*' if c.get('type') != 'false_positive' else (c.get('host') or '').lower()
+                hist[(host, c.get('path') or '')].append(v['verdict'])
+    return hist
 
 
 def scanner_groups(groups):
@@ -408,6 +467,8 @@ def fp_public(app, i, g):
             'events': g['events'], 'sources': len(g['sources']), 'internal_sources': len(g['internal']),
             'methods': dict(g['methods'].most_common(4)), 'variants': [_clean(v, 300) for v, _ in g['variants'].most_common(3)],
             'families': [f for f, _ in g['families'].most_common(6)], 'rules': rules,
+            'source_paths_max': g.get('src_paths_max', 0), 'source_families': g.get('src_families', []),
+            'sensitive_name': bool(g.get('recon_name')),
             'first_seen': util.iso(g['first']), 'last_seen': util.iso(g['last'])}
 
 
@@ -499,6 +560,8 @@ There is a second list, "false_positive_candidates" (ids f1, f2, ...): requests 
 - "false_positive": normal use of the application that the WAF wrongly blocks (the matched values are ordinary content: text, rich text or HTML the application edits, JSON, file names, tokens of the application). A narrow exclusion of these rules for this site and path will be proposed to a person.
 - "attack": the matched values are real attack payloads (SQL injection, cross-site scripting, command injection, path traversal...).
 - "unsure": anything else. When in doubt, answer "unsure".
+Context for each of them: "source_paths_max" is the largest number of different paths one of its outside sources was blocked on in the window (a person using an application hits one or two; a scanner tries many), "source_families" the attack families those sources triggered anywhere, "sensitive_name" whether the path is a name attackers look for (secrets, backups, credentials, deployment, cloud or CI configuration, source control).
+A request for such a file (.env, *.bak, *.old, credentials or service-account JSON, Dockerfile, CI pipelines, config.json...) blocked by the restricted-file rules (930130, 920440...) is reconnaissance: the matched value being a file name is NOT evidence of normal use. Answer "attack" for it unless internal_sources show the organisation's own people use that exact path. Answer "false_positive" only when the matched values are ordinary application content and the request looks like real use (internal sources, or many different sources that each requested only a few paths).
 Give "reason" and "confidence" as above (no regex, no label).
 
 Optionally "alerts": when the probe candidates show an attack a person should look at NOW (a concentrated, ongoing campaign against these sites: many sources or many events in a short time), add {"kind": "attack_in_progress", "ids": ["c1", ...], "severity": "warning" or "critical", "reason": "..."}. Otherwise an empty list.
@@ -822,8 +885,12 @@ def _analyse(app, client, a, st, log):
     for g in scanner_groups(fgroups):
         st['skipped'].append({'host': _clean(g['host'], 100), 'path': _clean(g['path'], 300), 'reason': 'scanner_pattern',
                               'sources': len(g['sources'])})
+    for g in recon_groups(fgroups):
+        st['skipped'].append({'host': _clean(g['host'], 100), 'path': _clean(g['path'], 300), 'reason': 'recon_file',
+                              'sources': len(g['sources'])})
+    st['history'] = verdict_history(app)
     for g in fgroups:
-        if g.get('scanner'):
+        if g.get('scanner') or g.get('recon'):
             continue
         spec, _ = exclusion_spec(g)
         known = fp_known(app, spec) if spec else None
@@ -860,7 +927,7 @@ def _analyse(app, client, a, st, log):
         text = None
         for attempt in (1, 2):
             try:
-                text, usage, secs = client.chat(msgs, max_tokens=min(16384, 512 + 320 * (len(bc) + len(bf))), temperature=0.1,
+                text, usage, secs = client.chat(msgs, max_tokens=min(16384, 512 + 320 * (len(bc) + len(bf))), temperature=0,
                                                 json_mode=True, schema=schema)
                 break
             except llm.LLMError as e:
@@ -996,6 +1063,11 @@ def _alerts(app, a, st, by_id, fp_by_id, verdicts, model_alerts, adopted, model,
         skip = lambda reason, **k: st['skipped'].append(dict({'id': cid, 'host': c['host'], 'path': c['path'], 'reason': reason}, **k))  # noqa: E731
         if (v.get('confidence') or 0) < MIN_CONFIDENCE:
             skip('low_confidence', confidence=v.get('confidence'))
+            continue
+        hist = st.get('history') or {}
+        earlier = hist.get((c['host'], c['path']), []) + hist.get(('*', c['path']), [])
+        if any(x in ('attack', 'attack_probe') for x in earlier):
+            skip('unstable_verdict', earlier=earlier[:HISTORY_RUNS])       # called an attack before: not stable enough to loosen
             continue
         spec, problem = exclusion_spec(g)
         change_id = None

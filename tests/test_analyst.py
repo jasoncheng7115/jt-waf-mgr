@@ -566,6 +566,57 @@ class TestFalsePositivesAndAlerts(AnalystBase):
         kinds = [(r['kind'], json.loads(r['details'])['path']) for r in self.app.db.q('SELECT kind, details FROM alerts')]
         self.assertEqual(kinds, [('false_positive', '/api/notes')])
 
+    def test_sensitive_file_names_from_outside_are_reconnaissance(self):
+        # two addresses, two paths each (below the scanner threshold): still a probe for secrets, never a false positive
+        self.adopt()
+        for ip in ('203.0.113.41', '203.0.113.42'):
+            for p in ('/serviceaccountcredentials.json', '/bitbucket-pipelines.yml'):
+                for _ in range(3):
+                    self.fpev(path=p, ip=ip, method='GET', rule=930130, var='REQUEST_FILENAME', value=p,
+                              data='Matched Data: found within REQUEST_FILENAME: ' + p)
+        for _ in range(3):        # the same kind of name used by the organisation's own people: that one is judged
+            self.fpev(path='/static/config.json', ip='192.168.77.30', method='GET', rule=930130, var='REQUEST_FILENAME',
+                      value='/static/config.json', data='Matched Data: found within REQUEST_FILENAME')
+        self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'false_positive', 'confidence': 0.95, 'reason': 'config'})
+        self.run_analyst()
+        body = self.srv.seen[-1]['body']
+        self.assertEqual(body['temperature'], 0)
+        sent = {c['path']: c for c in fp_candidates_of(body)}
+        self.assertEqual(sorted(sent), ['/static/config.json'])
+        self.assertTrue(sent['/static/config.json']['sensitive_name'])
+        self.assertEqual(sent['/static/config.json']['source_paths_max'], 0)       # no outside source
+        skipped = json.loads(self.last_run()['skipped'])
+        self.assertEqual(sorted(x['path'] for x in skipped if x['reason'] == 'recon_file'),
+                         ['/bitbucket-pipelines.yml', '/serviceaccountcredentials.json'])
+        kinds = [json.loads(r['details'])['path'] for r in self.app.db.q("SELECT details FROM alerts WHERE kind='false_positive'")]
+        self.assertNotIn('/serviceaccountcredentials.json', kinds)
+
+    def test_a_verdict_that_flips_to_false_positive_is_not_acted_on(self):
+        # the same requests, called an attack in one run and a false positive in the next: no exclusion, no alert
+        self.adopt()
+        for ip in ('192.168.77.21', '192.168.77.22', '203.0.113.30'):
+            self.fpev(ip=ip)
+        self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'attack', 'confidence': 0.9, 'reason': 'xss payload'})
+        self.run_analyst()
+        self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'false_positive', 'confidence': 0.95, 'reason': 'editor'})
+        out = self.run_analyst()
+        self.assertEqual(out['proposals'], [])
+        skipped = json.loads(self.last_run()['skipped'])
+        flip = [x for x in skipped if x['reason'] == 'unstable_verdict']
+        self.assertEqual((flip[0]['path'], flip[0]['earlier']), ('/api/notes', ['attack']))
+        self.assertIsNone(self.app.db.one("SELECT id FROM alerts WHERE kind='false_positive'"))
+
+    def test_the_model_sees_what_the_sources_did_elsewhere(self):
+        self.adopt()
+        for p in ('/a', '/b', '/c'):
+            self.fpev(path=p, ip='203.0.113.50', rule=941100)
+        for ip in ('203.0.113.50', '203.0.113.50', '192.168.77.21', '192.168.77.21'):
+            self.fpev(ip=ip)
+        self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'unsure', 'confidence': 0.5, 'reason': '?'})
+        self.run_analyst()
+        f = {c['path']: c for c in fp_candidates_of(self.srv.seen[-1]['body'])}['/api/notes']
+        self.assertEqual((f['source_paths_max'], f['source_families'], f['sensitive_name']), (4, ['xss'], False))
+
     def test_attack_that_got_content_is_an_alert(self):
         self.adopt()
         self.app.cfg.data['evidence']['catch_all_hosts'] = ['spa.example.com']

@@ -962,8 +962,13 @@ def managed(app, req):
     if not disk['adopted']:
         try:
             items, sources = mg.import_preview()
+            plan = mg.adopt_plan()
+            where = {mg.path('before'): 'before', mg.path('after'): 'after'}
             out['import'] = {'sources': sources, 'rules': sum(1 for i in items if i['text']),
-                             'comment_blocks': sum(1 for i in items if not i['text'])}
+                             'comment_blocks': sum(1 for i in items if not i['text']), 'possible': plan is not None,
+                             # sides without a site rule file: the managed file is added next to the CRS rules
+                             'insert': [{'placement': where.get(f), 'file': f, 'anchor': h['anchor'], 'where': h['where']}
+                                        for f, h in (plan or {}).get('insert', {}).items()]}
         except OSError as e:
             out['import'] = {'error': str(e)[:200]}
         r = app.db.one("SELECT id, state FROM changes WHERE op='adopt' ORDER BY id DESC LIMIT 1")
