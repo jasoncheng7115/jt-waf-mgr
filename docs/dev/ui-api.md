@@ -139,9 +139,26 @@ same filter works on `/overview` and `/events/timeline`.
  "text": "full rule text as written (multi-line)",
  "hits_7d": 0, "hits_30d": 0, "last_hit": null}
 ```
-`GET /api/v1/rules?source=local|crs|plugin|vhost_inline|base|all&category=&q=&limit&cursor` (viewer) → list.
+`GET /api/v1/rules?source=local|crs|plugin|vhost_inline|base|all&category=&family=&state=&q=&limit&cursor` (viewer) →
+`{"items": [Rule], "next_cursor", "total", "summary": [{"key": "<category, or attack family for source=crs>", "on": n,
+"partial": n, "off": n, "inactive": n}]}` (the summary counts the whole source, before the other filters).
 Default `source=local` (CRS has ~700 rules; UI offers a filter). `q` matches id, msg, comment, hosts.
+Every Rule also has `"state": "on|partial|off|inactive"` with `"state_detail"`: `off` = removed for every request
+(`{"where": "file:line"}`, or `{"managed_item": id}` for a managed rule switched off, listed although not in the files),
+`partial` = removed by a `ctl:ruleRemoveById/ByTag` exclusion (`{"hosts": [..., "*" = by path or source]}`),
+`inactive` = a CRS rule above the paranoia level (`{"level", "paranoia_level"}`); `"family"` (CRS attack type) and
+`"managed"` (true when the rule is in a jt-waf-mgr managed file).
 `GET /api/v1/rules/{id}` → Rule. `GET /api/v1/rules/{id}/hits?days=30` → `{"items": [{"day": "2026-11-10", "blocked": 0, "logged": 0}]}`
+
+`POST /api/v1/rules/toggle` (operator; token scope `changes:propose`) — switch several rules, or a whole category, on
+or off as ONE change (a bundle): `{"action": "disable|enable", "rule_ids": [..] | "group": {"source": "crs|local",
+"key": "<family|category>"}, "scope": {"mode": "hosts", "hosts": [..]} | {"mode": "all"}, "reason": "...",
+"preview": true?}`. Managed site rules are disabled / enabled; CRS rules are switched off by exclusions for the chosen
+sites, or by `SecRuleRemoveById` for every request (an expert rule: admins only), and back on by switching off the
+managed rules that remove them. `preview` → `{"rule_ids", "operations", "by_kind", "skipped": [{"id", "reason"}],
+"strict"}`; otherwise 202 `{"change_id", "direction", "state", "operations", "skipped", "strict"}`. A whole CRS
+category switched off is `strict`: only an admin approves it, with a one-time code and a written reason. Skip reasons:
+already, not_loaded, not_managed, system_rule, paranoia_level, shared_item, removed_outside.
 
 Also `GET /api/v1/rules/removals` → configure-time removals/updates
 `{"items": [{"directive": "SecRuleUpdateTargetById", "target_ids": [942100], "args": "!ARGS:search", "file": "…", "line": 3, "comment": "…"}]}`

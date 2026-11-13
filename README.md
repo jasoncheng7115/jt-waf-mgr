@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.16
+# jt-waf-mgr v0.4.18
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -70,7 +70,8 @@ something you can read, and every change into a workflow you can trust:
   per channel; retries, rate limits and delivery records. Values from requests are never markup, links or mentions.
 - **Accounts**: scrypt passwords, TOTP required for approver / admin, lockout, password policy with history and
   ageing, account expiry and review; API tokens with scopes and allowed source networks (tokens can propose, never
-  approve).
+  approve). Recovery on the host: `jt-waf-mgr user unlock | reset | passwd | disable | enable <name>` (reset clears
+  TOTP and forces a new password at the next sign-in); every action is in the audit trail.
 - **Integrity and compliance**: system check page, compliance page, daily verified backups with download (one-time
   code), configuration change history with attribution (jt-waf-mgr, registered automation, or outside).
 - **Interface**: English, 繁體中文 and 日本語; light and dark; phones and tablets; GeoIP (MaxMind GeoLite2, downloaded
@@ -96,8 +97,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.16.tar.gz.sig jt-waf-mgr-0.4.16.tar.gz
-tar xzf jt-waf-mgr-0.4.16.tar.gz && cd jt-waf-mgr-0.4.16
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
+tar xzf jt-waf-mgr-0.4.18.tar.gz && cd jt-waf-mgr-0.4.18
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

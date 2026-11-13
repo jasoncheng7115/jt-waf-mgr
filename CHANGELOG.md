@@ -2,6 +2,32 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.18 (2026-11-13)
+
+- Rules list: tick rules (or "select all listed") and switch them off or on as one change; or switch a whole category
+  (CRS: an attack type) off or on. CRS rules switched off need a scope: chosen sites (exclusions, picked from the nginx
+  server names) or every site (an expert rule, admins only, marked high risk). A whole CRS category switched off can
+  only be approved by an administrator, with a one-time code and a written reason. A preview shows the operations and
+  every rule that cannot be switched here, with the reason. API: `POST /api/v1/rules/toggle`.
+- Rule states: CRS's own mechanics (sampling, the localhost exceptions) no longer make every CRS rule look "off for
+  some"; a rule above the paranoia level shows "not in effect" before any exclusion.
+- Alerts: the analysis page has a "handle" button per alert; `/alerts?id=N` selects that alert and opens its form.
+- Overview: the navigation shows its icon; the country list beside the map is one line per country, with the first ten.
+- Settings: the configuration file section is a card with its own title.
+- Project site and READMEs: a calmer security headline, accounts and sign-in (TOTP, lockout, password policy) and
+  recovery on the host (`jt-waf-mgr user unlock | reset | passwd | disable | enable`).
+
+## 0.4.17 (2026-11-13)
+
+- Rules list and CRS page show whether each rule runs: on, off (removed for every request, with where), off for some
+  (an exclusion for some sites or paths) or not in effect (a CRS rule above the paranoia level). Totals per state, a
+  state filter, and per category (CRS: per attack type) how many rules are in each state; a click lists them.
+  Managed rules that are switched off are listed too. API: `state`, `state_detail`, `family`, `summary`.
+- Rules in the managed files are no longer marked "not managed" (the flag was never set).
+- A folded card next to an open one keeps its own height.
+- Event analysis: a false-positive candidate judged an attack (or unsure) shows "stays blocked" instead of "not
+  proposed": the requests were already blocked and stay so.
+
 ## 0.4.16 (2026-11-13)
 
 - Overview, by source address: internal / external and the country are a column of their own, aligned from row to row.

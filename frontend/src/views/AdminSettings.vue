@@ -5,10 +5,10 @@
     <RegressionSamples />
     <GeoipSettings @saved="load" />
     <UiSettings :groups="['llm', 'analyst', 'network', 'syslog', 'policy']" @saved="load" />
-    <h2><Icon name="page" /> {{ t('settings.config_title') }}</h2>
-    <p class="alert info">{{ t('settings.readonly_note', { path: CONFIG_PATH }) }}</p>
     <ErrorBox :error="error" />
     <section v-if="s" class="card">
+      <h2><Icon name="page" /> {{ t('settings.config_title') }}</h2>
+      <p class="alert info">{{ t('settings.readonly_note', { path: CONFIG_PATH }) }}</p>
       <div v-if="retentionItems.length" class="chartgrid">
         <div><h3 class="charthead">{{ t('chart.settings.retention') }}</h3>
           <HBars :items="retentionItems" :series="[{ key: 'days', label: t('chart.settings.days'), tone: 's1' }]" /></div>

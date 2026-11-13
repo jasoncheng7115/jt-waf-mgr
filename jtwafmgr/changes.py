@@ -14,6 +14,7 @@ side only writes a request into the spool directory and reads the result back.
 import collections
 import datetime
 import json
+import re
 import os
 import threading
 import time
@@ -352,6 +353,136 @@ class Workflow:
                            changes=[m['change_id'] for m in made], skipped=len(skipped))
         return {'changes': made, 'skipped': skipped}
 
+    # --- switching rules on and off, several at once ------------------------------------------
+    TOGGLE_MAX = 300
+    REMOVE_CHUNK = 20          # rule ids per exclusion / removal line
+
+    @staticmethod
+    def _removed_ids(it):
+        """The rule ids a managed item removes (exclusion 'remove_rule', or SecRuleRemoveById / ctl in raw text)."""
+        try:
+            spec = json.loads(it['spec'] or '{}')
+        except ValueError:
+            spec = {}
+        out = set()
+        if it['kind'] == 'exclusion' and spec.get('action') == 'remove_rule':
+            out |= {i for i in spec.get('rule_ids') or [] if isinstance(i, int)}
+        if it['kind'] == 'raw':
+            text = it.get('text') or ''
+            for line in re.findall(r'SecRuleRemoveById\s+([\d,\s-]+)', text) + re.findall(r'ruleRemoveById=([\d,-]+)', text):
+                for part in re.split(r'[\s,]+', line.strip()):
+                    if part.isdigit():
+                        out.add(int(part))
+                    elif re.fullmatch(r'\d+-\d+', part):
+                        lo, hi = map(int, part.split('-'))
+                        if hi - lo <= 100000:
+                            out |= set(range(lo, hi + 1))
+        return out
+
+    def toggle_plan(self, action, rule_ids, scope=None):
+        """What switching these rules on or off takes, as bundle operations (nothing is created):
+        managed site rules are disabled / enabled; CRS rules are disabled by exclusions for the chosen sites
+        (scope {'mode': 'hosts', 'hosts': [...]}) or by a removal for every request ({'mode': 'all'}, an expert rule:
+        admin only), and enabled again by switching off the managed items that remove them. Rules that cannot be
+        switched here are listed in 'skipped' with the reason."""
+        if action not in ('disable', 'enable'):
+            raise ChangeError('invalid_action', 422)
+        if not isinstance(rule_ids, list) or not rule_ids or len(rule_ids) > self.TOGGLE_MAX or \
+                not all(isinstance(i, int) and not isinstance(i, bool) for i in rule_ids):
+            raise ChangeError('invalid_rule_ids', 422, limit=self.TOGGLE_MAX)
+        if not self.managed.adopted():
+            raise ChangeError('not_adopted', 409)
+        _, m = self.app.site.load()
+        states = m.rule_states()
+        loaded = {r.id: r for r in m.rules if r.id is not None}
+        items = [it for it in self.managed.items() if it['kind'] != 'comment']
+        by_rule = {it['rule_id']: it for it in items if it['rule_id']}
+        system = set(self.cfg['waf']['threshold_rule_ids']) | set(self.cfg['waf']['score_rule_ids']) | \
+            set(self.cfg['waf']['fallback_rule_ids']) | util.SCORING_RULES
+        ops, skipped, crs_off, crs_on = [], [], [], set()
+        for rid in dict.fromkeys(rule_ids):
+            it = by_rule.get(rid)
+            if it is not None:                                  # a managed site rule
+                if bool(it['enabled']) == (action == 'enable'):
+                    skipped.append({'id': rid, 'reason': 'already'})
+                else:
+                    ops.append({'op': action, 'item_id': it['id']})
+                continue
+            r = loaded.get(rid)
+            if r is None:
+                skipped.append({'id': rid, 'reason': 'not_loaded'})
+            elif m.source_of(r) != 'crs':
+                skipped.append({'id': rid, 'reason': 'not_managed'})
+            elif rid in system:
+                skipped.append({'id': rid, 'reason': 'system_rule'})
+            else:
+                st = (states.get(rid) or {}).get('state', 'on')
+                if action == 'disable':
+                    if st == 'off':
+                        skipped.append({'id': rid, 'reason': 'already'})
+                    else:
+                        crs_off.append(rid)
+                elif st == 'on':
+                    skipped.append({'id': rid, 'reason': 'already'})
+                elif st == 'inactive':
+                    skipped.append({'id': rid, 'reason': 'paranoia_level'})
+                else:
+                    crs_on.add(rid)
+        if crs_off:
+            scope = scope if isinstance(scope, dict) else {}
+            chunks = [crs_off[i:i + self.REMOVE_CHUNK] for i in range(0, len(crs_off), self.REMOVE_CHUNK)]
+            if scope.get('mode') == 'all':
+                for c in chunks:
+                    ops.append({'op': 'add', 'kind': 'raw', 'spec': {
+                        'text': '# switched off for every request\nSecRuleRemoveById %s' % ' '.join(map(str, c)),
+                        'placement': 'after'}})
+            elif scope.get('mode') == 'hosts':
+                hosts = scope.get('hosts')
+                if not isinstance(hosts, list) or not 1 <= len(hosts) <= 20 or not all(isinstance(h, str) for h in hosts):
+                    raise ChangeError('invalid_scope', 422)
+                for h in dict.fromkeys(x.strip().lower() for x in hosts):
+                    for c in chunks:
+                        ops.append({'op': 'add', 'kind': 'exclusion', 'spec': {
+                            'host': {'mode': 'exact', 'value': h}, 'path': {'mode': 'any'},
+                            'action': 'remove_rule', 'rule_ids': c}})
+            else:
+                raise ChangeError('scope_required', 422)
+        if crs_on:
+            done = set()
+            for it in items:
+                if not it['enabled']:
+                    continue
+                rem = self._removed_ids(it) & (crs_on | set(loaded))
+                hit = rem & crs_on
+                if not hit:
+                    continue
+                if rem <= crs_on:                    # the item removes only rules being switched on: switch it off
+                    ops.append({'op': 'disable', 'item_id': it['id']})
+                    done |= hit
+                else:
+                    for rid in sorted(hit - done):
+                        skipped.append({'id': rid, 'reason': 'shared_item', 'item_rule_id': it['rule_id']})
+                    done |= hit
+            for rid in sorted(crs_on - done):
+                skipped.append({'id': rid, 'reason': 'removed_outside'})   # not by a managed rule (crs-setup, plugin...)
+        if len(ops) > self.BUNDLE_MAX:
+            raise ChangeError('invalid_bundle', 422, limit=self.BUNDLE_MAX)
+        return {'ops': ops, 'skipped': skipped[:self.TOGGLE_MAX]}
+
+    def propose_toggle(self, action, rule_ids, scope, reason, actor, via='user', role=None, owner=None, strict=False):
+        """toggle_plan as ONE change. strict (a whole category of CRS rules switched off): only an admin may approve,
+        with a fresh one-time code and a written reason."""
+        plan = self.toggle_plan(action, rule_ids, scope)
+        if not plan['ops']:
+            raise ChangeError('nothing_to_change', 409, skipped=plan['skipped'][:50])
+        cid = self.propose_bundle(plan['ops'], reason, actor, via, role=role, owner=owner)
+        if strict:
+            r = self.get(cid)
+            spec = json.loads(r['spec'])
+            spec['strict'] = True
+            self.db.x('UPDATE changes SET spec=? WHERE id=?', (json.dumps(spec), cid))
+        return cid, plan
+
     def propose_adoption(self, actor):
         if self.managed.adopted():
             raise ChangeError('already_adopted', 409)
@@ -537,6 +668,18 @@ class Workflow:
                 from .auth import AuthError
                 try:
                     self.app.auth.step_up(user['username'], totp or '', 'change.approve_own')
+                except AuthError as e:
+                    raise ChangeError(e.code, e.status)
+                if len((note or '').strip()) < 10:
+                    raise ChangeError('note_required')
+        if r['direction'] != 'tighten' and json.loads(r['spec'] or '{}').get('strict'):
+            # a whole category of CRS rules switched off: an admin, a fresh one-time code and a written reason
+            if user['role'] != 'admin':
+                raise ChangeError('admin_required', 403)
+            if not own:                     # one's own loosening above already took the code and the reason
+                from .auth import AuthError
+                try:
+                    self.app.auth.step_up(user['username'], totp or '', 'change.approve_category_off')
                 except AuthError as e:
                     raise ChangeError(e.code, e.status)
                 if len((note or '').strip()) < 10:

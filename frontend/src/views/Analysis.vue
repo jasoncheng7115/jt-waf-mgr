@@ -137,7 +137,8 @@
             <span class="mono small breakall">{{ a.path ? safeText(a.path, 200) : '—' }}</span>
             <span class="al-links">
               <RouterLink v-if="a.change_id" :to="'/changes/' + a.change_id">{{ t('analysis.proposed', { id: a.change_id }) }}</RouterLink>
-              <RouterLink to="/alerts">{{ t('analysis.alert_n', { id: a.alert_id }) }}</RouterLink>
+              <RouterLink v-if="canHandle" class="btn tiny" :to="{ path: '/alerts', query: { id: a.alert_id } }"><Icon name="check" />{{ t('analysis.handle_alert', { id: a.alert_id }) }}</RouterLink>
+              <RouterLink v-else :to="{ path: '/alerts', query: { id: a.alert_id } }">{{ t('analysis.alert_n', { id: a.alert_id }) }}</RouterLink>
             </span>
             <div v-if="a.reason" class="sub reason">{{ safeText(a.reason, 300) }}</div>
           </li>
@@ -160,6 +161,8 @@
             <template v-if="row.proposal"><RouterLink :to="'/changes/' + row.proposal.change_id">{{ t('analysis.proposed_exclusion', { id: row.proposal.change_id }) }}</RouterLink>
               <div v-if="row.proposal.state" class="sub"><StateBadge :state="row.proposal.state" /></div></template>
             <span v-else-if="row.skipped" class="small">{{ skipText(row.skipped) }}</span>
+            <!-- these requests were already blocked: an attack or unsure verdict keeps them blocked, nothing to propose -->
+            <span v-else-if="verdictOf(row) === 'attack' || verdictOf(row) === 'unsure'" class="small">{{ t('analysis.fp_kept_blocked') }}</span>
             <span v-else class="muted small">{{ t('analysis.not_proposed') }}</span>
           </template>
         </DataTable>
@@ -240,6 +243,7 @@ import TimeBars from '../components/charts/TimeBars.vue'
 const props = defineProps({ id: { type: String, default: '' } })
 const router = useRouter()
 const isAdmin = computed(() => hasRole('admin'))
+const canHandle = computed(() => hasRole('approver'))      // who marks alerts handled
 const VERDICTS = ['attack_probe', 'legitimate', 'unsure', 'false_positive', 'attack', 'invalid']
 const VTONE = { attack_probe: 's2', legitimate: 's1', false_positive: 's1', attack: 's2', unsure: 's3', invalid: 'muted' }
 const VCLS = { attack_probe: 'b-blocked', legitimate: 'b-ok', false_positive: 'b-int', attack: 'b-blocked', unsure: 'b-warn', invalid: 'b-logged' }

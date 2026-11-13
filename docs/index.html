@@ -151,7 +151,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.16</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.18</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -209,6 +209,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="card"><h3><span class="ic">⛨</span><span data-t="sec2_h"></span></h3><p data-t="sec2"></p></div>
     <div class="card"><h3><span class="ic">✓</span><span data-t="sec3_h"></span></h3><p data-t="sec3"></p></div>
     <div class="card"><h3><span class="ic">≡</span><span data-t="sec4_h"></span></h3><p data-t="sec4"></p></div>
+    <div class="card"><h3><span class="ic">⚇</span><span data-t="sec5_h"></span></h3><p data-t="sec5"></p></div>
+    <div class="card"><h3><span class="ic">⌘</span><span data-t="sec6_h"></span></h3><p data-t="sec6"></p></div>
   </div>
 </div></section>
 
@@ -233,8 +235,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.16.tar.gz.sig jt-waf-mgr-0.4.16.tar.gz
-tar xzf jt-waf-mgr-0.4.16.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.16
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
+tar xzf jt-waf-mgr-0.4.18.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.18
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
@@ -298,8 +300,8 @@ const T = {
   n_h: 'Hear about what needs a person', n_sub: 'The web service only queues messages; a separate sandboxed unit sends them, retries and reminds open alerts.',
   n1: 'A matrix of events and channels, messages in English, Traditional Chinese or Japanese with a link back', n2: 'Values from requests are never markup, links or mentions; secrets are write-only',
   n3: 'Generic webhook with an HMAC-SHA256 signature over timestamp and body',
-  sec_h: 'Security is the product', sec_sub: 'A WAF manager must not become the way into the WAF.',
-  sec1_h: 'Least privilege', sec1: 'The web service listens on loopback, runs unprivileged and never connects out; only the apply program runs as root and writes only the managed files.',
+  sec_h: 'Security design', sec_sub: 'The manager itself is built with least privilege, strict handling of request data and security tests in every release.',
+  sec1_h: 'Least privilege', sec1: 'The web service listens on loopback, runs unprivileged and connects out only to a syslog server you set; downloads, the LLM and notifications run in separate restricted units; only the apply program runs as root and writes only the managed files.',
   sec2_h: 'OWASP Top 10:2025', sec2: 'Strict CSP without unsafe-inline, attacker data rendered as text, scrypt and TOTP, lockout, scoped API tokens that can never approve.',
   sec3_h: 'Tested every release', sec3: 'Unit tests, a browser test of every page, a security scan of every route, an OWASP ZAP active scan, an independent review, upgrade and rollback tests.',
   sec4_h: 'Compliance views', sec4: 'Mapped to ISO/IEC 27001:2022, Taiwan\'s Cyber Security Management Act baseline and OWASP Top 10:2025, with a system check page.',
@@ -309,6 +311,8 @@ const T = {
   in_sub: 'Debian 12 / 13 or Ubuntu 24.04, Python 3.11+, nginx with ModSecurity-nginx, libmodsecurity 3.0.9+, OWASP CRS 4.x.',
   ms_note: 'Starting from a fresh nginx, or ModSecurity without CRS 4?', ms_link: 'ModSecurity installation guide →',
   ai_disclaimer: 'AI can be wrong, in both directions. The model only suggests: loosening always needs a person, only tightening that passed every check may apply on its own. Check the evidence before you approve.',
+  sec5_h: 'Accounts and sign-in', sec5: 'Passwords hashed with scrypt; TOTP two-factor authentication required for approvers and administrators; an account is locked for 15 minutes after 5 failed sign-ins; password length, character classes, history and age are configurable; the previous sign-in and failed attempts are shown after signing in; sessions end after 30 minutes idle or 12 hours (both adjustable).',
+  sec6_h: 'Recovery on the host', sec6: 'Locked out or forgot the password: on the host, jt-waf-mgr user unlocks an account, resets its password (TOTP is cleared too and the password must be changed at the next sign-in), sets a password, disables or enables an account. Every action goes into the audit trail.',
   sec_policy: 'Security policy',
   in_h: 'Install, upgrade, uninstall',
   ib_h: 'Install',
@@ -356,8 +360,8 @@ const T = {
   n_h: '需要有人處理時就通知你', n_sub: '網頁服務只把通知排入佇列，由獨立的受限程序發送、重試，並提醒待處理警示。',
   n1: '事件 × 管道矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結', n2: '來自請求的內容永遠不會變成格式、連結或提及；金鑰只能寫入',
   n3: '通用 webhook 以 HMAC-SHA256 對時間戳與內容簽章',
-  sec_h: '安全就是產品本身', sec_sub: 'WAF 管理工具不能變成攻進 WAF 的入口。',
-  sec1_h: '最小權限', sec1: '網頁服務只聽 loopback、以非特權執行、不對外連線；只有套用程式是 root，而且只寫受管理的檔案。',
+  sec_h: '安全設計', sec_sub: '管理工具本身也照最小權限、嚴格的輸入處理與每版安全測試來設計。',
+  sec1_h: '最小權限', sec1: '網頁服務只聽 loopback、以非特權執行，只會連到你設定的 syslog 伺服器；GeoIP 下載、LLM 與通知各在受限的獨立 unit 執行；只有套用程式是 root，而且只寫受管理的檔案。',
   sec2_h: 'OWASP Top 10:2025', sec2: '不允許 unsafe-inline 的嚴格 CSP、攻擊者資料一律純文字、scrypt 與 TOTP、鎖定、永遠不能核准的範圍化 API 權杖。',
   sec3_h: '每次發版都測', sec3: '單元測試、每一頁的瀏覽器測試、每個路由的安全檢測、OWASP ZAP 主動掃描、獨立審查、升級與還原測試。',
   sec4_h: '合規對照', sec4: '對照 ISO/IEC 27001:2022、資通安全管理法防護基準與 OWASP Top 10:2025，並有系統檢查頁。',
@@ -367,6 +371,8 @@ const T = {
   in_sub: 'Debian 12 / 13 或 Ubuntu 24.04、Python 3.11 以上、nginx 加 ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
   ms_note: '全新的 nginx，或還沒有 CRS 4 的 ModSecurity？', ms_link: 'ModSecurity 安裝手冊 →',
   ai_disclaimer: 'AI 可能出錯，兩個方向都會。模型只提供建議：放寬一律要人核准，只有通過所有檢查的收緊可以自動套用。核准前請自行查看證據。',
+  sec5_h: '帳號與登入', sec5: '密碼以 scrypt 雜湊；核准者與管理者必須設定 TOTP 雙因素驗證；連續登入失敗 5 次鎖定 15 分鐘；密碼長度、字元種類、歷史與有效期限可設定；登入後顯示上次登入時間與失敗次數；閒置 30 分鐘或滿 12 小時需重新登入（都可調整）。',
+  sec6_h: '主機上的救援指令', sec6: '被鎖住或忘記密碼時，在主機上用 jt-waf-mgr user 解鎖帳號、重設密碼（同時清除 TOTP，下次登入必須改密碼）、直接設定密碼、停用或啟用帳號。每個動作都寫進稽核記錄。',
   sec_policy: '安全政策',
   in_h: '安裝、升級與移除',
   ib_h: '安裝',
@@ -414,8 +420,8 @@ const T = {
   n_h: '人の対応が必要なことを知らせる', n_sub: 'Web サービスはメッセージをキューに入れるだけ。送信・再送・対応待ちアラートの再通知は別の制限付きユニットが行います。',
   n1: 'イベント × チャネルのマトリクス。メッセージは英語・繁体字中国語・日本語で、ページへのリンク付き', n2: 'リクエスト由来の値が書式・リンク・メンションになることはなく、シークレットは書き込み専用',
   n3: '汎用 webhook はタイムスタンプと本文に対する HMAC-SHA256 署名付き',
-  sec_h: 'セキュリティこそが製品', sec_sub: 'WAF の管理ツールが WAF への入口になってはいけません。',
-  sec1_h: '最小権限', sec1: 'Web サービスは loopback のみで待ち受け、非特権で動作し、外部に接続しません。root で動くのは適用プログラムだけで、管理対象のファイルだけを書き込みます。',
+  sec_h: 'セキュリティ設計', sec_sub: '管理ツール自体も、最小権限、リクエストデータの厳格な扱い、リリースごとのセキュリティテストに基づいて設計しています。',
+  sec1_h: '最小権限', sec1: 'Web サービスは loopback のみで待ち受け、非特権で動作し、外部への接続は設定した syslog サーバーだけです。GeoIP のダウンロード、LLM、通知は制限された別の unit で動きます。root で動くのは適用プログラムだけで、管理対象のファイルだけを書き込みます。',
   sec2_h: 'OWASP Top 10:2025', sec2: 'unsafe-inline を許可しない厳格な CSP、攻撃者データはテキスト表示、scrypt と TOTP、ロックアウト、決して承認できないスコープ付き API トークン。',
   sec3_h: 'リリースごとに試験', sec3: '単体テスト、全ページのブラウザ試験、全ルートのセキュリティ検査、OWASP ZAP のアクティブスキャン、独立レビュー、アップグレードとロールバックの試験。',
   sec4_h: 'コンプライアンス対照', sec4: 'ISO/IEC 27001:2022、台湾の資通安全管理法の防護基準、OWASP Top 10:2025 との対照とシステムチェック画面。',
@@ -425,6 +431,8 @@ const T = {
   in_sub: 'Debian 12 / 13 または Ubuntu 24.04、Python 3.11 以上、nginx と ModSecurity-nginx、libmodsecurity 3.0.9 以上、OWASP CRS 4.x。',
   ms_note: 'nginx を新しく入れる場合や、CRS 4 のない ModSecurity の場合は', ms_link: 'ModSecurity インストールガイド →',
   ai_disclaimer: 'AI はどちらの方向にも誤ることがあります。モデルは提案するだけで、緩和は必ず人が承認し、すべてのチェックに合格した強化だけが自動適用されます。承認する前に証拠を確認してください。',
+  sec5_h: 'アカウントとサインイン', sec5: 'パスワードは scrypt でハッシュ化。承認者と管理者は TOTP 二要素認証が必須。サインインに 5 回失敗すると 15 分間ロック。パスワードの長さ・文字種・履歴・有効期限は設定可能。サインイン後に前回のサインインと失敗回数を表示。30 分無操作または 12 時間でセッション終了（いずれも調整可能）。',
+  sec6_h: 'ホスト上での復旧', sec6: 'ロックされた、またはパスワードを忘れた場合は、ホスト上で jt-waf-mgr user によりアカウントのロック解除、パスワードの再設定（TOTP も消去され、次回サインインでパスワード変更が必要）、パスワードの設定、無効化・有効化ができます。すべて監査記録に残ります。',
   sec_policy: 'セキュリティポリシー',
   in_h: 'インストール・アップグレード・アンインストール',
   ib_h: 'インストール',

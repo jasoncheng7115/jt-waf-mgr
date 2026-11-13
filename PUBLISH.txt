@@ -48,6 +48,9 @@ docs/COMPLIANCE.ja.md
 docs/MODSECURITY.md
 docs/MODSECURITY.zh-TW.md
 docs/MODSECURITY.ja.md
+docs/OFFLINE.md
+docs/OFFLINE.zh-TW.md
+docs/OFFLINE.ja.md
 docs/index.html
 docs/shots/
 docs/logo-mark.svg

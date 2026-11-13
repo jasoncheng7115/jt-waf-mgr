@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.16
+# jt-waf-mgr v0.4.18
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -64,7 +64,9 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   Nextcloud Talk、汎用 webhook（HMAC-SHA256 署名）。イベント × チャネルのマトリクス、チャネルごとのテスト送信、再送・上限・
   送信記録。リクエスト由来の値が書式・リンク・メンションになることはありません。
 - **アカウント**：scrypt パスワード、approver / admin は二要素認証必須、ロックアウト、履歴と期限付きのパスワードポリシー、
-  アカウントの期限と見直し。API トークンはスコープと許可送信元ネットワーク付き（提案はできるが承認は不可）。
+  アカウントの期限と見直し。API トークンはスコープと許可送信元ネットワーク付き（提案はできるが承認は不可）。ホスト上での
+  復旧：`jt-waf-mgr user unlock | reset | passwd | disable | enable <名前>`（reset は TOTP も消去し、次回サインインで
+  パスワード変更が必要）。すべて監査記録に残ります。
 - **完全性とコンプライアンス**：システムチェック、コンプライアンス、毎日検証されるバックアップとダウンロード（ワンタイム
   コード）、設定変更の履歴と原因判定（jt-waf-mgr、登録済みの自動化、外部）。
 - **画面**：English・繁體中文・日本語、ライト / ダーク、スマートフォンとタブレット、GeoIP（MaxMind GeoLite2、専用の制限付き
@@ -89,8 +91,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.16.tar.gz.sig jt-waf-mgr-0.4.16.tar.gz
-tar xzf jt-waf-mgr-0.4.16.tar.gz && cd jt-waf-mgr-0.4.16
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
+tar xzf jt-waf-mgr-0.4.18.tar.gz && cd jt-waf-mgr-0.4.18
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

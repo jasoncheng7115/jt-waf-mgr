@@ -40,10 +40,11 @@
         <p v-if="c.direction === 'loosen' && c.state === 'pending_approval'" class="muted small">{{ t('wizard.loosen_note') }}</p>
         <p v-if="own && canApprove" class="alert info">{{ t('change.own_note') }}</p>
         <p v-if="fromAnalyst && c.direction !== 'tighten' && canApprove" class="alert warn">{{ t('change.analyst_loosen_note') }}</p>
+        <p v-if="strict && c.direction !== 'tighten' && c.state === 'pending_approval'" class="alert warn">{{ t('change.strict_note') }}</p>
         <div class="filters inline">
           <label class="field grow"><span>{{ t('change.note') }}</span>
             <input v-model="note" maxlength="2000" :placeholder="t('change.note_ph')"></label>
-          <label v-if="canApprove && (own || fromAnalyst) && c.direction !== 'tighten'" class="field"><span>{{ t('change.totp') }}</span>
+          <label v-if="canApprove && (own || fromAnalyst || strict) && c.direction !== 'tighten'" class="field"><span>{{ t('change.totp') }}</span>
             <input v-model.trim="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="mono" placeholder="123456"></label>
         </div>
         <label v-if="canRecheck" class="field"><span>{{ t('change.override') }}</span>
@@ -146,8 +147,10 @@ let timer = null
 const own = computed(() => c.value && state.user && c.value.proposed_by === state.user.username && c.value.proposed_via === 'user')
 const ownOrAdmin = computed(() => own.value || hasRole('admin'))
 const fromAnalyst = computed(() => !!c.value && c.value.proposed_by === 'analyst')
+// a whole category of CRS rules switched off: an admin approves, with a one-time code and a written reason
+const strict = computed(() => !!c.value && !!(c.value.spec && c.value.spec.strict))
 const canApprove = computed(() => c.value && c.value.state === 'pending_approval' && hasRole('approver') &&
-  (c.value.op !== 'adopt' || hasRole('admin')))
+  (c.value.op !== 'adopt' || hasRole('admin')) && (!(c.value.spec && c.value.spec.strict) || c.value.direction === 'tighten' || hasRole('admin')))
 const canReject = computed(() => c.value && c.value.state === 'pending_approval' && hasRole('approver'))
 const canCancel = computed(() => c.value && ['checking', 'pending_approval'].includes(c.value.state) &&
   hasRole('operator') && ownOrAdmin.value)

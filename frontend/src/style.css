@@ -290,6 +290,8 @@ table.grid td.empty, .empty { color: var(--muted); text-align: center; padding: 
 .field { display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; color: var(--muted); min-width: 0; }
 .field > span, .field > legend { font-weight: 500; }
 .field.grow { flex: 1; min-width: 220px; }
+/* in the filter grid a column is the width: a minimum here pushes the last field past the edge (tablet) */
+.filters > .field.grow { min-width: 0; }
 fieldset.field { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0; }
 input, select, textarea { font: inherit; font-size: 14.5px; color: var(--text); background: var(--panel); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; min-width: 0; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
@@ -855,6 +857,8 @@ form + *, .actions + .pwage, form + .pwage { margin-top: 16px; }
 .cardfold .icon { transition: transform .15s; }
 .card.folded > .foldable .cardfold .icon { transform: rotate(-90deg); }
 .card.folded > :not(.foldable) { display: none !important; }
+/* a folded card in a grid row keeps its own height instead of stretching to the open card beside it */
+.card.folded { align-self: start; }
 .card.folded > .foldable { margin-bottom: -14px; border-bottom: 0; border-radius: 8px; }
 @media (max-width: 640px) { .card.folded > .foldable { margin-bottom: -12px; } }
 @media print { .cardfold { display: none; } .card.folded > :not(.foldable) { display: revert !important; } }
@@ -890,3 +894,10 @@ form + *, .actions + .pwage, form + .pwage { margin-top: 16px; }
 /* a world map with its ranked list beside it (one column on narrow screens) */
 .mapgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
 @media (max-width: 900px) { .mapgrid { grid-template-columns: minmax(0, 1fr); } }
+/* rule states: totals that filter (rules list, CRS page) */
+.statetotals { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+.stchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  border-radius: 14px; padding: 3px 11px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.stchip.on, a.stchip:hover { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.stchip .lg { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+a.stchip { text-decoration: none; }

@@ -37,7 +37,7 @@
       <RowTimeline v-model:window="win" :title="t('timeline.alerts')" :rows="items" ts-key="created_at" :series="tlSeries" />
       <DataTable id="alerts" :columns="cols" :rows="shownItems" row-key="id" :has-more="!!cursor" :loading-more="loading"
                  :default-sort="{ key: 'id', dir: -1 }" :empty="filter === 'open' ? t('alerts.none_open') : t('common.no_data')"
-                 :row-class="(r) => (r.state === 'open' && r.severity === 'critical' ? 'row-crit' : null)" @more="more">
+                 :row-class="(r) => (r.id === focusId ? 'row-focus' : r.state === 'open' && r.severity === 'critical' ? 'row-crit' : null)" @more="more">
         <template #cell-created_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.created_at) }}</span>
           <div v-if="row.count > 1" class="sub">{{ t('alerts.seen', { n: row.count, at: fmtShortTime(row.last_seen) }) }}</div></template>
         <template #cell-severity="{ row }"><span class="badge" :class="row.severity === 'critical' ? 'b-blocked' : 'b-warn'">{{ t('alerts.sev.' + row.severity) }}</span></template>
@@ -68,7 +68,7 @@ import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
 import { fmtShortTime, safeText } from '../util.js'
 import { hasRole, refreshAlerts } from '../store.js'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
 import ErrorBox from '../components/ErrorBox.vue'
 import DataTable from '../components/DataTable.vue'
@@ -155,7 +155,27 @@ async function handle() {
     reload()
   } catch (e) { handleError.value = e } finally { busy.value = false }
 }
-onMounted(() => load(false))
+// /alerts?id=N (from the analysis page, a notification...): that alert, selected, its handling form open
+const route = useRoute()
+const focusId = ref(null)
+async function focusAlert() {
+  const id = Number(route.query.id)
+  if (!Number.isInteger(id) || id <= 0) return
+  focusId.value = id
+  let r = items.value.find((x) => x.id === id)
+  if (!r) {                    // handled already, or further down: look at every alert
+    filter.value = 'all'
+    await load(false)
+    r = items.value.find((x) => x.id === id)
+  }
+  if (r && r.state === 'open' && canHandle.value) pick(r)
+  else if (r) {
+    await nextTick()
+    const el = document.querySelector('.row-focus')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+onMounted(async () => { await load(false); focusAlert() })
 </script>
 
 <style scoped>
@@ -163,6 +183,7 @@ onMounted(() => load(false))
 .sub { color: var(--muted); font-size: .85em; margin-top: 2px; }
 .reason { white-space: pre-wrap; overflow-wrap: anywhere; }
 .rowacts { display: flex; flex-wrap: wrap; gap: 6px; }
+:deep(tr.row-focus) td { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
 :deep(tr.row-crit) td:first-child { box-shadow: inset 3px 0 0 var(--blocked); }
 .w-lg { width: 100%; max-width: 560px; }
 </style>

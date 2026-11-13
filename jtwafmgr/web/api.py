@@ -2,6 +2,7 @@
 import gzip
 import hashlib
 import ipaddress
+import collections
 import json
 import re
 import os
@@ -581,6 +582,34 @@ class _Provenance:
         return {'channel': 'site_file', 'automation': auto}
 
 
+MANAGED_CHANNELS = ('managed', 'adopted', 'change', 'person', 'token', 'analyst')
+_KIND_CATEGORY = {'exclusion': 'exclusion', 'confident_block': 'confident_block', 'redaction': 'redaction',
+                  'plugin': 'plugin_toggle', 'raw': 'other'}
+RULE_STATES = ('on', 'off', 'partial', 'inactive')
+
+
+def _disabled_managed(app):
+    """Managed rules that are switched off: not in the rendered files, so not among the loaded rules."""
+    wf = getattr(app, 'workflow', None)
+    if not wf:
+        return []
+    out = []
+    for it in wf.managed.items():
+        if it['enabled'] or not it['rule_id'] or it['kind'] == 'comment':
+            continue
+        try:
+            spec = json.loads(it['spec'] or '{}')
+        except ValueError:
+            spec = {}
+        out.append({'id': it['rule_id'], 'file': wf.managed.path(it['placement']), 'line': None, 'directive': 'SecRule',
+                    'phase': None, 'disruptive': None, 'msg': str(spec.get('msg') or ''), 'tags': [], 'severity': None,
+                    'source': 'local', 'managed': True, 'category': _KIND_CATEGORY.get(it['kind'], 'other'),
+                    'hosts': [], 'comment': it.get('comment') or '', 'text': it.get('text') or '', 'family': None,
+                    'state': 'off', 'state_detail': {'state': 'off', 'managed_item': it['id']},
+                    'provenance': {'channel': 'managed'}})
+    return out
+
+
 def rules(app, req):
     _, m = app.site.load()
     prov = _Provenance(app, m)
@@ -588,13 +617,33 @@ def rules(app, req):
     if src not in ('local', 'crs', 'plugin', 'vhost_inline', 'base', 'all'):
         raise ApiError(400, 'bad_request', 'unknown source')
     cat = req.query.get('category')
+    fam = req.query.get('family')
+    state = req.query.get('state')
+    if state and state not in RULE_STATES:
+        raise ApiError(400, 'bad_request', 'state: ' + ', '.join(RULE_STATES))
     q = (req.query.get('q') or '').lower()
-    out = []
+    lo_hi = app.cfg['waf']['local_range']
+    states = m.rule_states()
+    rows = []
     for r in m.rules:
         d = m.rule_dict(r)
         if src != 'all' and d['source'] != src:
             continue
-        if cat and d['category'] != cat:
+        st = states.get(d['id']) or {'state': 'on'}
+        d['state'], d['state_detail'] = st['state'], st
+        d['family'] = util.family_of(d['id'], lo_hi) if d['source'] == 'crs' and d['id'] else None
+        rows.append(d)
+    if src in ('local', 'all'):
+        rows += _disabled_managed(app)
+    # counts per category (CRS: attack family) and state, over the source, before the other filters
+    summary = {}
+    for d in rows:
+        key = (d['family'] or 'other') if src == 'crs' else (d['category'] or 'other')
+        c = summary.setdefault(key, {'key': key, 'on': 0, 'off': 0, 'partial': 0, 'inactive': 0})
+        c[d['state']] += 1
+    out = []
+    for d in rows:
+        if cat and d['category'] != cat or fam and (d['family'] or 'other') != fam or state and d['state'] != state:
             continue
         if q and not (q in str(d['id']) or q in d['msg'].lower() or q in d['comment'].lower()
                       or any(q in h for h in d['hosts'])):
@@ -605,14 +654,17 @@ def rules(app, req):
     start = max(0, _int_param(req, 'cursor') or 0)
     page = out[start:start + limit]
     for d in page:
-        d['provenance'] = prov.of(d)
+        if 'provenance' not in d:
+            d['provenance'] = prov.of(d)
+            d['managed'] = d['provenance'].get('channel') in MANAGED_CHANNELS
         if d['id'] is not None:
             d['hits_7d'], d['hits_30d'], d['last_hit'] = _hits(app, d['id'])
         else:
             d['hits_7d'] = d['hits_30d'] = 0
             d['last_hit'] = None
     nxt = str(start + limit) if start + limit < len(out) else None
-    return json_response(200, {'items': page, 'next_cursor': nxt, 'total': len(out)})
+    return json_response(200, {'items': page, 'next_cursor': nxt, 'total': len(out),
+                               'summary': sorted(summary.values(), key=lambda c: -sum(c[k] for k in RULE_STATES))})
 
 
 def _rule_id(req):
@@ -630,6 +682,10 @@ def rule(app, req):
     _, m = app.site.load()
     d = m.rule_dict(r)
     d['provenance'] = _Provenance(app, m).of(d)
+    d['managed'] = d['provenance'].get('channel') in MANAGED_CHANNELS
+    st = m.rule_states().get(rid) or {'state': 'on'}
+    d['state'], d['state_detail'] = st['state'], st
+    d['family'] = util.family_of(rid, app.cfg['waf']['local_range']) if d['source'] == 'crs' else None
     d['hits_7d'], d['hits_30d'], d['last_hit'] = _hits(app, rid)
     return json_response(200, d)
 
@@ -1027,6 +1083,48 @@ def change_create(app, req):
     return json_response(202, {'change_id': cid, 'direction': r['direction'], 'state': r['state'], 'rule_id': r['rule_id']})
 
 
+def _group_rule_ids(app, group):
+    """{'source': 'crs', 'key': <attack family>} or {'source': 'local', 'key': <category>} -> the rule ids in it."""
+    if not isinstance(group, dict) or group.get('source') not in ('crs', 'local') or not isinstance(group.get('key'), str):
+        raise ApiError(422, 'invalid_group', 'group: {source: crs|local, key}')
+    _, m = app.site.load()
+    lo_hi = app.cfg['waf']['local_range']
+    if group['source'] == 'crs':
+        ids = [r.id for r in m.rules if r.id is not None and m.source_of(r) == 'crs'
+               and (util.family_of(r.id, lo_hi) or 'other') == group['key']]
+    else:
+        ids = [d['id'] for d in (m.rule_dict(r) for r in m.rules) if d['id'] is not None and d['source'] == 'local'
+               and d['category'] == group['key']] + [d['id'] for d in _disabled_managed(app) if d['category'] == group['key']]
+    return sorted(set(ids))
+
+
+def rules_toggle(app, req):
+    """Switch several rules (or a whole category) on or off as ONE change. With "preview": true only the plan."""
+    b = req.body()
+    actor, via = (req.user['username'], 'user') if req.user is not None else (req.token['name'], 'api')
+    role = req.user['role'] if req.user is not None else None
+    if via == 'user' and role == 'viewer':
+        raise ApiError(403, 'forbidden')
+    action = b.get('action')
+    group = b.get('group')
+    ids = _group_rule_ids(app, group) if group is not None else b.get('rule_ids')
+    strict = group is not None and group.get('source') == 'crs' and action == 'disable'
+    wf = _wf(app)
+    try:
+        if b.get('preview'):
+            plan = wf.toggle_plan(action, ids, b.get('scope'))
+            kinds = collections.Counter('%s %s' % (o['op'], o.get('kind') or 'item') for o in plan['ops'])
+            return json_response(200, {'rule_ids': ids, 'operations': len(plan['ops']), 'by_kind': dict(kinds),
+                                       'skipped': plan['skipped'], 'strict': strict})
+        cid, plan = _wf(app).propose_toggle(action, ids, b.get('scope'), b.get('reason'), actor, via, role=role,
+                                      owner=req.token['created_by'] if via == 'api' else None, strict=strict)
+    except ChangeError as e:
+        raise _change_error(e)
+    r = wf.get(cid)
+    return json_response(202, {'change_id': cid, 'direction': r['direction'], 'state': r['state'],
+                               'operations': len(plan['ops']), 'skipped': plan['skipped'], 'strict': strict})
+
+
 def change_preview(app, req):
     """Render a template without creating anything: rule text, direction, next rule id, or the field error."""
     from .. import rulegen
@@ -1259,6 +1357,7 @@ def register_p2(router):
     R('GET', V + '/managed/items/{id}', managed_item, viewer('rules:read'))
     R('GET', V + '/changes', changes_list, viewer('changes:read'))
     R('POST', V + '/changes', change_create, ('role', 'viewer', 'changes:propose'))
+    R('POST', V + '/rules/toggle', rules_toggle, ('role', 'viewer', 'changes:propose'))
     R('POST', V + '/changes/preview', change_preview, ('role', 'operator', 'changes:propose'))
     R('GET', V + '/changes/{id}', change_get, viewer('changes:read'))
     R('POST', V + '/changes/{id}/approve', change_approve, ('role', 'approver', None))

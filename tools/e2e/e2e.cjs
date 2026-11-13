@@ -198,6 +198,29 @@ async function audit(page, where) {
   ok((await page.locator('.worldmap .wm-dot').count()) >= 1, 'events: world map of loaded events');
   await page.goto(base + '/lookup/203.0.113.9', { waitUntil: 'networkidle' });
   ok((await page.locator('.worldmap .wm-dot').count()) === 1, 'lookup: location on the world map');
+  // whether each rule runs: totals per state, a badge per rule, per attack type on the CRS page
+  await page.goto(base + '/rules?source=crs', { waitUntil: 'networkidle' });
+  ok((await page.locator('.statetotals .stchip').count()) === 4 && (await page.locator('.datatable .badge.b-ok, .datatable .badge.b-blocked').count()) > 0,
+     'rules: state totals and a state per rule');
+  await page.goto(base + '/crs', { waitUntil: 'networkidle' });
+  ok((await page.locator('.statetotals a.stchip').count()) === 4 && (await page.locator('.hb-row').count()) > 0, 'crs: rules per attack type and state');
+  // several rules at once: tick, "switch off" opens the change form with its preview (or why it cannot)
+  await page.goto(base + '/rules', { waitUntil: 'networkidle' });
+  await page.locator('input.rowsel').first().check();
+  ok((await page.locator('.selbar').innerText()).includes('1'), 'rules: a ticked rule is counted');
+  await page.locator('.selbar button.danger').click();
+  await page.waitForSelector('.ruletoggle', { timeout: 5000 }).catch(() => {});
+  await page.waitForLoadState('networkidle');
+  ok(await page.locator('.ruletoggle').isVisible() && (await page.locator('.ruletoggle .planbox, .ruletoggle .alert.error').count()) > 0,
+     'rules: switching off shows the plan or the reason');
+  await page.locator('.ruletoggle button.ghost').click();
+  ok(!(await page.locator('.ruletoggle').count()), 'rules: the change form closes');
+  // /alerts?id=N: that alert selected with its handling form open
+  const aid = await page.evaluate(async () => { const r = await (await fetch('/api/v1/alerts?state=open&limit=1')).json(); return r.items[0] && r.items[0].id })
+  await page.goto(base + '/alerts?id=' + aid, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(400);
+  ok(!!aid && (await page.locator('tr.row-focus').count()) === 1 && (await page.locator('textarea, .card h2:has-text("#' + aid + '")').count()) > 0,
+     'alerts: ?id opens that alert for handling');
   await page.goto(base + '/', { waitUntil: 'networkidle' });
   // notification preview: example message, language switch, Escape closes
   await page.goto(base + '/admin/notify', { waitUntil: 'networkidle' });

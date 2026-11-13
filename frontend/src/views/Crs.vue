@@ -33,6 +33,16 @@
             <Meter :value="detectionPl" :max="4" :warn-at="2" :crit-at="2" :label="t('chart.paranoia_detection')" :text="t('chart.level_of', { n: detectionPl, max: 4 })" /></div>
         </div>
       </section>
+      <section v-if="families.length" class="card">
+        <h2><Icon name="shield" /> {{ t('crs.rules_by_family') }}</h2>
+        <p class="muted small">{{ t('crs.rules_by_family_hint') }}</p>
+        <div class="statetotals">
+          <RouterLink v-for="s in STATES" :key="s" class="stchip" :to="{ path: '/rules', query: { source: 'crs', state: s } }">
+            <Icon :name="STATE_ICON[s]" /><span class="lg" :class="'tone-' + STATE_TONE[s]"></span>{{ t('rulestate.' + s) }} <b>{{ fmtNum(totals[s]) }}</b></RouterLink>
+        </div>
+        <HBars :items="familyBars" :series="stateSeries" pickable :open-label="t('filter.open')"
+               @pick="(it) => router.push({ path: '/rules', query: { source: 'crs', family: it.key } })" />
+      </section>
       <div class="cols2">
         <section class="card">
           <h2><Icon name="settings" /> {{ t('crs.engine') }}</h2>
@@ -82,6 +92,9 @@ import StatusCard from '../components/StatusCard.vue'
 import Icon from '../components/Icon.vue'
 import FlowSteps from '../components/FlowSteps.vue'
 import Meter from '../components/charts/Meter.vue'
+import HBars from '../components/charts/HBars.vue'
+import { useRouter } from 'vue-router'
+import { tOr } from '../i18n.js'
 
 const crs = ref(null)
 const error = ref(null)
@@ -110,6 +123,19 @@ function wafMode(sm) {
   return sm.min_block_score !== null && sm.mode !== 'off' ? t('waf.mode.blocking', { n: sm.min_block_score }) : t('waf.mode.' + sm.mode)
 }
 onMounted(() => { get('/waf/model').then((m) => { wafModel.value = m }).catch(() => { /* the page works without it */ }) })
+// CRS rules per attack type, and whether they run (the rules list's summary for the CRS source)
+const router = useRouter()
+const STATES = ['on', 'partial', 'off', 'inactive']
+const STATE_TONE = { on: 'good', partial: 'warning', off: 'blocked', inactive: 'muted' }
+const STATE_ICON = { on: 'check', partial: 'warning', off: 'hide', inactive: 'timer' }
+const families = ref([])
+const stateSeries = computed(() => STATES.map((k) => ({ key: k, label: t('rulestate.' + k), tone: STATE_TONE[k] })))
+const familyBars = computed(() => families.value.map((c) => ({
+  key: c.key, label: tOr('family.' + c.key, c.key), values: { on: c.on, partial: c.partial, off: c.off, inactive: c.inactive },
+  sub: t('rules.group_counts', { n: fmtNum(c.on + c.partial + c.off + c.inactive), off: fmtNum(c.off + c.partial), inactive: fmtNum(c.inactive) }),
+})))
+const totals = computed(() => Object.fromEntries(STATES.map((k) => [k, families.value.reduce((a, c) => a + (c[k] || 0), 0)])))
+onMounted(() => { get('/rules', { source: 'crs', limit: 1 }).then((r) => { families.value = r.summary || [] }).catch(() => { /* optional */ }) })
 onMounted(async () => {
   try { crs.value = await get('/crs') } catch (e) { error.value = e }
 })

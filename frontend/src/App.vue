@@ -115,7 +115,7 @@ const sourceUrl = computed(() => {
 
 // navigation: groups (each a drop-down) and a few direct links, drawn inline when they fit, else in the menu panel
 const navGroups = computed(() => [
-  { key: 'overview', to: '/', label: t('nav.overview'), icon: 'chart', exact: true },
+  { key: 'overview', to: '/', label: t('nav.overview'), icon: 'chart', exact: true, inlineIcon: true },
   { key: 'events', label: t('nav.g_events'), icon: 'list', badge: alertCount.open || 0, badgeTitle: t('nav.open_alerts'), items: [
     { to: '/events', label: t('nav.events_list'), icon: 'list' },
     { to: '/alerts', label: t('nav.alerts'), icon: 'bell', badge: alertCount.open || 0, badgeTitle: t('nav.open_alerts') },

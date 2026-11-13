@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.16
+# jt-waf-mgr v0.4.18
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -59,7 +59,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   Nextcloud Talk 與通用 webhook（HMAC-SHA256 簽章）；事件 × 管道矩陣；每個管道都能發送測試；重試、上限與發送記錄。來自請求
   的內容永遠不會變成格式、連結或提及。
 - **帳號**：scrypt 密碼、approver / admin 必須雙因素驗證、鎖定、含歷史與期限的密碼政策、帳號到期與審查；API 權杖有範圍與
-  允許來源網段（權杖可以提案，永遠不能核准）。
+  允許來源網段（權杖可以提案，永遠不能核准）。主機上的救援指令：`jt-waf-mgr user unlock | reset | passwd | disable | enable <名稱>`
+  （reset 會清除 TOTP，下次登入必須改密碼）；每個動作都寫進稽核記錄。
 - **完整性與合規**：系統檢查頁、合規頁、每日驗證過的備份與下載（需一次性驗證碼）、設定異動記錄與來源判斷（jt-waf-mgr、
   已登記的自動化或外部）。
 - **介面**：English、繁體中文、日本語；淺色與深色；手機與平板；GeoIP（MaxMind GeoLite2，由獨立的受限程序下載），以及在頁面內繪製的請求來源世界地圖（不使用任何地圖服務）。
@@ -81,8 +82,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.16.tar.gz.sig jt-waf-mgr-0.4.16.tar.gz
-tar xzf jt-waf-mgr-0.4.16.tar.gz && cd jt-waf-mgr-0.4.16
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.18.tar.gz.sig jt-waf-mgr-0.4.18.tar.gz
+tar xzf jt-waf-mgr-0.4.18.tar.gz && cd jt-waf-mgr-0.4.18
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼

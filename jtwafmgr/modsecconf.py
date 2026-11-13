@@ -1,6 +1,7 @@
 """Read-only ModSecurity v3 configuration parser: rules, removals, engine settings, CRS status."""
 import glob
 import os
+import collections
 import re
 
 from . import util
@@ -293,6 +294,90 @@ class ModsecConfig:
                 'tags': [v for k, v in acts if k == 'tag'][:30], 'severity': sev,
                 'source': self.source_of(r), 'managed': False, 'category': self.category_of(r),
                 'hosts': self.hosts_of(r), 'comment': r.comment, 'text': r.text}
+
+    def rule_states(self):
+        """rule id -> {'state', ...}: whether each loaded rule really runs.
+        off: removed for every request (SecRuleRemoveById / ByTag / ByMsg); partial: removed by a ctl:ruleRemoveById /
+        ByTag inside a rule (for some sites, paths or sources; 'hosts' lists the sites, '*' = not by site);
+        inactive: a CRS rule above the paranoia level (CRS skips it); on: everything else. Cached per load."""
+        if getattr(self, '_states', None) is not None:
+            return self._states
+        pl = self.tx_setvar(900000, 'blocking_paranoia_level') or self.tx_setvar(900000, 'paranoia_level') or 1
+        dpl = max(pl, self.tx_setvar(900001, 'detection_paranoia_level') or pl)
+        ids, ranges, tags, msgs = {}, [], [], []
+        for rm in self.removals:
+            where = '%s:%s' % (rm['file'], rm['line'])
+            if rm['directive'] == 'SecRuleRemoveById':
+                for t in rm['target_ids']:
+                    if isinstance(t, int):
+                        ids[t] = where
+                    else:
+                        lo, hi = t.split('-')
+                        ranges.append((int(lo), int(hi), where))
+            elif rm['directive'] in ('SecRuleRemoveByTag', 'SecRuleRemoveByMsg'):
+                pat = rm['args'].strip().strip('"\'')
+                (tags if rm['directive'] == 'SecRuleRemoveByTag' else msgs).append((pat, where))
+        p_ids, p_tags = collections.defaultdict(set), collections.defaultdict(set)
+        for r in self.rules:
+            if self.source_of(r) == 'crs':
+                # CRS's own mechanics (sampling 901450, the localhost exceptions 9051xx) remove "OWASP_CRS" for a
+                # few internal requests: not an exclusion of the site's, or every CRS rule would look switched off
+                continue
+            for k, v in r.all_actions():
+                if k != 'ctl':
+                    continue
+                m = re.match(r'ruleRemoveById\s*=\s*([\d,\s-]+)$', v)
+                t = re.match(r'ruleRemoveByTag\s*=\s*(.+)$', v)
+                hosts = set(self.hosts_of(r)) or {'*'}
+                if m:
+                    for part in m.group(1).split(','):
+                        part = part.strip()
+                        if re.fullmatch(r'\d+', part):
+                            p_ids[int(part)] |= hosts
+                        elif re.fullmatch(r'\d+-\d+', part):
+                            lo, hi = map(int, part.split('-'))
+                            if hi - lo <= 100000:
+                                for i in range(lo, hi + 1):
+                                    p_ids[i] |= hosts
+                elif t:
+                    p_tags[t.group(1).strip().strip('"\'')] |= hosts
+
+        def tag_hit(pat, rtags):
+            for x in rtags:
+                if x == pat:
+                    return True
+                try:
+                    if re.search(pat, x):
+                        return True
+                except re.error:
+                    pass
+            return False
+        out = {}
+        for r in self.rules:
+            if r.id is None:
+                continue
+            rtags = [v for k, v in r.all_actions() if k == 'tag']
+            msg = r.action('msg') or ''
+            where = ids.get(r.id) or next((w for lo, hi, w in ranges if lo <= r.id <= hi), None) \
+                or next((w for pat, w in tags if tag_hit(pat, rtags)), None) \
+                or next((w for pat, w in msgs if pat and pat in msg), None)
+            if where:
+                out[r.id] = {'state': 'off', 'where': where}
+                continue
+            lvl = next((int(m.group(1)) for x in rtags for m in [re.match(r'paranoia-level/(\d)$', x)] if m), None)
+            if self.source_of(r) == 'crs' and lvl and lvl > dpl:      # not evaluated at all: exclusions do not matter
+                out[r.id] = {'state': 'inactive', 'level': lvl, 'paranoia_level': dpl}
+                continue
+            hosts = set(p_ids.get(r.id, ()))
+            for pat, hs in p_tags.items():
+                if tag_hit(pat, rtags):
+                    hosts |= hs
+            if hosts:
+                out[r.id] = {'state': 'partial', 'hosts': sorted(hosts)[:20]}
+                continue
+            out[r.id] = {'state': 'on'}
+        self._states = out
+        return out
 
     def setting(self, name, default=None):
         v = default
