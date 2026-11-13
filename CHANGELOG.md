@@ -2,6 +2,12 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.28 (2026-11-14)
+
+- Country blocks: the sandbox's regression samples come from an address of an allowed country (the usual external test
+  address is in no country, so every sample was refused and the check failed). The impact on the change also shows the
+  last 7 days next to all logs kept: when nginx already has the same limit, the recent figures are what changes.
+
 ## 0.4.27 (2026-11-13)
 
 - Country blocks (optional, off by default): limit a site to some countries ("only Taiwan and Japan") or block some

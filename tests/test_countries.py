@@ -323,10 +323,14 @@ class TestWorkflow(unittest.TestCase):
         lines = []
         for ip, status in (('198.51.100.7', 200), ('203.0.113.9', 200), ('203.0.113.9', 404), ('192.0.2.5', 200),
                            ('192.168.77.3', 200)):
-            lines.append('%s - - [13/Nov/2026:10:00:00 +0800] "GET /x HTTP/1.1" %d 1 "-" "Mozilla/5.0"' % (ip, status))
+            lines.append('%s - - [13/Oct/2026:10:00:00 +0800] "GET /x HTTP/1.1" %d 1 "-" "Mozilla/5.0"' % (ip, status))
         wr(log, '\n'.join(lines) + '\n')
         ev = self.wf.evidence.country_impact(dict(self.spec, host={'mode': 'exact', 'value': 'app.example.com'}))
         self.assertEqual((ev['requests'], ev['refused'], ev['refused_sources'], ev['refused_success']), (5, 3, 2, 2))
+        self.assertEqual(ev['recent'], {'requests': 0, 'refused': 0, 'refused_success': 0})      # all from a month ago
+        wr(log, '203.0.113.9 - - [%s] "GET /x HTTP/1.1" 200 1 "-" "M"\n' % time.strftime('%d/%b/%Y:%H:%M:%S +0000', time.gmtime()), 'a')
+        ev = self.wf.evidence.country_impact(dict(self.spec, host={'mode': 'exact', 'value': 'app.example.com'}))
+        self.assertEqual(ev['recent'], {'requests': 1, 'refused': 1, 'refused_success': 1})
         self.assertEqual({c['country'] for c in ev['countries']}, {'US', 'JP'})
         self.assertTrue(ev['ok'])
 
@@ -339,6 +343,23 @@ class TestWorkflow(unittest.TestCase):
 
 
 class TestSandbox(unittest.TestCase):
+    def test_regression_samples_come_from_an_allowed_country(self):
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        app = App(env.cfg)
+        self.addCleanup(app.stop)
+        from jtwafmgr.sandbox import Sandbox
+        sb = Sandbox(app.cfg, app.site)
+        tests = [{'host': 'a.example.com', 'path': '/', 'source': 'external', 'src_ip': '198.51.100.1', 'expect': 200},
+                 {'host': 'a.example.com', 'path': '/', 'source': 'external', 'src_ip': '203.0.113.1', 'expect': 403}]
+        samples = [{'host': 'a.example.com', 'method': 'GET', 'path': '/app.js'}]
+        r = {'op': 'add', 'kind': 'country', 'direction': 'tighten', 'spec': '{}'}
+        reg = [c for c in sb.cases_for(r, tests, samples) if c['origin'] == 'regression']
+        self.assertEqual([c.get('src_ip') for c in reg], ['198.51.100.1'])
+        r = {'op': 'add', 'kind': 'confident_block', 'direction': 'tighten', 'spec': '{}'}
+        reg = [c for c in sb.cases_for(r, tests, samples) if c['origin'] == 'regression']
+        self.assertEqual([c.get('src_ip') for c in reg], [None])       # other changes: the usual external address
+
     def test_candidate_lists_built_inside_the_sandbox(self):
         env = TempEnv()
         self.addCleanup(env.cleanup)

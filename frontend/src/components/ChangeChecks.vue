@@ -78,6 +78,12 @@
           <span>{{ t('evidence.country_sources') }} <b>{{ fmtNum(ev.refused_sources) }}</b></span>
           <span :class="{ warn: ev.refused_success }">{{ t('evidence.country_success') }} <b>{{ fmtNum(ev.refused_success) }}</b></span>
         </div>
+        <div v-if="ev.recent" class="minitiles">
+          <span>{{ t('evidence.country_recent', { n: ev.recent_days }) }}</span>
+          <span>{{ t('evidence.country_requests', { host: safeText(ev.host, 80) }) }} <b>{{ fmtNum(ev.recent.requests) }}</b></span>
+          <span>{{ t('evidence.country_refused') }} <b>{{ fmtNum(ev.recent.refused) }}</b></span>
+          <span :class="{ warn: ev.recent.refused_success }">{{ t('evidence.country_success') }} <b>{{ fmtNum(ev.recent.refused_success) }}</b></span>
+        </div>
         <div v-if="ev.complete === false" class="alert warn">{{ t('evidence.incomplete') }}</div>
         <p class="muted small">{{ t('evidence.country_note') }}</p>
         <div v-if="(ev.countries || []).length" class="sub">{{ t('evidence.country_from') }}:

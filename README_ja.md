@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.27
+# jt-waf-mgr v0.4.28
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -46,7 +46,7 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   一致したすべてのルールを表示し、ワンクリックで除外やブロックを起案。
 - **一時的な IP ブロック**（0.4.24 で追加、任意）：メールサーバーの fail2ban、SOAR プレイブック、承認者が単一アドレスを
   一時的にブロックします。1 つの nginx deny リストがすべてのサイトに効きます。[一時的な IP ブロック](#一時的な-ip-ブロック任意)を参照。
-- **国別ブロック**（0.4.27 で追加、任意）：サイトを一部の国だけに限定、または一部の国をブロックします。一覧は 5 つの地域
+- **国別ブロック**（0.4.28 で追加、任意）：サイトを一部の国だけに限定、または一部の国をブロックします。一覧は 5 つの地域
   インターネットレジストリから毎日更新。サイトごとの制限は変更フローを通るルールです。[国別ブロック](#国別ブロック任意)を参照。
 - **リクエスト量**（0.4.23 で追加）：nginx のアクセスログにあるすべてのリクエストを、サイトと時間ごとに集計します（2xx、
   3xx、4xx、5xx、403、444、429、外部、バイト数。数値のみで、IP・URL・User-Agent は保存しません）。WAF がブロックした数と
@@ -112,8 +112,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.27.tar.gz.sig jt-waf-mgr-0.4.27.tar.gz
-tar xzf jt-waf-mgr-0.4.27.tar.gz && cd jt-waf-mgr-0.4.27
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.28.tar.gz.sig jt-waf-mgr-0.4.28.tar.gz
+tar xzf jt-waf-mgr-0.4.28.tar.gz && cd jt-waf-mgr-0.4.28
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

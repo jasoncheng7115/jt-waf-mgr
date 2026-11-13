@@ -250,13 +250,30 @@ class AccessLogs:
                         yield {'host': str(d.get('vhost') or host_from_name).lower(), 'method': parts[0] if parts else '',
                                'uri': uri, 'status': str(d.get('http_status') or ''),
                                'ip': str(d.get('srcip') or d.get('remote_addr') or ''), 'ua': str(d.get('user_agent') or ''),
-                               'esc': False}
+                               'esc': False, 'time': str(d.get('timestamp') or d.get('time_iso8601') or '')}
                     else:
                         m = COMBINED.match(line)
                         if m:
+                            t = line.find('[')
                             yield {'host': host_from_name if host_from_name not in ('access', 'access.log') else '(default)',
                                    'method': m.group(2), 'uri': m.group(3), 'status': m.group(4), 'ip': m.group(1),
-                                   'ua': m.group(5), 'esc': True}
+                                   'ua': m.group(5), 'esc': True, 'time': line[t + 1:t + 27] if t > 0 else ''}
+
+
+def _log_time(s):
+    """Epoch of an access log time: ISO 8601 (JSON logs) or 13/Nov/2026:10:00:00 +0800 (combined); None if neither."""
+    import datetime
+    if not s:
+        return None
+    for fmt in ('%Y-%m-%dT%H:%M:%S%z', '%d/%b/%Y:%H:%M:%S %z'):
+        try:
+            return datetime.datetime.strptime(s[:25] if 'T' in s else s, fmt).timestamp()
+        except ValueError:
+            continue
+    try:
+        return datetime.datetime.fromisoformat(s).timestamp()
+    except ValueError:
+        return None
 
 
 class Evidence:
@@ -396,6 +413,8 @@ class Evidence:
         never = rulegen.never_list(self.cfg)
         deadline = time.time() + self.cfg['evidence']['max_scan_seconds']
         total = refused = refused_ok = 0
+        recent = {'requests': 0, 'refused': 0, 'refused_success': 0}
+        cutoff = time.time() - 7 * 86400
         ips, countries, ok_samples = set(), collections.Counter(), collections.Counter()
         cache = {}
         for d in self.logs.lines(deadline):
@@ -403,6 +422,9 @@ class Evidence:
             if not (h == host or (rx and rx.match(h))):
                 continue
             total += 1
+            ts = _log_time(d.get('time'))
+            new = ts is not None and ts >= cutoff
+            recent['requests'] += new
             ip = d['ip']
             if ip not in cache:
                 if util.ip_in(ip, never):
@@ -417,14 +439,17 @@ class Evidence:
             if cc is None:
                 continue
             refused += 1
+            recent['refused'] += new
             ips.add(ip)
             countries[cc] += 1
             if d['status'][:1] in '23':
                 refused_ok += 1
+                recent['refused_success'] += new
                 ok_samples[(cc, d['status'], util.clip(d['uri'].split('?', 1)[0], 80))] += 1
         complete = time.time() <= deadline
         return {'ok': True, 'informational': True, 'complete': complete, 'host': host, 'mode': spec.get('mode'),
                 'requests': total, 'refused': refused, 'refused_sources': len(ips), 'refused_success': refused_ok,
+                'recent_days': 7, 'recent': recent,
                 'countries': [{'country': k, 'requests': n} for k, n in countries.most_common(15)],
                 'success_samples': [{'country': k[0], 'status': k[1], 'path': k[2], 'count': n}
                                     for k, n in ok_samples.most_common(10)]}

@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.27
+# jt-waf-mgr v0.4.28
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -49,7 +49,7 @@ something you can read, and every change into a workflow you can trust:
   URL; event detail with every matched rule; one click to draft an exclusion or a block.
 - **Temporary IP blocks** (new in 0.4.24, optional): fail2ban on a mail server, a SOAR playbook or an approver blocks
   a single address for a while; one nginx deny list covers every site. See [Temporary IP blocks](#temporary-ip-blocks-optional).
-- **Country blocks** (new in 0.4.27, optional): limit a site to some countries, or block some countries, with lists
+- **Country blocks** (new in 0.4.28, optional): limit a site to some countries, or block some countries, with lists
   from the five regional Internet registries, refreshed daily. Each site's limit is a rule through the change workflow.
   See [Country blocks](#country-blocks-optional).
 - **Request volume** (new in 0.4.23): every request in the nginx access logs, counted per site and hour (2xx, 3xx,
@@ -122,8 +122,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.27.tar.gz.sig jt-waf-mgr-0.4.27.tar.gz
-tar xzf jt-waf-mgr-0.4.27.tar.gz && cd jt-waf-mgr-0.4.27
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.28.tar.gz.sig jt-waf-mgr-0.4.28.tar.gz
+tar xzf jt-waf-mgr-0.4.28.tar.gz && cd jt-waf-mgr-0.4.28
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

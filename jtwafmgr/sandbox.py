@@ -342,6 +342,17 @@ http {
             return [b['spec'] for b in spec.get('ops', []) if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify')]
         return [spec] if r['kind'] == 'confident_block' and r['op'] in ('add', 'modify') else []
 
+    @staticmethod
+    def _has_country(r):
+        if r['kind'] == 'country':
+            return True
+        if r['op'] == 'bundle':
+            try:
+                return any(b.get('kind') == 'country' for b in json.loads(r['spec']).get('ops', []))
+            except (ValueError, AttributeError):
+                return False
+        return False
+
     def cases_for(self, r, user_tests, samples):
         cases = []
         blocks = self._blocks(r)
@@ -360,10 +371,16 @@ http {
                     cases.append(dict(t, source='internal', expect=200, origin='internal-same'))
                 elif sources == {'all'}:
                     cases.append(dict(t, source='internal', expect=403, origin='internal-same'))
+        # a country rule refuses the sandbox's usual external address (it is in no country): the regression samples
+        # then come from an address the rule lets through (its own "passes" test), so they test the rule's other effects
+        pass_ip = None
+        if self._has_country(r):
+            pass_ip = next((t['src_ip'] for t in user_tests if t.get('src_ip') and t.get('expect') == 200
+                            and t.get('source', 'external') == 'external'), None)
         if r['direction'] == 'tighten' or r['kind'] in ('raw', 'bundle'):
             for s in samples:
-                cases.append({'host': s['host'], 'method': s['method'], 'path': s['path'], 'source': 'external',
-                              'expect': 'not403', 'origin': 'regression'})
+                cases.append(dict({'host': s['host'], 'method': s['method'], 'path': s['path'], 'source': 'external',
+                                   'expect': 'not403', 'origin': 'regression'}, **({'src_ip': pass_ip} if pass_ip else {})))
         return cases
 
     def run_change(self, r, files, user_tests, managed, samples=None):
