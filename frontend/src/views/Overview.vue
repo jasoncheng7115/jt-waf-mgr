@@ -392,8 +392,6 @@ onUnmounted(() => clearInterval(timer))
 .custompanel .field { margin: 0; }
 .custompanel p { flex-basis: 100%; margin: 0; }
 .brushhint { margin: 4px 0 0; display: flex; gap: 5px; align-items: center; }
-.ovfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 10px; }
 .fhint { display: inline-flex; align-items: center; gap: 4px; }
 .ovbody { display: flex; flex-direction: column; gap: 14px; transition: opacity .15s; }
 .ovbody.stale { opacity: .5; pointer-events: none; }

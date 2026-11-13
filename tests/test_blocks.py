@@ -169,12 +169,43 @@ class LogicTest(unittest.TestCase):
         st = self.b.status()
         self.assertTrue(st['included'], st)
         self.assertEqual(st['included_in'], 'http')
+        # an empty list (no deny lines at all) is still seen as loaded: the include itself is what counts
+        wr(path, blocks.render([], path))
+        self.assertTrue(self.b.status()['included'])
+        # loaded inside a server instead: reported as such, not as covering every site
+        wr(conf, text)
+        vh = os.path.join(site, 'vhost', sorted(os.listdir(os.path.join(site, 'vhost')))[0])
+        wr(vh, rd(vh).replace('server {', 'server {\n    include %s;' % path, 1))
+        st = self.b.status()
+        self.assertFalse(st['included'])
+        self.assertEqual(st['included_in'], 'server')
 
-    def _probe(self, ip, paths, ago=60):
+    def test_list_has_no_allow(self):
+        # nginx stops at the first allow / deny that matches within a level: an "allow all" at the end of this file
+        # would turn an administrator's own "deny" after the include (same http{}) from 403 into 200
+        for entries in ([], ['203.0.113.7', '2001:db8::/64']):
+            body = [ln for ln in blocks.render(entries, '/x').splitlines() if ln and not ln.startswith('#')]
+            self.assertEqual(body, ['deny %s;' % e for e in entries])
+
+    def _probe(self, ip, paths, ago=60, status=403):
         for i, p in enumerate(paths):
-            self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, outcome, rule_ids, "
-                          "local_rule_ids, families, message, matches) VALUES ('n', ?, ?, 'www.example.com', 'GET', ?, '', ?, "
-                          "'external', 'blocked', '', '', '', '', '[]')", ('%s-%d-%d' % (ip, i, ago), time.time() - ago, p, ip))
+            self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, status, outcome, "
+                          "rule_ids, local_rule_ids, families, message, matches) VALUES ('n', ?, ?, 'www.example.com', 'GET', ?, '', "
+                          "?, 'external', ?, ?, '', '', '', '', '[]')",
+                          ('%s-%d-%d-%d' % (ip, i, ago, status), time.time() - ago, p, ip, status,
+                           'blocked' if status == 403 else 'detected'))
+
+    def test_auto_recon_leaves_answered_and_ambiguous_sources(self):
+        self.env.cfg.data['blocks']['auto_recon'] = True
+        cfgs = ['/team%d/config.json' % i for i in range(5)]
+        self._probe('203.0.113.80', cfgs, status=200)              # five config.json, all answered: a real front end
+        self._probe('203.0.113.81', cfgs, status=404)              # five config.json, not found: no unmistakable name
+        secrets = ['/.env', '/.aws/credentials', '/wp-config.php.bak', '/id_rsa.pem', '/backup.sql']
+        self._probe('203.0.113.82', secrets)                       # refused secrets ...
+        self._probe('203.0.113.82', ['/settings.json'], status=200)  # ... but one answered 2xx: for a person to look at
+        self._probe('203.0.113.83', ['/a/config.json', '/b/config.json', '/c/settings.yml', '/d/database.yml'], status=404)
+        self._probe('203.0.113.83', ['/.git/config'], status=403)  # four ambiguous plus one unmistakable: a scanner
+        self.assertEqual(self.b.auto_recon(), ['203.0.113.83'])
 
     def test_auto_recon(self):
         secrets = ['/.env', '/config.json', '/.aws/credentials', '/wp-config.php.bak', '/docker-compose.yml', '/id_rsa.pem']
@@ -202,7 +233,7 @@ class LogicTest(unittest.TestCase):
     def test_render(self):
         t = blocks.render(['203.0.113.7', '2001:db8::/64'], '/etc/nginx/jt-waf-mgr/blocked-ips.conf')
         lines = [l for l in t.splitlines() if not l.startswith('#')]
-        self.assertEqual(lines, ['deny 203.0.113.7;', 'deny 2001:db8::/64;', 'allow all;'])
+        self.assertEqual(lines, ['deny 203.0.113.7;', 'deny 2001:db8::/64;'])
 
 
 class ApplierTest(unittest.TestCase):
@@ -234,6 +265,29 @@ class ApplierTest(unittest.TestCase):
         self.assertFalse(r['changed'])
         self.assertEqual(len(self.reloads), 1)
 
+    def test_failed_reload_is_not_taken_as_loaded(self):
+        # the list is written and nginx -t passes, but the reload fails: the file goes back to what nginx runs, and
+        # sending the same list again reloads (it is not "unchanged" just because a file once had that content)
+        def bad_reload(wait):
+            raise Fail('reload', 'reload failed: signal not sent')
+        self.ap.reload = bad_reload
+        with self.assertRaises(Fail):
+            self.ap.blocks_write(self.ap.check_blocks(self.req(['203.0.113.7'])))
+        self.assertFalse(os.path.exists(self.file))
+        self.ap.reload = lambda wait: self.reloads.append(wait) or 'reloaded (test)'
+        r = self.ap.blocks_write(self.ap.check_blocks(self.req(['203.0.113.7'])))
+        self.assertTrue(r['changed'])
+        self.assertEqual(self.reloads, [0])
+        # a crash between writing and reloading: the file already has the list, nothing says nginx loaded it
+        os.unlink(os.path.join(self.d, 'state', 'blocks-loaded.json'))
+        r = self.ap.blocks_write(self.ap.check_blocks(self.req(['203.0.113.7'])))
+        self.assertTrue(r['changed'])
+        self.assertIn('not yet loaded', r['summary'])
+        self.assertEqual(self.reloads, [0, 0])
+        r = self.ap.blocks_write(self.ap.check_blocks(self.req(['203.0.113.7'])))
+        self.assertFalse(r['changed'])
+        self.assertEqual(self.reloads, [0, 0])
+
     def test_nginx_t_failure_restores(self):
         self.ap.blocks_write(self.ap.check_blocks(self.req(['203.0.113.7'])))
         before = rd(self.file)
@@ -256,6 +310,24 @@ class ApplierTest(unittest.TestCase):
             self.ap.check_blocks(bad)
         with self.assertRaises(Fail):
             self.ap.check_blocks(self.req(['203.0.113.007']))     # not normalised
+
+    def test_root_reads_the_protected_networks_set_in_the_web_interface(self):
+        # a range added only in Settings (stored in the database) is refused by the root program too
+        from jtwafmgr.db import Database
+        from jtwafmgr import uisettings
+        db = os.path.join(self.d, 'jt.db')
+        self.cfg.data['paths']['db'] = db
+        self.ap.check_blocks(self.req(['203.0.113.7']))                   # nothing stored yet: allowed
+        d = Database(db)
+        d.migrate()
+        d.x("INSERT INTO settings(key, value, updated_by, updated_at) VALUES (?, ?, 'admin1', 0)",
+            (uisettings.PREFIX + 'blocks.protected', json.dumps(['203.0.113.0/26'])))
+        with self.assertRaises(Fail):
+            self.ap.check_blocks(self.req(['203.0.113.7']))
+        self.ap.check_blocks(self.req(['203.0.113.70']))                  # outside that range: still allowed
+        d.x("UPDATE settings SET value='not json' WHERE key=?", (uisettings.PREFIX + 'blocks.protected',))
+        with self.assertRaises(Fail):                                     # unreadable: fail closed
+            self.ap.check_blocks(self.req(['203.0.113.70']))
 
     def test_link_refused(self):
         os.makedirs(os.path.dirname(self.file))

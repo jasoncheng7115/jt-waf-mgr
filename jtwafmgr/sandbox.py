@@ -97,29 +97,17 @@ class Sandbox:
                 p = mm.group(2)
                 p = p if os.path.isabs(p) else os.path.join(os.path.dirname(main), p)
                 if add and not added and add[1] == p:
-                    out.append('Include %s' % p)
-                    out += ['Include %s' % x for x in add[2]]
+                    # the anchor (modsecurity.conf, with SecAuditLog) and the new CRS files go through the same
+                    # rewrite as any other Include: the sandbox never writes the production audit log
+                    out.append(self._include(p, replace, conf, root, len(out)))
+                    out += [self._include(x, replace, conf, root, len(out) + j) for j, x in enumerate(add[2])]
                     added = True
                     continue
                 if crs_swap and p.startswith(crs_swap[0].rstrip('/') + '/'):
-                    out.append('Include %s' % (crs_swap[1].rstrip('/') + p[len(crs_swap[0].rstrip('/')):]))
-                    continue
-                if p in replace:
-                    dst = os.path.join(conf, 'cand-%s' % os.path.basename(p))
-                    with open(dst, 'w', encoding='utf-8') as fh:
-                        fh.write(replace[p])
-                    out.append('Include %s' % dst)
-                elif not any(ch in p for ch in '*?[') and os.path.isfile(p) and self._needs_rewrite(p):
-                    dst = os.path.join(conf, 'rw-%d-%s' % (len(out), os.path.basename(p)))
-                    with open(p, encoding='utf-8', errors='replace') as fh:
-                        body = fh.read()
-                    with open(dst, 'w', encoding='utf-8') as fh:
-                        fh.write(AUDIT_REWRITE.sub(lambda x: self._audit_line(x, root), body))
-                    out.append('Include %s' % dst)
-                else:
-                    out.append('Include %s' % p)
+                    p = crs_swap[1].rstrip('/') + p[len(crs_swap[0].rstrip('/')):]
+                out.append(self._include(p, replace, conf, root, len(out)))
             if add and not added:
-                out += ['Include %s' % x for x in add[2]]
+                out += [self._include(x, replace, conf, root, len(out) + j) for j, x in enumerate(add[2])]
             dst = os.path.join(conf, 'main-%d.conf' % i)
             with open(dst, 'w', encoding='utf-8') as fh:
                 fh.write('\n'.join(out) + '\n')
@@ -152,6 +140,23 @@ http {
         with open(os.path.join(conf, 'nginx.conf'), 'w') as fh:
             fh.write(nginx_conf)
         return port
+
+    def _include(self, p, replace, conf, root, n):
+        """The Include line for production file p in the sandbox: the candidate text when p is replaced, a copy
+        with SecAuditLog / SecDebugLog / directories pointed into the sandbox when p sets them, else p itself."""
+        if p in replace:
+            dst = os.path.join(conf, 'cand-%s' % os.path.basename(p))
+            with open(dst, 'w', encoding='utf-8') as fh:
+                fh.write(replace[p])
+            return 'Include %s' % dst
+        if not any(ch in p for ch in '*?[') and os.path.isfile(p) and self._needs_rewrite(p):
+            dst = os.path.join(conf, 'rw-%d-%s' % (n, os.path.basename(p)))
+            with open(p, encoding='utf-8', errors='replace') as fh:
+                body = fh.read()
+            with open(dst, 'w', encoding='utf-8') as fh:
+                fh.write(AUDIT_REWRITE.sub(lambda x: self._audit_line(x, root), body))
+            return 'Include %s' % dst
+        return 'Include %s' % p
 
     @staticmethod
     def _needs_rewrite(path):
@@ -380,15 +385,21 @@ http {
         return self._compare(requests, old, new)
 
     @staticmethod
-    def _compare(requests, old, new):
+    def _refused(r):
+        """Refused in the sandbox: any 4xx / 5xx. The sandbox backend answers 200 to everything, so an error status
+        comes from ModSecurity (403, or a site's own status:406 / 400 ...) or nginx, never from the application."""
+        return isinstance(r.get('status'), int) and r['status'] >= 400
+
+    @classmethod
+    def _compare(cls, requests, old, new):
         diffs, more, fewer = [], 0, 0
         for c, a, b in zip(requests, old, new):
             if a['status'] != b['status'] or sorted(a['rules']) != sorted(b['rules']):
-                more += a['status'] != 403 and b['status'] == 403
-                fewer += a['status'] == 403 and b['status'] != 403
+                more += not cls._refused(a) and cls._refused(b)
+                fewer += cls._refused(a) and not cls._refused(b)
                 diffs.append({'request': _case_view(c), 'before': [a['status'], a['rules']], 'after': [b['status'], b['rules']]})
-        return {'ok': True, 'requests': len(requests), 'blocked_before': sum(1 for a in old if a['status'] == 403),
-                'blocked_after': sum(1 for b in new if b['status'] == 403), 'newly_blocked': more, 'no_longer_blocked': fewer,
+        return {'ok': True, 'requests': len(requests), 'blocked_before': sum(1 for a in old if cls._refused(a)),
+                'blocked_after': sum(1 for b in new if cls._refused(b)), 'newly_blocked': more, 'no_longer_blocked': fewer,
                 'changed': len(diffs), 'differences': diffs[:50]}
 
     def run_equivalence(self, files, managed, requests):

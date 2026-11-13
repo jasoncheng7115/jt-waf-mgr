@@ -25,14 +25,22 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand { display: flex; align-items: center; gap: 9px; font: 700 19px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
-nav.links { display: flex; gap: 12px; flex: 1; overflow-x: auto; white-space: nowrap; }
-nav.links a { color: var(--text); font-size: 14.5px; font-weight: 500; } nav.links a:hover { color: var(--blue); text-decoration: none; }
-@media (max-width: 1500px) { nav.links { gap: 9px; } nav.links a { font-size: 13.5px; } }
-@media (max-width: 1240px) { nav.links { gap: 7px; } nav.links a { font-size: 12.5px; } }
-.langs { display: flex; gap: 4px; }
-.langs button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; }
-.langs button:hover { border-color: var(--blue); }
-.langs button.on { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 3px rgba(37, 99, 196, .10); }
+header.top .wrap { max-width: 1320px; }
+nav.links { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6px 9px; border-radius: 8px; }
+nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
+@media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }
+@media (max-width: 1140px) { nav.links a { padding: 5px 5px; font-size: 12.5px; } }
+.lang { position: relative; flex: none; }
+.lang-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.lang-btn:hover, .lang-btn[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.lang-btn svg { width: 16px; height: 16px; flex: none; }
+.lang-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 150px; margin: 0; padding: 6px; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(15, 23, 42, .12); z-index: 20; }
+.lang-menu[hidden] { display: none; }
+.lang-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 14px; border: 0; background: none; padding: 7px 10px; border-radius: 7px; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; text-align: left; }
+.lang-menu button:hover, .lang-menu button:focus-visible { background: #eef4fd; color: var(--blue); outline: none; }
+.lang-menu button[aria-checked="true"] { color: var(--blue); font-weight: 600; }
+.lang-menu button[aria-checked="true"]::after { content: "\2713"; }
 .hero { padding: 72px 0 56px; border-bottom: 1px solid var(--border);
   background: radial-gradient(1000px 520px at 85% -10%, rgba(58, 134, 230, .16), transparent 60%),
               radial-gradient(760px 480px at 0% 10%, rgba(99, 102, 241, .09), transparent 55%),
@@ -161,14 +169,23 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <a href="#notify" data-t="nav_notify"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
     <a href="#install" data-t="nav_install"></a><a href="#specs" data-t="nav_specs"></a><a href="how.html" id="how-link" data-t="nav_how"></a>
   </nav>
-  <div class="langs" role="group" aria-label="Language">
-    <button type="button" data-lang="en">EN</button><button type="button" data-lang="zh-TW">繁中</button><button type="button" data-lang="ja">日本語</button>
+  <div class="lang">
+    <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu" aria-label="Language">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
+      <span id="lang-cur">EN</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="lang-menu" id="lang-menu" role="menu" hidden>
+      <button type="button" role="menuitemradio" data-lang="en" lang="en">English</button>
+      <button type="button" role="menuitemradio" data-lang="zh-TW" lang="zh-TW">繁體中文</button>
+      <button type="button" role="menuitemradio" data-lang="ja" lang="ja">日本語</button>
+    </div>
   </div>
 </div></header>
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.25</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.26</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -479,7 +496,7 @@ const T = {
   f12: 'A SIEM, a SOAR playbook or a script uses API tokens with scopes and allowed source addresses: read events and alerts, propose changes. Tokens can never approve. See the API manual.',
   ai_rec_h: 'Which LLM',
   ai_rec1: 'Always self-hosted: an OpenAI-compatible server (llama.cpp server, vLLM, Ollama) with JSON-schema-constrained answers; without them plain JSON mode is used and answers are less reliable',
-  ai_rec2: 'An instruction model of about 14B parameters or more, at 4-bit quantization or better; 27–32B dense or 30B-class MoE recommended, for example Qwen3 32B or Qwen3 30B-A3B, Gemma 3 27B, gpt-oss-20b, Llama 3.3 70B',
+  ai_rec2: 'An instruction model of about 14B parameters or more, at 4-bit quantization or better; 27–32B dense or 30B-class MoE recommended, with Qwen 3.8 or later or Gemma 4 or later (older versions are not recommended), or gpt-oss-20b',
   ai_rec3: 'A context window of at least 16k tokens: one batch of 11 candidates used about 3k input and 3.5k output tokens and took about 85 seconds on the production server',
   ai_rec4: 'Models of 8B and below or 2–3-bit quantizations contradict themselves more between runs (in production a 3-bit model called the same probe an attack twice and a false positive once); program-side scanner rules and a verdict history counter this, a stronger model helps. On slow hardware, raise the LLM timeout (up to 900 s)',
   cn_h: 'Connect to the management interface',
@@ -626,7 +643,7 @@ const T = {
   f12: 'SIEM、SOAR 劇本或指令稿使用有範圍、限制來源位址的 API 權杖：讀取事件與警示、提出變更。權杖永遠不能核准。詳見 API 介接手冊。',
   ai_rec_h: '建議的 LLM',
   ai_rec1: '一律用地端伺服器：OpenAI 相容（llama.cpp server、vLLM、Ollama），並支援以 JSON schema 限制回答格式；不支援時改用一般 JSON 模式，回答比較不可靠',
-  ai_rec2: '約 14B 參數以上的指令模型，4-bit 量化或更好；建議 27–32B 的 dense 模型或 30B 級 MoE，例如 Qwen3 32B 或 Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B',
+  ai_rec2: '約 14B 參數以上的指令模型，4-bit 量化或更好；建議 27–32B 的 dense 模型或 30B 級 MoE，Qwen 要 3.8 以上、Gemma 要 4 以上（較舊的版本不建議），或 gpt-oss-20b',
   ai_rec3: '上下文長度至少 16k tokens：實測一批 11 個候選約用 3k 輸入與 3.5k 輸出 tokens，在正式機上約 85 秒',
   ai_rec4: '8B 以下的模型或 2–3-bit 量化，每次的判斷比較容易前後矛盾（正式環境曾有 3-bit 量化模型把同一個探測兩次判為攻擊、一次判為誤判）；程式端的掃描器規則與判斷歷史可以抵銷，但模型強一點有幫助。硬體較慢時請把 LLM 逾時調高（最多 900 秒）',
   cn_h: '連到管理介面',
@@ -773,7 +790,7 @@ const T = {
   f12: 'SIEM、SOAR のプレイブック、スクリプトは、スコープと許可する送信元アドレス付きの API トークンで、イベントやアラートの取得、変更の提案ができます。トークンは承認できません。API 連携マニュアルを参照してください。',
   ai_rec_h: '推奨する LLM',
   ai_rec1: '常にオンプレミス：OpenAI 互換サーバー（llama.cpp server、vLLM、Ollama）で、JSON スキーマで形式を制約した回答に対応しているもの。非対応なら通常の JSON モードとなり、回答の信頼性が下がります',
-  ai_rec2: '約 14B パラメータ以上の指示モデル、4 ビット量子化以上。27–32B の dense か 30B 級 MoE を推奨。例：Qwen3 32B または Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B',
+  ai_rec2: '約 14B パラメータ以上の指示モデル、4 ビット量子化以上。27–32B の dense か 30B 級 MoE を推奨。Qwen は 3.8 以上、Gemma は 4 以上（それより古いものは推奨しません）、または gpt-oss-20b',
   ai_rec3: 'コンテキスト長は 16k トークン以上：実測では候補 11 件の 1 バッチで入力約 3k・出力約 3.5k トークン、本番サーバーで約 85 秒',
   ai_rec4: '8B 以下のモデルや 2–3 ビット量子化は実行ごとの判定が矛盾しやすくなります（本番では 3 ビット量子化のモデルが同じ探査を 2 回は攻撃、1 回は誤検知と判定）。プログラム側のスキャナー規則と判定履歴で補いますが、強いモデルのほうが有利です。遅いハードウェアでは LLM のタイムアウトを延ばしてください（最大 900 秒）',
   cn_h: '管理画面への接続',
@@ -800,7 +817,8 @@ function apply(lang) {
   const d = T[lang]
   document.documentElement.lang = lang
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
-  for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
+  for (const b of document.querySelectorAll('#lang-menu button')) b.setAttribute('aria-checked', b.dataset.lang === lang ? 'true' : 'false')
+  document.getElementById('lang-cur').textContent = { en: 'EN', 'zh-TW': '繁中', ja: '日本語' }[lang]
   for (const a of document.querySelectorAll('a[data-shot]')) {
     const thumb = 'shots/' + lang + '/thumb/' + a.dataset.shot + '.webp'
     a.querySelector('img').src = thumb
@@ -815,7 +833,23 @@ function apply(lang) {
   document.getElementById('api-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/API' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
-for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))
+// one language button; the menu opens below it. Escape, a click outside or picking a language closes it.
+const langBtn = document.getElementById('lang-btn'), langMenu = document.getElementById('lang-menu')
+function langOpen(open, focus) {
+  langMenu.hidden = !open
+  langBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+  if (open && focus) (langMenu.querySelector('[aria-checked="true"]') || langMenu.querySelector('button')).focus()
+  if (!open && focus) langBtn.focus()
+}
+langBtn.addEventListener('click', () => langOpen(langMenu.hidden, true))
+for (const b of langMenu.querySelectorAll('button')) b.addEventListener('click', () => { apply(b.dataset.lang); langOpen(false, true) })
+langMenu.addEventListener('keydown', (e) => {
+  const items = [...langMenu.querySelectorAll('button')], i = items.indexOf(document.activeElement)
+  if (e.key === 'Escape') { e.preventDefault(); langOpen(false, true) }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus() }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus() }
+})
+document.addEventListener('click', (e) => { if (!langMenu.hidden && !e.target.closest('.lang')) langOpen(false, false) })
 // screenshots open large in the page; X, Escape or a click outside the picture closes it
 const lb = document.getElementById('lb')
 for (const a of document.querySelectorAll('a[data-shot]')) a.addEventListener('click', (e) => {

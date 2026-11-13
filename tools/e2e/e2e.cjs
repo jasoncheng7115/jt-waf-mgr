@@ -332,6 +332,17 @@ async function audit(page, where) {
   const fav = await lp.request.get(base + '/favicon.svg');
   ok(fav.status() === 200, 'favicon served');
   await lp.screenshot({ path: SHOTS + '/login.png' });
+  // after an upgrade the login page shows the reload notice right above the login box, as wide as the box
+  await lp.route('**/api/v1/meta', (r) => r.fulfill({ contentType: 'application/json',
+    body: JSON.stringify({ name: 'jt-waf-mgr', version: '99.0.0', source_url: '', sso_enabled: false, node_id: '', login_notice: '', password_policy: null }) }));
+  await lp.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await lp.waitForSelector('.newver', { timeout: 5000 }).catch(() => {});
+  const nb = await lp.locator('.newver').boundingBox();
+  const ab = await lp.locator('.authbox').boundingBox();
+  ok(nb && ab && Math.abs(nb.width - ab.width) < 2 && Math.abs(nb.x - ab.x) < 2 && nb.y + nb.height <= ab.y && ab.y - (nb.y + nb.height) < 30,
+    'login: the reload notice sits right above the login box, as wide as it');
+  await lp.screenshot({ path: SHOTS + '/login-newver.png' });
+  await lp.unroute('**/api/v1/meta');
   // phone and tablet widths: no page scrolls sideways, the menu reaches every page group
   for (const [name, vp] of [['phone', { width: 375, height: 812 }], ['tablet', { width: 768, height: 1024 }]]) {
     const m = await login(browser, 'admin', 'light', vp);

@@ -426,7 +426,7 @@ SIEM，請在網頁介面的設定中新增外送記錄目的地（syslog 等格
 運作方式：jt-waf-mgr 把清單存在資料庫，由 root 的套用程式寫進一個 nginx 檔案（每行 `deny <位址>;`，最快每
 `reload_seconds` 秒寫一次，預設 60），測試 nginx 後 reload。管理者在 `http { }` 裡加一次 include 這個檔案；jt-waf-mgr
 本身不修改 nginx 設定。http 層的 `deny` 涵蓋所有站台（沒開 ModSecurity 的也算），但自己有 `allow` / `deny` 的 server
-與 location 例外（「封鎖中的 IP」頁會列出）。在「設定」啟用之前，每個呼叫都回 409 `blocks_off`。
+與 location 例外（「封鎖中的 IP」頁會列出）。封鎖從 reload 起對新的請求與連線生效；封鎖前就已經開著的連線（WebSocket、長時間下載）不會被切斷，會持續到它自己結束。在「設定」啟用之前，每個呼叫都回 409 `blocks_off`。
 
 - **`POST /blocks`**（scope `blocks:write`）：內容 `{"ip", "ttl", "source", "reason"}`。
   - `ip`：單一位址（IPv4 或 IPv6）。網段只有人在網頁介面可以封鎖（最大 /24 或 /64）。

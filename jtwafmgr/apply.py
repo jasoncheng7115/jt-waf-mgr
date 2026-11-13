@@ -226,12 +226,21 @@ class Applier:
             time.sleep(0.5)
         else:
             raise Fail('reload', 'no new worker processes after reload (configuration not loaded)')
+        # New requests already use the new configuration. Old workers finish their open requests, close idle
+        # keep-alive connections and exit; only long-lived ones (WebSocket, long downloads) keep them for a while.
         t0 = time.time()
-        while time.time() - t0 < wait_old:
-            if not any(down for _, _, down in self.workers()):
-                return 'old workers gone after %ds' % (time.time() - t0)
+        while True:
+            draining = sum(1 for _, _, down in self.workers() if down)
+            if not draining:
+                return 'reloaded; old workers gone after %ds' % (time.time() - t0)
+            if time.time() - t0 >= wait_old:
+                break
             time.sleep(2)
-        return 'old workers still draining after %ds (long-lived connections)' % wait_old
+        if not wait_old:
+            return ('reloaded; new requests use the new configuration, %d old worker(s) still finishing '
+                    'open connections (not waited for)' % draining)
+        return ('reloaded; new requests use the new configuration, %d old worker(s) still finishing long-lived '
+                'connections after %ds' % (draining, wait_old))
 
     def test_config(self):
         rc, out = run([self.nginx, '-t'], 120)
@@ -450,10 +459,46 @@ class Applier:
         os.replace(tmp, link)
 
     # --- temporary IP blocks -------------------------------------------------------------------
+    NEVER_KEYS = ('blocks.protected', 'network.known_scanners', 'network.internal', 'server.trusted_proxies')
+
     def never_blocked(self):
+        """The networks no block may touch: the configuration file's AND the ones set in the web interface (the
+        web service lays those over the file at start; this program reads only the file otherwise, so a CDN range
+        added in Settings would be checked by the web side alone). The union: never less than either side."""
         from .blocks import _nets
         return (list(self.cfg.internal_networks) + list(self.cfg.known_scanners)
-                + _nets(self.cfg['server'].get('trusted_proxies')) + _nets(self.cfg['blocks'].get('protected')))
+                + _nets(self.cfg['server'].get('trusted_proxies')) + _nets(self.cfg['blocks'].get('protected'))
+                + self._stored_never())
+
+    def _stored_never(self):
+        """The never-blocked lists stored by the web interface (settings table), read-only. No database yet:
+        none stored. A database that cannot be read or a value that does not parse: refuse (fail closed)."""
+        import sqlite3
+        import urllib.parse
+        from .blocks import _nets
+        from .uisettings import PREFIX
+        db = self.cfg['paths']['db']
+        if not os.path.exists(db):
+            return []
+        try:
+            con = sqlite3.connect('file:%s?mode=ro' % urllib.parse.quote(db), uri=True, timeout=10)
+            try:
+                rows = con.execute('SELECT key, value FROM settings WHERE key IN (%s)' % ','.join('?' * len(self.NEVER_KEYS)),
+                                   [PREFIX + k for k in self.NEVER_KEYS]).fetchall()
+            finally:
+                con.close()
+        except sqlite3.Error as e:
+            raise Fail('validate', 'blocks: cannot read the protected networks set in the web interface: %s' % clean(str(e), 200))
+        out = []
+        for k, v in rows:
+            try:
+                val = json.loads(v)
+            except ValueError:
+                raise Fail('validate', 'blocks: stored setting %s does not parse' % clean(k, 80))
+            if not isinstance(val, list):
+                raise Fail('validate', 'blocks: stored setting %s is not a list' % clean(k, 80))
+            out += _nets(val)
+        return out
 
     def check_blocks(self, req):
         from .blocks import validate_entries
@@ -481,22 +526,44 @@ class Applier:
         entries = req['entries']
         new = render(entries, path).encode()
         body = lambda b: [l for l in (b or b'').decode('utf-8', 'replace').splitlines() if l and not l.startswith('#')]
-        if old is not None and body(old) == body(new):
-            return {'result': 'ok', 'count': len(entries), 'sha256': req['sha256'], 'changed': False,
-                    'summary': 'unchanged (%d entries)' % len(entries)}
-        self.check_binary()
-        write_atomic(path, new, 0o644)
+        want = hashlib.sha256('\n'.join(body(new)).encode()).hexdigest()
+        # What nginx has really loaded is recorded only after a reload succeeded; the file on disk alone proves
+        # nothing (a reload that failed, or a crash between writing and reloading, leaves the new file unloaded).
+        os.makedirs(self.state, mode=0o700, exist_ok=True)
+        loaded_path = os.path.join(self.state, 'blocks-loaded.json')
         try:
-            self.test_config()
-        except Fail:
+            loaded = json.loads(self._read_nofollow(loaded_path, 4096).decode()).get('sha256')
+        except (OSError, ValueError, AttributeError, Fail):
+            loaded = None
+        if old is not None and body(old) == body(new) and loaded == want:
+            return {'result': 'ok', 'count': len(entries), 'sha256': req['sha256'], 'changed': False,
+                    'summary': 'unchanged (%d entries), already loaded by nginx' % len(entries)}
+        self.check_binary()
+        changed = old is None or body(old) != body(new)
+        if changed:
+            write_atomic(path, new, 0o644)
+
+        def put_back():
+            if not changed:
+                return
             if old is None:
                 os.unlink(path)
             else:
                 write_atomic(path, old, 0o644)
+        try:
+            self.test_config()
+        except Fail:
+            put_back()
             raise
-        note = self.reload(0)
+        try:
+            note = self.reload(0)
+        except Fail:
+            put_back()          # nginx still runs the previous list: keep the file the same as what is loaded
+            raise
+        write_atomic(loaded_path, json.dumps({'sha256': want, 'at': time.time(), 'count': len(entries)}).encode(), 0o600)
         return {'result': 'ok', 'count': len(entries), 'sha256': req['sha256'], 'changed': True,
-                'summary': '%d entries written, nginx reloaded (%s)' % (len(entries), note)}
+                'summary': '%d entries %s, nginx reloaded (%s)' % (len(entries), 'written' if changed else
+                                                                   'already on disk but not yet loaded', note)}
 
     def crs_switch(self, req):
         from . import crsupdate

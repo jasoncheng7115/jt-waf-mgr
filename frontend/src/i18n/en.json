@@ -2356,7 +2356,7 @@
  "uiset.bad_field": "Please check: {field}",
  "uiset.blocks.api_max_ttl": "Longest from an API token (seconds)",
  "uiset.blocks.auto_recon": "Block sources that guess secret files automatically",
- "uiset.blocks.auto_recon.hint": "Program rule, no LLM: one external address asking for several different secret or configuration file names (.env, config.json, credentials, backups…) in a short time is blocked for a while on every site. An address a person unblocked is left alone for 7 days.",
+ "uiset.blocks.auto_recon.hint": "A program rule, no LLM, reading the WAF events: one external address asking for several different secret or configuration file names in a short time, all refused or not found (4xx/5xx), at least one of them unmistakable (.env, .git, keys, dumps, backups), is blocked on every site for a while. An address that got a 2xx/3xx for any such name is left to a person; one a person unblocked is left alone for 7 days.",
  "uiset.blocks.auto_recon_minutes": "…within (minutes)",
  "uiset.blocks.auto_recon_paths": "…after this many different file names",
  "uiset.blocks.auto_recon_per_hour": "Most automatic blocks per hour",

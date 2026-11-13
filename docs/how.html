@@ -25,12 +25,22 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand { display: flex; align-items: center; gap: 9px; font: 700 19px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
-nav.links { display: flex; gap: 16px; flex: 1; overflow-x: auto; white-space: nowrap; }
-nav.links a { color: var(--text); font-size: 14.5px; font-weight: 500; } nav.links a:hover { color: var(--blue); text-decoration: none; }
-.langs { display: flex; gap: 4px; }
-.langs button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; }
-.langs button:hover { border-color: var(--blue); }
-.langs button.on { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 3px rgba(37, 99, 196, .10); }
+header.top .wrap { max-width: 1320px; }
+nav.links { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6px 9px; border-radius: 8px; }
+nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
+@media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }
+@media (max-width: 1140px) { nav.links a { padding: 5px 5px; font-size: 12.5px; } }
+.lang { position: relative; flex: none; }
+.lang-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.lang-btn:hover, .lang-btn[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.lang-btn svg { width: 16px; height: 16px; flex: none; }
+.lang-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 150px; margin: 0; padding: 6px; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(15, 23, 42, .12); z-index: 20; }
+.lang-menu[hidden] { display: none; }
+.lang-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 14px; border: 0; background: none; padding: 7px 10px; border-radius: 7px; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; text-align: left; }
+.lang-menu button:hover, .lang-menu button:focus-visible { background: #eef4fd; color: var(--blue); outline: none; }
+.lang-menu button[aria-checked="true"] { color: var(--blue); font-weight: 600; }
+.lang-menu button[aria-checked="true"]::after { content: "\2713"; }
 .hero { padding: 56px 0 44px; border-bottom: 1px solid var(--border);
   background: radial-gradient(1000px 520px at 85% -10%, rgba(58, 134, 230, .16), transparent 60%),
               radial-gradient(760px 480px at 0% 10%, rgba(99, 102, 241, .09), transparent 55%),
@@ -153,8 +163,17 @@ body.zm-on { overflow: hidden; }
     <a href="#analysis" data-t="nav_ai"></a><a href="#crs" data-t="nav_crs"></a><a href="#blocks" data-t="nav_blocks"></a>
     <a href="#notify" data-t="nav_notify"></a><a href="#integrity" data-t="nav_integrity"></a><a href="#bounds" data-t="nav_bounds"></a>
   </nav>
-  <div class="langs" role="group" aria-label="Language">
-    <button type="button" data-lang="en">EN</button><button type="button" data-lang="zh-TW">繁中</button><button type="button" data-lang="ja">日本語</button>
+  <div class="lang">
+    <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu" aria-label="Language">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
+      <span id="lang-cur">EN</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="lang-menu" id="lang-menu" role="menu" hidden>
+      <button type="button" role="menuitemradio" data-lang="en" lang="en">English</button>
+      <button type="button" role="menuitemradio" data-lang="zh-TW" lang="zh-TW">繁體中文</button>
+      <button type="button" role="menuitemradio" data-lang="ja" lang="ja">日本語</button>
+    </div>
   </div>
 </div></header>
 
@@ -424,7 +443,7 @@ body.zm-on { overflow: hidden; }
   <div class="two top">
     <div>
       <h3 data-t="rv_h"></h3>
-      <ul class="ticks"><li data-t="rv_1"></li><li data-t="rv_2"></li><li data-t="rv_3"></li><li data-t="rv_4"></li></ul>
+      <ul class="ticks"><li data-t="rv_1"></li><li data-t="rv_2"></li><li data-t="rv_3"></li><li data-t="rv_4"></li><li data-t="rv_5"></li></ul>
     </div>
     <div>
       <h3 data-t="ib_h"></h3>
@@ -434,6 +453,10 @@ body.zm-on { overflow: hidden; }
   <div class="reccard">
     <h3 data-t="il_h"></h3>
     <ul class="ticks"><li data-t="il_1"></li><li data-t="il_2"></li><li data-t="il_3"></li><li data-t="il_4"></li><li data-t="il_5"></li></ul>
+  </div>
+  <div class="reccard">
+    <h3 data-t="au_h"></h3>
+    <ol class="steps blue"><li data-t="au_1"></li><li data-t="au_2"></li><li data-t="au_3"></li></ol>
   </div>
 </div></section>
 
@@ -660,16 +683,21 @@ const T = {
   rv_4: 'Optional alerts, off by default: an hour with 5 times a site\'s usual requests over the previous 7 days, or 20 % or more answered with 5xx.',
   ib_h: 'Temporary IP blocks',
   ib_1: 'fail2ban, a SOAR playbook or a script calls POST /api/v1/blocks with a token that has the blocks:write scope; an approver can also block on the Blocked IPs page.',
-  ib_2: 'Checked by the web service and again by the root program: private, loopback, link-local, multicast and reserved addresses, the internal networks, the known scanners, the trusted proxies and the protected list are never blocked.',
+  ib_2: 'Checked by the web service and again by the root program, which reads the protected networks set in Settings as well: private, loopback, link-local, multicast and reserved addresses, the internal networks, the known scanners, the trusted proxies and the protected list are never blocked.',
   ib_3: 'The database holds the list. The web service queues the whole list for the apply program at most once a minute.',
-  ib_4: 'The apply program writes the deny file, runs nginx -t and reloads; when nginx -t fails, the previous file is put back.',
+  ib_4: 'The apply program writes the deny file, runs nginx -t and reloads; when nginx -t or the reload fails, the previous file is put back. The list counts as applied only after nginx reloaded it.',
   ib_5: 'Blocks end by themselves, and the list is written again.',
   il_h: 'Limits',
   il_1: 'A token blocks single addresses only; an approver may block a range up to /24 (IPv4) or /64 (IPv6).',
   il_2: '24 hours by default, at most 7 days from a token and 30 days by hand; nothing is permanent.',
   il_3: 'At most 500 active blocks, 200 per token, and 60 new blocks per token and hour.',
   il_4: 'No change workflow and no approval: a block is temporary data, not configuration. Every add, extension, removal, refusal and expiry is in the audit trail.',
-  il_5: 'Included once inside http { }, the file covers every site, also those without ModSecurity. Servers and locations with allow / deny lines of their own do not inherit it; the Blocked IPs page lists them.',
+  il_5: 'Included once inside http { }, the file covers every site, also those without ModSecurity. Servers and locations with allow / deny lines of their own do not inherit it; the Blocked IPs page lists them. The file holds deny lines only, so allow / deny lines of your own in the same http { } keep working wherever the include sits.',
+  rv_5: 'The site name comes from the access log file name (one log per site). Sites sharing one combined log are counted under (default); give each site its own access_log for per-site numbers.',
+  au_h: 'Three automations, three switches',
+  au_1: 'Path rules from the program (no LLM needed): a secret or configuration file name asked for from outside only, never answered 2xx and not used internally becomes a confident block proposal. It goes through the change workflow (checks, sandbox, approval) and applies by itself only when an administrator turned on automatic tightening.',
+  au_2: 'Loosening (exclusions, rules switched off) always waits for a person with a fresh one-time code and a note. Nothing automatic ever loosens.',
+  au_3: 'Automatic IP blocks for secret file scanners (off by default; Settings > Temporary IP blocks). It reads the WAF events, not the access log: one external address that within 60 minutes got a 4xx/5xx for 5 different secret or configuration file names, at least one of them unmistakable (.env, .git, keys, dumps, backups), is blocked on every site for 24 hours; at most 30 such blocks an hour. An address that got a 2xx/3xx for any such name is left to a person, and one a person unblocked is left alone for 7 days. This one skips the change workflow and acts on every site at once: turn it on knowingly.',
   nt_h: 'Notifications, log shipping and alerts',
   nt_sub: 'The web service only writes rows; sending happens elsewhere, so a slow chat service or log server never holds it up.',
   nc_h: 'Notifications',
@@ -889,16 +917,21 @@ const T = {
   rv_4: '選用的警示，預設關閉：某小時的請求數達到該站台前 7 天同時段平常的 5 倍，或 20% 以上的回應是 5xx。',
   ib_h: '暫時封鎖 IP',
   ib_1: 'fail2ban、SOAR 劇本或指令稿以具有 blocks:write 範圍的權杖呼叫 POST /api/v1/blocks；核准者也可以在「封鎖的 IP」頁面封鎖。',
-  ib_2: '網頁服務檢查一次，root 程式再檢查一次：私有、loopback、link-local、多播與保留位址、內部網路、已知掃描器、可信任的代理與保護清單，永遠不會被封鎖。',
+  ib_2: '網頁服務檢查一次，root 程式再檢查一次（也會讀取在「設定」裡加的保護網段）：私有、loopback、link-local、多播與保留位址、內部網路、已知掃描器、可信任的代理與保護清單，永遠不會被封鎖。',
   ib_3: '清單存在資料庫裡。網頁服務最多每分鐘一次，把整份清單排給套用程式。',
-  ib_4: '套用程式寫入 deny 檔、執行 nginx -t 並 reload；nginx -t 失敗時放回原本的檔案。',
+  ib_4: '套用程式寫入 deny 檔、執行 nginx -t 並 reload；nginx -t 或 reload 失敗時放回原本的檔案。nginx 真的 reload 之後，清單才算已套用。',
   ib_5: '封鎖到期自動結束，清單會重新寫入。',
   il_h: '限制',
   il_1: '權杖只能封鎖單一位址；核准者可以封鎖最大到 /24（IPv4）或 /64（IPv6）的網段。',
   il_2: '預設 24 小時，權杖最長 7 天，在介面上最長 30 天；沒有永久封鎖。',
   il_3: '最多 500 筆生效中的封鎖，每個權杖 200 筆，每個權杖每小時最多 60 筆新封鎖。',
   il_4: '不經過變更流程、不需要核准：封鎖是暫時的資料，不是設定。每一次新增、延長、移除、拒絕與到期都寫進稽核記錄。',
-  il_5: '這個檔案在 http { } 裡 include 一次，就涵蓋所有站台，包括沒有 ModSecurity 的站台。自己有 allow、deny 行的 server 與 location 不會繼承它；「封鎖的 IP」頁面會列出這些地方。',
+  il_5: '這個檔案在 http { } 裡 include 一次，就涵蓋所有站台，包括沒有 ModSecurity 的站台。自己有 allow、deny 行的 server 與 location 不會繼承它；「封鎖的 IP」頁面會列出這些地方。這個檔案只有 deny 行，所以同一個 http { } 裡你自己的 allow、deny 不論放在 include 前後都照常有效。',
+  rv_5: '站台名稱取自存取記錄的檔名（一站一檔）。多個站台共用同一個 combined 記錄時，數字會算在 (default)；要分站統計，請讓每個站台有自己的 access_log。',
+  au_h: '三種自動化，各有自己的開關',
+  au_1: '程式提出的路徑規則（不需要 LLM）：只有外部在要、從沒回過 2xx、內部也沒在用的機密或設定檔名，會變成確定封鎖的提案。它照樣走變更流程（檢查、沙箱、核准），只有管理者開啟自動套用收緊類變更時才會自動套用。',
+  au_2: '放寬（排除、停用規則）一律等人核准，要輸入新的一次性驗證碼並寫說明。任何自動化都不會放寬。',
+  au_3: '自動封鎖猜機密檔的來源（預設關閉；設定 > 暫時封鎖 IP）。它看的是 WAF 事件，不是存取記錄：同一個外部位址在 60 分鐘內要了 5 個不同的機密或設定檔名、都被拒絕或找不到（4xx/5xx），且其中至少一個是明確的機密檔（.env、.git、金鑰、傾印、備份檔），就在所有站台封鎖 24 小時；每小時最多 30 筆。只要有任何一個這類檔名拿到 2xx/3xx，就不自動封鎖，留給人判斷；人工解除過的位址 7 天內不再自動封鎖。它不經過變更流程、一次影響所有站台，請了解後再開啟。',
   nt_h: '通知、外送記錄與警示',
   nt_sub: '網頁服務只寫入資料列，實際發送在別處進行，所以聊天服務或記錄伺服器變慢也不會拖住它。',
   nc_h: '通知',
@@ -1118,16 +1151,21 @@ const T = {
   rv_4: '任意のアラート（既定はオフ）：ある時間のリクエストがそのサイトの過去 7 日の通常の 5 倍に達したとき、または応答の 20% 以上が 5xx のとき。',
   ib_h: '一時的な IP ブロック',
   ib_1: 'fail2ban、SOAR のプレイブック、スクリプトが blocks:write スコープのトークンで POST /api/v1/blocks を呼びます。承認者は「ブロック中の IP」画面からもブロックできます。',
-  ib_2: 'Web サービスと root プログラムの両方で確認：プライベート、ループバック、リンクローカル、マルチキャスト、予約済みのアドレス、内部ネットワーク、既知のスキャナー、信頼するプロキシ、保護リストは決してブロックしません。',
+  ib_2: 'Web サービスと root プログラム（設定画面で追加した保護ネットワークも読みます）の両方で確認：プライベート、ループバック、リンクローカル、マルチキャスト、予約済みのアドレス、内部ネットワーク、既知のスキャナー、信頼するプロキシ、保護リストは決してブロックしません。',
   ib_3: 'リストはデータベースが持ちます。Web サービスはリスト全体を、最大で 1 分に 1 回、適用プログラムに渡します。',
-  ib_4: '適用プログラムが deny ファイルを書き、nginx -t と reload を行います。nginx -t が失敗すれば前のファイルに戻します。',
+  ib_4: '適用プログラムが deny ファイルを書き、nginx -t と reload を行います。nginx -t または reload が失敗すれば前のファイルに戻します。nginx が実際に reload してから、リストは適用済みになります。',
   ib_5: 'ブロックは期限が来ると自動で終わり、リストが書き直されます。',
   il_h: '制限',
   il_1: 'トークンがブロックできるのは単一のアドレスだけです。承認者は /24（IPv4）または /64（IPv6）までの範囲をブロックできます。',
   il_2: '既定 24 時間、トークンからは最長 7 日、画面からは最長 30 日。永久のブロックはありません。',
   il_3: '有効なブロックは最大 500 件、トークンごとに 200 件、トークンごとに 1 時間あたり 60 件の新規まで。',
   il_4: '変更フローも承認もありません。ブロックは設定ではなく一時的なデータです。追加、延長、削除、拒否、期限切れはすべて監査記録に残ります。',
-  il_5: 'http { } 内で一度 include すれば、ModSecurity のないサイトも含めてすべてのサイトに効きます。独自の allow や deny 行を持つ server と location は引き継がないため、「ブロック中の IP」画面に一覧で示します。',
+  il_5: 'http { } 内で一度 include すれば、ModSecurity のないサイトも含めてすべてのサイトに効きます。独自の allow や deny 行を持つ server と location は引き継がないため、「ブロック中の IP」画面に一覧で示します。このファイルには deny 行しかないため、同じ http { } にある独自の allow や deny は include の前後どちらでもそのまま効きます。',
+  rv_5: 'サイト名はアクセスログのファイル名から取ります（1 サイト 1 ファイル）。複数のサイトが 1 つの combined ログを共有すると (default) に集計されます。サイトごとの数値には、サイトごとの access_log を用意してください。',
+  au_h: '3 つの自動化と、それぞれのスイッチ',
+  au_1: 'プログラムによるパスのルール（LLM 不要）：外部からだけ要求され、2xx で応答したことがなく、内部でも使われていない機密・設定ファイル名は確定ブロックの提案になります。変更フロー（チェック、サンドボックス、承認）を通り、管理者が強化の自動適用をオンにした場合だけ自動で適用されます。',
+  au_2: '緩和（除外、ルールの無効化）は必ず人の承認を待ち、新しいワンタイムコードとメモが必要です。自動で緩和されることはありません。',
+  au_3: '機密ファイルを探す送信元の自動ブロック（既定はオフ。設定 > 一時的な IP ブロック）。アクセスログではなく WAF イベントを見ます：同じ外部アドレスが 60 分以内に 5 つの異なる機密・設定ファイル名で 4xx/5xx を受け、そのうち少なくとも 1 つが明白な機密ファイル（.env、.git、鍵、ダンプ、バックアップ）なら、全サイトで 24 時間ブロックします。1 時間に最大 30 件。こうした名前に 2xx/3xx が返ったアドレスは人の判断に任せ、人が解除したアドレスは 7 日間自動ではブロックしません。変更フローを通らず全サイトに一度に効くため、理解したうえでオンにしてください。',
   nt_h: '通知、ログ転送、アラート',
   nt_sub: 'Web サービスは行を書くだけで、送信は別の場所で行います。チャットサービスやログサーバーが遅くても Web サービスは止まりません。',
   nc_h: '通知',
@@ -1203,7 +1241,8 @@ function apply(lang) {
   const d = T[lang]
   document.documentElement.lang = lang
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
-  for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
+  for (const b of document.querySelectorAll('#lang-menu button')) b.setAttribute('aria-checked', b.dataset.lang === lang ? 'true' : 'false')
+  document.getElementById('lang-cur').textContent = { en: 'EN', 'zh-TW': '繁中', ja: '日本語' }[lang]
   for (const id of ['home-brand', 'home-btn']) document.getElementById(id).href = 'index.html?lang=' + lang
   const sfx = { 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || ''
   const gh = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/'
@@ -1214,7 +1253,23 @@ function apply(lang) {
   fit(document)
   const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
 }
-for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))
+// one language button; the menu opens below it. Escape, a click outside or picking a language closes it.
+const langBtn = document.getElementById('lang-btn'), langMenu = document.getElementById('lang-menu')
+function langOpen(open, focus) {
+  langMenu.hidden = !open
+  langBtn.setAttribute('aria-expanded', open ? 'true' : 'false')
+  if (open && focus) (langMenu.querySelector('[aria-checked="true"]') || langMenu.querySelector('button')).focus()
+  if (!open && focus) langBtn.focus()
+}
+langBtn.addEventListener('click', () => langOpen(langMenu.hidden, true))
+for (const b of langMenu.querySelectorAll('button')) b.addEventListener('click', () => { apply(b.dataset.lang); langOpen(false, true) })
+langMenu.addEventListener('keydown', (e) => {
+  const items = [...langMenu.querySelectorAll('button')], i = items.indexOf(document.activeElement)
+  if (e.key === 'Escape') { e.preventDefault(); langOpen(false, true) }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus() }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus() }
+})
+document.addEventListener('click', (e) => { if (!langMenu.hidden && !e.target.closest('.lang')) langOpen(false, false) })
 // a diagram opens at full size in the page (scrolls on a phone); X, Escape or a click outside closes it
 const zoom = document.getElementById('zoom')
 for (const b of document.querySelectorAll('button.zoom')) b.addEventListener('click', () => {

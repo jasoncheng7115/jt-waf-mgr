@@ -8,8 +8,10 @@ its own (nginx does not inherit them into a block that defines its own -- listed
 
 How it reaches nginx: the administrator adds once, inside http{}:
     include /etc/nginx/jt-waf-mgr/blocked-ips.conf;
-The root apply program writes that file ("deny <address>;" lines, always ending in "allow all;", which is
-nginx's default and shows that the file is really loaded at the http{} level), tests and reloads nginx. The web
+The root apply program writes that file ("deny <address>;" lines only), tests and reloads nginx. No trailing
+"allow all;": nginx stops at the first allow / deny that matches in a level, so an "allow all" here would switch off
+any allow / deny that follows it in the same http{} (403 becoming 200). Whether the file is loaded at the http{}
+level is read from the include directive itself. The web
 service only queues the whole list (one request, at most once per [blocks] reload_seconds); the database is the
 source of truth, so a lost file is written again.
 
@@ -44,6 +46,15 @@ NON_PUBLIC = [ipaddress.ip_network(n) for n in (
 HARD_MAX = 20000          # the root program refuses a longer list whatever the settings say
 META_APPLIED = 'blocks_applied'     # {"sha": ..., "at": ..., "count": n, "ok": bool, "summary": ...}
 META_PENDING = 'blocks_pending'     # {"request_id": ..., "sha": ..., "at": ...}
+
+
+
+# Names no site serves on purpose: secrets, keys, dumps, backups, VCS and dot directories. A config.json or
+# settings.yml alone can be a real front end's file, so those count towards the threshold but never decide it.
+UNMISTAKABLE = re.compile(
+    r'(?:^|/)(?:\.env(?:\.[a-z0-9_-]+)?|[^/]*\.(?:bak|backup|old|orig|save|swp|sql|dump|pem|key|p12|pfx|kdbx)'
+    r'|[^/]*(?:credential|secret|passw|private[_-]?key|id_rsa|service[_-]?account)[^/]*'
+    r'|\.(?:git|svn|hg|aws|ssh|htpasswd|npmrc|pypirc)(?:/.*)?)$')
 
 
 class BlockError(Exception):
@@ -335,10 +346,10 @@ class Blocks:
             n = NginxConfig(self.cfg['paths']['nginx_conf'])
             h = n.http()
             if h is not None:
-                included = any(d.file == path and d.name == 'allow' for d in h.children)
+                included = any(_includes(d, path) for d in h.children)
                 if not included:
                     for s in h.children:
-                        if s.name == 'server' and s.children and any(d.file == path for d in s.children):
+                        if s.name == 'server' and s.children and any(_includes(d, path) for d in s.children):
                             where = 'server'
                 for s in h.children:
                     if s.name != 'server' or s.children is None:
@@ -366,18 +377,28 @@ class Blocks:
     def auto_recon(self, now=None):
         """Program rule (no LLM): an external address that asked for auto_recon_paths different secret or
         configuration file names (analyst.RECON_NAME) within auto_recon_minutes is blocked for auto_recon_ttl.
-        Returns the addresses blocked."""
+        Only requests that were refused or not found count (status 400 and up), at least one of the names must be
+        one no site serves on purpose (UNMISTAKABLE: .env, .git, keys, dumps, backups...), and an address that got
+        a 2xx / 3xx answer for any such name in the window is left to a person: that is a matter to look into, not
+        a scanner to block blindly (a shared exit or a tenant's own config.json). Returns the addresses blocked."""
         from .analyst import RECON_NAME
         b = self.cfg['blocks']
         if not (b['enabled'] and b['auto_recon']):
             return []
         now = now or util.now()
-        per = collections.defaultdict(set)
-        for r in self.db.q("SELECT DISTINCT src_ip, path FROM events WHERE ts>=? AND origin='external'",
+        per, answered = collections.defaultdict(set), set()
+        for r in self.db.q("SELECT DISTINCT src_ip, path, status FROM events WHERE ts>=? AND origin='external'",
                            (now - b['auto_recon_minutes'] * 60,)):
             p = (r['path'] or '').lower()
-            if RECON_NAME.search(p):
+            if not RECON_NAME.search(p):
+                continue
+            st = r['status']
+            if st is not None and 200 <= st < 400:
+                answered.add(r['src_ip'])
+            elif st is not None and st >= 400:
                 per[r['src_ip']].add(p)
+        per = {ip: ps for ip, ps in per.items()
+               if ip not in answered and any(UNMISTAKABLE.search(p) for p in ps)}
         hits = sorted(((ip, ps) for ip, ps in per.items() if len(ps) >= b['auto_recon_paths']), key=lambda x: -len(x[1]))
         if not hits:
             return []
@@ -430,12 +451,23 @@ def _locations(children, prefix=''):
             yield from _locations(d.children, loc + ' > ')
 
 
+def _includes(d, path):
+    """d is an include (kept by NginxConfig as a marker) that loads path."""
+    if d.name != 'include' or not d.args:
+        return False
+    try:
+        return os.path.realpath(d.args[0]) == os.path.realpath(path)
+    except (OSError, ValueError):
+        return d.args[0] == path
+
+
 def render(entries, path, when=None):
-    """The list file: one deny per entry, then nginx's default (allow all), which also marks the file as loaded."""
+    """The list file: one deny per entry and nothing else. No "allow all": in the same http{} it would end the
+    matching before an allow / deny the administrator has after the include (see the module text)."""
     head = ['# Generated by jt-waf-mgr -- temporary IP blocks; do not edit by hand.',
             '# Include once inside http { }:  include %s;' % path,
             '# %d entries, %s' % (len(entries), when or time.strftime('%Y-%m-%dT%H:%M:%S%z'))]
-    return '\n'.join(head + ['deny %s;' % e for e in entries] + ['allow all;', ''])
+    return '\n'.join(head + ['deny %s;' % e for e in entries] + [''])
 
 
 def validate_entries(entries, never=()):

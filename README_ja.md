@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.25
+# jt-waf-mgr v0.4.26
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -110,8 +110,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
-tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.26.tar.gz.sig jt-waf-mgr-0.4.26.tar.gz
+tar xzf jt-waf-mgr-0.4.26.tar.gz && cd jt-waf-mgr-0.4.26
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -209,12 +209,14 @@ CRS は jt-waf-mgr が扱います。新しいホストに必要なのは、ngin
    jail では `action = jt-waf-block` を使います。`bantime` は 60 秒から 7 日の間にしてください（それより長い、または永久の
    ブロックは拒否されます）。内部アドレスは jail の `ignoreip` で除外したままにします（いずれにしても拒否されます）。
    任意で、設定 → 一時的な IP ブロック →「機密ファイルを探す送信元を自動でブロック」：1 時間以内に 5 つの異なる機密・設定ファイル名を
-   要求した外部アドレスを、プログラムのルールで 24 時間ブロックします。
+   要求した外部アドレスを、プログラムのルールで 24 時間ブロックします。WAF イベントを見て、拒否または見つからなかった（4xx/5xx）
+   ファイル名だけを数え、少なくとも 1 つは明白な機密ファイル（.env、.git、鍵、ダンプ、バックアップ）であることが条件です。
+   こうした名前に 2xx/3xx が返ったアドレスは自動でブロックせず、人の判断に任せます。変更フローを通らず全サイトでブロックするため、既定はオフです。
 
 ブロックの既定は 24 時間、トークンからは最長 7 日、手動では最長 30 日で、永久ブロックはありません。内部ネットワーク、
 既知のスキャナー、信頼するプロキシ、保護リストは決してブロックされません。nginx は `real_ip` 後のアドレスで判定するため、
 CDN の後ろのサイトには `set_real_ip_from` / `real_ip_header` が必要です。独自の `allow` / `deny` を持つ server と location は
-このリストを継承しません（「ブロック中の IP」ページに表示）。詳しくは [API マニュアル](docs/API.ja.md) の 4.9 節を参照してください。
+このリストを継承しません（「ブロック中の IP」ページに表示）。ブロックは約 1 分以内に新しいリクエストに効きます。すでに開いている接続（WebSocket）は閉じるまで続きます。詳しくは [API マニュアル](docs/API.ja.md) の 4.9 節を参照してください。
 
 ### アカウントと復旧
 
@@ -266,7 +268,7 @@ nginx の設定には触れません。管理画面の vhost はご自身で削�
 - **サーバー**：OpenAI 互換（llama.cpp server、vLLM、Ollama）で、JSON スキーマで形式を制約した回答に対応しているもの。
   対応していない場合は通常の JSON モードを使い、回答の信頼性が下がります。
 - **モデル**：約 14B パラメータ以上の指示（instruct）モデルで、4 ビット量子化以上。27–32B の dense モデルか 30B 級の MoE を
-  推奨します。例：Qwen3 32B または Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B。
+  推奨します。バージョン：Qwen は 3.8 以上、Gemma は 4 以上（それより古いものは推奨しません）、または gpt-oss-20b。
 - **コンテキスト長**：16k トークン以上。実測：候補 11 件の 1 バッチで入力約 3k、出力約 3.5k トークンを使い、本番サーバーで
   約 85 秒かかりました。
 - **小さなモデル**（8B 以下）や 2–3 ビット量子化は、実行ごとの判定が矛盾しやすくなります。本番では 3 ビット量子化のモデルが

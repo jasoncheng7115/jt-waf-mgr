@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.25
+# jt-waf-mgr v0.4.26
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -119,8 +119,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
-tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.26.tar.gz.sig jt-waf-mgr-0.4.26.tar.gz
+tar xzf jt-waf-mgr-0.4.26.tar.gz && cd jt-waf-mgr-0.4.26
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -223,11 +223,14 @@ list to one nginx file of `deny` lines, which covers every site, also those with
  
    Optionally, Settings → Temporary IP blocks → "Block sources that guess secret files automatically": an outside address
    asking for 5 different secret or configuration file names within an hour is blocked for 24 hours by a program rule.
+   It reads the WAF events, counts only names that were refused or not found (4xx/5xx), needs at least one unmistakable
+   name (.env, .git, keys, dumps, backups) and leaves an address that got a 2xx/3xx for any such name to a person.
+   It skips the change workflow and blocks on every site, so it is off by default.
 
 Blocks last 24 hours by default, at most 7 days from a token and 30 days by hand; nothing is permanent. Internal
 networks, known scanners, trusted proxies and the protected list are never blocked. nginx checks the address after
 `real_ip`, so sites behind a CDN need `set_real_ip_from` / `real_ip_header`. Servers and locations with `allow` /
-`deny` lines of their own do not inherit the list; the Blocked IPs page lists them. Details: the
+`deny` lines of their own do not inherit the list; the Blocked IPs page lists them. A block takes effect for new requests within about a minute; connections already open (WebSocket) last until they close. Details: the
 [API manual](docs/API.md), section 4.9.
 
 ### Accounts and recovery
@@ -280,7 +283,7 @@ The analysis always runs on your own, self-hosted LLM server.
 - **Server**: OpenAI-compatible (llama.cpp server, vLLM, Ollama) with JSON-schema-constrained answers. Without them,
   plain JSON mode is used and answers are less reliable.
 - **Model**: an instruction model of about 14B parameters or more, at 4-bit quantization or better; 27–32B dense or a
-  30B-class MoE is recommended. Examples: Qwen3 32B or Qwen3 30B-A3B, Gemma 3 27B, gpt-oss-20b, Llama 3.3 70B.
+  30B-class MoE is recommended. Versions: Qwen 3.8 or later, Gemma 4 or later (older versions are not recommended), or gpt-oss-20b.
 - **Context window**: at least 16k tokens. Measured: one batch of 11 candidates used about 3k input and 3.5k output
   tokens and took about 85 seconds on the production server.
 - **Smaller models** (8B and below) or 2–3-bit quantizations contradict themselves more between runs: in production a

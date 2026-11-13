@@ -452,7 +452,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
 最短で `reload_seconds` 秒ごと、既定 60）に書き込み、nginx をテストして reload します。管理者は `http { }` の中で
 このファイルを一度だけ include します。jt-waf-mgr 自身は nginx の設定を変更しません。http レベルの `deny` は
 ModSecurity を使わないサイトも含めてすべてのサイトに効きますが、独自の `allow` / `deny` を持つ server と location は
-例外です（「ブロック中の IP」ページに表示）。設定でオンにするまで、すべての呼び出しは 409 `blocks_off` を返します。
+例外です（「ブロック中の IP」ページに表示）。ブロックは reload 以降の新しいリクエストと接続に効きます。ブロック前から開いている接続（WebSocket、長時間のダウンロード）は切断されず、自然に閉じるまで続きます。設定でオンにするまで、すべての呼び出しは 409 `blocks_off` を返します。
 
 - **`POST /blocks`**（スコープ `blocks:write`）：本文 `{"ip", "ttl", "source", "reason"}`。
   - `ip`：単一アドレス（IPv4 または IPv6）。範囲のブロックは Web 画面の人だけ（/24 または /64 まで）。

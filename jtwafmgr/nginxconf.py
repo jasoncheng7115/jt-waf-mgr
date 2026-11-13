@@ -138,6 +138,9 @@ class NginxConfig:
                     out.append(d)
                 elif d.name == 'include' and d.args:
                     for f in self._resolve(d.args[0]):
+                        # the include itself stays as a marker (args: the resolved file), so callers can tell where
+                        # a file is loaded even when it holds no directives (an empty IP block list)
+                        out.append(Directive('include', [f], path, line))
                         out.extend(self._parse_file(f, depth + 1))
                 else:
                     out.append(d)

@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.25
+# jt-waf-mgr v0.4.26
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -97,8 +97,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
-tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.26.tar.gz.sig jt-waf-mgr-0.4.26.tar.gz
+tar xzf jt-waf-mgr-0.4.26.tar.gz && cd jt-waf-mgr-0.4.26
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -191,10 +191,12 @@ ModSecurity 的也算。使用方式：
    jail 裡改用 `action = jt-waf-block`。`bantime` 要在 60 秒到 7 天之間（更長或永久會被拒絕）；jail 原本的 `ignoreip` 照樣
    排除內部位址（反正也會被拒絕）。
    也可以在 設定 → 暫時封鎖 IP 開啟「自動封鎖猜機密檔的來源」：外部位址一小時內要求 5 個不同的機密或設定檔名，就由程式規則封鎖 24 小時。
+   它看的是 WAF 事件，只計算被拒絕或找不到（4xx/5xx）的檔名，其中至少要有一個明確的機密檔（.env、.git、金鑰、傾印、備份檔）；
+   只要有任何一個這類檔名拿到 2xx/3xx，就不自動封鎖，留給人判斷。它不經過變更流程、會在所有站台封鎖，所以預設關閉。
 
 封鎖預設 24 小時，權杖最長 7 天、手動最長 30 天，沒有永久封鎖。內部網路、已知掃描器、信任的代理與保護清單永遠不會被
 封鎖。nginx 比對的是 `real_ip` 之後的位址，所以在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。自己有
-`allow` / `deny` 的 server 與 location 不會繼承這份清單，「封鎖中的 IP」頁會列出。詳細說明見 [API 手冊](docs/API.zh-TW.md)
+`allow` / `deny` 的 server 與 location 不會繼承這份清單，「封鎖中的 IP」頁會列出。封鎖約一分鐘內對新的請求生效；已經開著的連線（WebSocket）會持續到自己結束。詳細說明見 [API 手冊](docs/API.zh-TW.md)
 第 4.9 節。
 
 ### 帳號與救援
@@ -245,8 +247,8 @@ sudo ./uninstall.sh --purge   # 連同 /var/lib/jt-waf-mgr、/etc/jt-waf-mgr 與
 
 - **伺服器**：OpenAI 相容（llama.cpp server、vLLM、Ollama），並支援以 JSON schema 限制回答格式；不支援時改用一般的 JSON
   模式，回答比較不可靠。
-- **模型**：約 14B 參數以上的指令模型，4-bit 量化或更好；建議 27–32B 的 dense 模型或 30B 級的 MoE。例如 Qwen3 32B 或
-  Qwen3 30B-A3B、Gemma 3 27B、gpt-oss-20b、Llama 3.3 70B。
+- **模型**：約 14B 參數以上的指令模型，4-bit 量化或更好；建議 27–32B 的 dense 模型或 30B 級的 MoE。版本：Qwen 要
+  3.8 以上、Gemma 要 4 以上（較舊的版本不建議），或 gpt-oss-20b。
 - **上下文長度**：至少 16k tokens。實測：一批 11 個候選約用了 3k 輸入與 3.5k 輸出 tokens，在正式機上花了約 85 秒。
 - **較小的模型**（8B 以下）或 2–3-bit 量化，每次執行的判斷比較容易前後矛盾：正式環境曾有 3-bit 量化的模型把同一個探測兩次
   判為攻擊、一次判為誤判。jt-waf-mgr 用程式端的掃描器特徵規則與判斷歷史來抵銷，但模型強一點還是有幫助。

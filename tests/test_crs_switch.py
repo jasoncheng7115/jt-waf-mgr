@@ -208,6 +208,50 @@ class TestSandboxCrsSwap(unittest.TestCase):
         self.assertIn('Include /var/lib/jt-waf-mgr/crs/stage/crs-4.30.1/rules/*.conf', main)
         self.assertNotIn(crs + '/rules', main)
 
+    def test_first_install_keeps_the_audit_log_in_the_sandbox(self):
+        # a first CRS installation adds Includes after modsecurity.conf (the anchor, which sets SecAuditLog): the
+        # anchor must be rewritten like any other file, or the candidate writes the production audit log
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        app = App(env.cfg)
+        from jtwafmgr.sandbox import Sandbox
+        sb = Sandbox(app.cfg, app.site)
+        modsec = os.path.join(os.path.dirname(env.cfg['paths']['nginx_conf']), 'modsec')
+        main, anchor = os.path.join(modsec, 'main.conf'), os.path.join(modsec, 'modsecurity.conf')
+        new_dir = tempfile.mkdtemp(prefix='crs-new-', dir=env.dir)
+        with open(os.path.join(new_dir, 'crs-setup.conf.example'), 'w') as fh:
+            fh.write('SecAuditLog /var/log/modsecurity/modsec_audit.log\nSecAction "id:900990,phase:1,pass,nolog"\n')
+        for crs_add in ((main, anchor, [os.path.join(new_dir, 'crs-setup.conf.example')]),
+                        (main, None, [os.path.join(new_dir, 'crs-setup.conf.example')])):
+            root = tempfile.mkdtemp(prefix='sbx-', dir=env.dir)
+            sb.build(root, {}, crs_add=crs_add)
+            texts = []
+            for n in os.listdir(os.path.join(root, 'conf')):
+                with open(os.path.join(root, 'conf', n)) as fh:
+                    texts.append(fh.read())
+            with open(os.path.join(root, 'conf', 'main-0.conf')) as fh:
+                lines = fh.read().splitlines()
+            for ln in lines:                       # every Include that sets an audit log is a sandbox copy
+                if ln.startswith('Include ') and not ln.split()[1].startswith(root):
+                    target = ln.split()[1]
+                    if os.path.isfile(target):
+                        with open(target) as fh:
+                            self.assertNotRegex(fh.read(), r'(?im)^\s*SecAuditLog\s', target)
+            self.assertNotIn('/var/log/modsecurity', '\n'.join(texts))
+            self.assertTrue(any('900990' in t for t in texts))
+
+
+class TestCompareCounts(unittest.TestCase):
+    def test_any_refusal_status_counts(self):
+        # a site whose rules refuse with status:406 (or 400): 200 -> 406 is newly blocked, not just "changed"
+        from jtwafmgr.sandbox import Sandbox
+        reqs = [{'method': 'GET', 'host': 'www.example.com', 'path': p} for p in ('/a', '/b', '/c')]
+        old = [{'status': 200, 'rules': []}, {'status': 406, 'rules': [10500]}, {'status': 200, 'rules': []}]
+        new = [{'status': 406, 'rules': [942100]}, {'status': 200, 'rules': []}, {'status': 200, 'rules': [920350]}]
+        r = Sandbox._compare(reqs, old, new)
+        self.assertEqual((r['changed'], r['newly_blocked'], r['no_longer_blocked']), (3, 1, 1))
+        self.assertEqual((r['blocked_before'], r['blocked_after']), (1, 1))
+
 
 if __name__ == '__main__':
     unittest.main()

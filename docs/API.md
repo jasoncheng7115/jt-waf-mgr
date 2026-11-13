@@ -455,7 +455,7 @@ How it works: jt-waf-mgr keeps the list in its database, and its root apply prog
 (`deny <address>;` lines, at most once every `reload_seconds`, 60 by default), tests nginx and reloads it. The
 administrator includes that file once inside `http { }`; jt-waf-mgr never edits nginx's configuration itself. A
 `deny` at the http level covers every site, also the ones without ModSecurity, except servers and locations with
-`allow` / `deny` lines of their own (the Blocked IPs page lists them). Until the feature is switched on in Settings,
+`allow` / `deny` lines of their own (the Blocked IPs page lists them). A block applies to new requests and connections from the reload on; a connection that was already open when the address was blocked (a WebSocket, a long download) is not cut and lasts until it closes. Until the feature is switched on in Settings,
 every call answers 409 `blocks_off`.
 
 - **`POST /blocks`** (scope `blocks:write`): body `{"ip", "ttl", "source", "reason"}`.

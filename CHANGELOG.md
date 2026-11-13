@@ -2,6 +2,37 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.26 (2026-11-13)
+
+From an independent review:
+- Temporary IP blocks: the list file no longer ends in `allow all;`. nginx stops at the first allow / deny that matches
+  within a level, so it switched off an administrator's own `deny` placed after the include in the same `http { }`
+  (403 became 200, reproduced with nginx). The file now holds deny lines only; whether it is loaded at the http level
+  is read from the include itself.
+- A list that was written but whose reload failed is no longer reported as applied when it is sent again: the file
+  goes back to what nginx runs, and the root program records what nginx loaded only after a reload succeeded.
+- The root program also checks the protected networks, known scanners, internal networks and trusted proxies set in
+  Settings (it read only config.toml before); a database it cannot read refuses the write.
+- Automatic blocks of secret file scanners: only names that were refused or not found (4xx/5xx) count, at least one
+  name must be unmistakable (.env, .git, keys, dumps, backups; a config.json alone never decides), and an address
+  that got a 2xx/3xx for any such name is left to a person.
+- First CRS installation in the sandbox: modsecurity.conf and the new CRS files go through the same audit log rewrite
+  as everything else, so the candidate never writes the production audit log.
+- CRS comparison counts any 4xx/5xx as refused (sites refusing with status 406 or 400), not 403 only.
+- Tests that need a GPG test key are skipped where gpg cannot make one.
+- Interface: the request volume page's site picker sits in the filter row; 「多擋/少擋」 became 「新增封鎖/不再封鎖」.
+- The "how it works" page lists the three automations with their switches, including what the automatic IP block
+  reads and when it holds back; request volume notes that sites sharing one combined log count under (default).
+
+Also:
+- Login page: after an upgrade the reload notice sits right above the login box, as wide as it (it used to stretch
+  across the page with the button at the far right).
+- Project site: more room between the menu entries; the three language buttons are one language button with a menu.
+- LLM advice: Qwen 3.8 or later, Gemma 4 or later (older versions are not recommended); Llama dropped from the examples.
+- The apply summary after a reload no longer says "old workers still draining after 0s" when it does not wait: it says
+  how many old workers are still finishing open connections. Documents: a temporary IP block applies to new requests
+  from the reload on; connections already open (WebSocket) last until they close.
+
 ## 0.4.25 (2026-11-13)
 
 - Chinese interface and documents: 「封鎖」 everywhere instead of 「阻擋」 (the confident block is now 「確定封鎖」); the

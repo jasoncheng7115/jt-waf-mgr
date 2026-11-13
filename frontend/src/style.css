@@ -437,6 +437,11 @@ pre.diff .dh { color: var(--muted); font-weight: 600; }
 .lastlogin .btn { margin-left: auto; }
 .newver { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .newver .btn { margin-left: auto; }
+/* login and other pages without the top bar: the notice sits right above the login box, as wide as it */
+.bare .newver { max-width: 380px; margin: 6vh auto 0; flex-direction: column; align-items: stretch; }
+.bare .newver .btn { margin-left: 0; justify-content: center; }
+.bare .newver ~ .authbox { margin-top: 12px; }
+.bare .newver:has(~ .authbox.wide) { max-width: 520px; }
 .policy { margin: 0 0 10px; padding-left: 0; }
 .policy li::before { content: "· "; }
 .integritybanner { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
@@ -792,6 +797,10 @@ table.grid th { background: var(--head-bg); }
 .pagehead { margin-top: 4px; }
 
 /* ---- active filters must be obvious -------------------------------------------------------------- */
+/* the filter row of the overview and the request volume page: range buttons, then the other filters on the same line */
+.ovfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; }
+.ovfilters > .field { margin: 0; flex: 0 1 300px; min-width: min(220px, 100%); }
 .ovfilters.active { border: 2px solid var(--accent); background: var(--guide-bg); }
 .fchip-lead { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--accent); }
 .fchip { background: var(--accent); border-color: var(--accent); }

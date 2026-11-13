@@ -2356,7 +2356,7 @@
  "uiset.bad_field": "確認してください：{field}",
  "uiset.blocks.api_max_ttl": "API トークンの最長（秒）",
  "uiset.blocks.auto_recon": "機密ファイルを探す送信元を自動でブロック",
- "uiset.blocks.auto_recon.hint": "プログラムのルール（LLM 不要）：1 つの外部アドレスが短時間に複数の機密・設定ファイル名（.env、config.json、credentials、バックアップなど）を要求すると、すべてのサイトで一時的にブロックします。人が解除したアドレスは 7 日間自動ブロックしません。",
+ "uiset.blocks.auto_recon.hint": "プログラムのルール（LLM 不要、WAF イベントを参照）：同じ外部アドレスが短時間に複数の異なる機密・設定ファイル名を要求し、すべて拒否または見つからず（4xx/5xx）、少なくとも 1 つが明白な機密ファイル（.env、.git、鍵、ダンプ、バックアップ）なら、全サイトで一時的にブロックします。こうした名前に 2xx/3xx が返ったアドレスは人の判断に任せ、人が解除したアドレスは 7 日間自動ではブロックしません。",
  "uiset.blocks.auto_recon_minutes": "…何分以内",
  "uiset.blocks.auto_recon_paths": "…異なるファイル名の数",
  "uiset.blocks.auto_recon_per_hour": "1 時間あたりの自動ブロックの上限",

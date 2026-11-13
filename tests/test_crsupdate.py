@@ -23,8 +23,15 @@ def gpg(home, *args, inp=None):
 
 
 def make_key(home):
+    """A throwaway signing key. Where gpg is missing or cannot make one (no agent, an old gpg without ed25519, a
+    home path too long for the agent socket), the tests that need it are skipped, not reported as errors."""
     os.makedirs(home, mode=0o700, exist_ok=True)
-    gpg(home, '--quick-gen-key', 'CRS test <crs-test@example.com>', 'ed25519', 'sign', 'never')
+    try:
+        gpg(home, '--quick-gen-key', 'CRS test <crs-test@example.com>', 'ed25519', 'sign', 'never')
+    except FileNotFoundError:
+        raise unittest.SkipTest('gpg is not installed')
+    except subprocess.CalledProcessError as e:
+        raise unittest.SkipTest('gpg cannot create a test key here: %s' % (e.stderr or b'').decode('utf-8', 'replace')[-300:])
     out = gpg(home, '--with-colons', '--list-keys').stdout.decode()
     fpr = next(l.split(':')[9] for l in out.splitlines() if l.startswith('fpr'))
     pub = os.path.join(home, 'pub.asc')
