@@ -53,7 +53,19 @@
         <p v-if="upd.manage && upd.external_updater" class="alert warn">{{ t('crsupd.external', { path: safeText(upd.external_updater, 200) }) }}</p>
         <p v-if="upd.location && !upd.location.link" class="alert info">{{ t('crsupd.not_link') }}</p>
         <p v-if="st.state === 'error'" class="alert error">{{ safeText(st.error, 300) }}</p>
-        <p v-if="st.staged" class="muted small">{{ t('crsupd.next') }}</p>
+        <!-- switching: a change (sandbox comparison of both versions, a person approves, the root program switches) -->
+        <div v-if="canPropose && switchTargets.length" class="crsswitch">
+          <label class="field"><span>{{ t('crsupd.reason') }}</span>
+            <textarea v-model="reason" rows="2" maxlength="2000" class="w-lg" :placeholder="t('crsupd.reason_hint')"></textarea></label>
+          <div class="actions">
+            <button v-for="x in switchTargets" :key="x.mode + x.version" type="button" class="btn small" :class="{ primary: x.mode === 'install' }"
+                    :disabled="busy || reason.trim().length < 5" @click="propose(x)">
+              <Icon :name="x.mode === 'install' ? 'test' : 'rollback'" />{{ t(x.mode === 'install' ? 'crsupd.propose' : 'crsupd.rollback', { v: x.version }) }}</button>
+          </div>
+          <p class="muted small">{{ t('crsupd.switch_hint') }}</p>
+        </div>
+        <div v-if="proposed" class="alert success" role="status">{{ t('crsupd.proposed', { id: proposed }) }}
+          <RouterLink :to="'/changes/' + proposed">{{ t('toggle.open_change') }}</RouterLink></div>
         <ErrorBox :error="updError" />
         <div v-if="isAdmin" class="actions">
           <button type="button" class="btn small" :disabled="busy || !upd.manage" @click="checkNow"><Icon name="refresh" />{{ t('crsupd.check_now') }}</button>
@@ -170,6 +182,28 @@ const busy = ref(false)
 const updError = ref(null)
 const checkMsg = ref('')
 const isAdmin = computed(() => hasRole('admin'))
+const canPropose = computed(() => hasRole('approver'))
+const reason = ref('')
+const proposed = ref(null)
+// what the CRS can switch to: the staged release, and the other versions kept on the host
+const switchTargets = computed(() => {
+  if (!upd.value || !upd.value.location) return []
+  const cur = upd.value.location.version
+  const out = []
+  if (st.value.staged && st.value.staged.version !== cur) out.push({ mode: 'install', version: st.value.staged.version })
+  for (const v of upd.value.versions || []) if (v !== cur && !out.some((x) => x.version === v)) out.push({ mode: 'rollback', version: v })
+  return out
+})
+async function propose(x) {
+  busy.value = true
+  updError.value = null
+  proposed.value = null
+  try {
+    const r = await post('/crs/updates/propose', { mode: x.mode, version: x.version, reason: reason.value.trim() })
+    proposed.value = r.change_id
+    reason.value = ''
+  } catch (e) { updError.value = e } finally { busy.value = false }
+}
 const STATE_CLS = { current: 'b-ok', ready: 'b-warn', waiting: 'b-int', error: 'b-blocked', off: 'b-logged' }
 async function loadUpd() { try { upd.value = await get('/crs/updates') } catch (e) { updError.value = e } }
 async function setManage(on) {

@@ -23,6 +23,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 
@@ -78,6 +79,8 @@ class Applier:
             if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_REQUEST or st.st_nlink != 1:
                 raise Fail('request', 'not a regular file or too large')
             req = json.loads(fh.read(MAX_REQUEST + 1).decode('utf-8'))
+        if isinstance(req, dict) and req.get('action') == 'crs_switch':
+            return self.check_crs(req)
         if not isinstance(req, dict) or req.get('action') != 'apply':
             raise Fail('request', 'unknown action')
         if not isinstance(req.get('version'), int) or not isinstance(req.get('change_id'), int):
@@ -376,6 +379,161 @@ class Applier:
             raise Fail('request', 'the spool directory must not be group or world writable')
         return fd
 
+    # --- OWASP CRS versions (crs -> crs-<version> symlink next to the CRS directory main.conf includes) ---------------
+    CRS_KEEP = 3
+
+    def check_crs(self, req):
+        """A CRS switch request: install (from the signed tarball the CRS unit staged) or rollback (to a version
+        already on the host). Everything is checked again here, as root."""
+        if not isinstance(req.get('change_id'), int) or req.get('mode') not in ('install', 'rollback') or \
+                not re.fullmatch(r'\d{1,3}\.\d{1,3}\.\d{1,3}', str(req.get('to') or '')):
+            raise Fail('request', 'bad CRS switch request')
+        crs = req.get('crs_path')
+        if crs not in self.crs_dirs():
+            raise Fail('request', 'crs_path %r is not the CRS directory a main ModSecurity file includes' % crs)
+        urls = req.get('health_urls') or []
+        if not isinstance(urls, list) or len(urls) > 100 or not all(
+                isinstance(u, str) and re.fullmatch(r'https?://[a-z0-9.-]+(?::\d{1,5})?/\S{0,500}', u) for u in urls):
+            raise Fail('request', 'bad health check list')
+        if req['mode'] == 'install':
+            stage = os.path.realpath(os.path.join(self.cfg['crs']['dir'], 'stage')) + os.sep
+            tb = req.get('tarball') or ''
+            if not isinstance(tb, str) or os.path.realpath(tb) != tb or not tb.startswith(stage) or \
+                    os.path.basename(tb) != 'coreruleset-%s-minimal.tar.gz' % req['to']:
+                raise Fail('request', 'the tarball must be the staged coreruleset-%s-minimal.tar.gz' % req['to'])
+            if not re.fullmatch(r'[0-9a-f]{64}', str(req.get('tarball_sha256'))) or \
+                    not re.fullmatch(r'[0-9a-f]{64}', str(req.get('manifest_sha256'))):
+                raise Fail('request', 'bad checksums')
+        return req
+
+    def crs_dirs(self):
+        """The CRS directories the main ModSecurity files include (<dir>/rules/*.conf)."""
+        out = set()
+        for main in self.main_files():
+            try:
+                with open(main, encoding='utf-8') as fh:
+                    text = fh.read()
+            except OSError:
+                continue
+            for p in self.includes(main, text):
+                if re.search(r'/rules/\*\.conf$', p):
+                    out.add(os.path.dirname(os.path.dirname(p)))
+        return out
+
+    @staticmethod
+    def _read_nofollow(path, limit):
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'rb') as fh:
+            st = os.fstat(fh.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size > limit:
+                raise Fail('request', '%s: not a regular file or too large' % os.path.basename(path))
+            return fh.read(limit + 1)
+
+    @staticmethod
+    def _point(link, name):
+        """Point the symlink link at name (a sibling directory) atomically."""
+        tmp = os.path.join(os.path.dirname(link), '.%s.new' % os.path.basename(link))
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(name, tmp)
+        os.replace(tmp, link)
+
+    def crs_switch(self, req):
+        from . import crsupdate
+        crs, to = req['crs_path'].rstrip('/'), req['to']
+        parent = os.path.dirname(crs)
+        target = os.path.join(parent, 'crs-%s' % to)
+        log = []
+        if req['mode'] == 'install':
+            tb = req['tarball']
+            data = self._read_nofollow(tb, crsupdate.MAX_DOWNLOAD)
+            if hashlib.sha256(data).hexdigest() != req['tarball_sha256']:
+                raise Fail('verify', 'the staged tarball changed since it was checked')
+            asc = self._read_nofollow(tb + '.asc', 64 * 1024)
+            work = tempfile.mkdtemp(prefix='crs-', dir=self.state)
+            try:
+                t, a = os.path.join(work, os.path.basename(tb)), os.path.join(work, os.path.basename(tb) + '.asc')
+                with open(t, 'wb') as fh:
+                    fh.write(data)
+                with open(a, 'wb') as fh:
+                    fh.write(asc)
+                if not crsupdate.verify(t, a):
+                    raise Fail('verify', 'the signature is not valid or not by the CRS release key')
+                log.append('signature ok')
+                if os.path.lexists(target):
+                    if os.path.islink(target) or not os.path.isdir(target):
+                        raise Fail('install', '%s exists and is not a directory' % target)
+                    got = self._manifest_sha(target)
+                    if got != req['manifest_sha256']:
+                        raise Fail('install', '%s exists with other files' % target)
+                    log.append('crs-%s already on the host' % to)
+                else:
+                    tmpd = tempfile.mkdtemp(prefix='.crs-%s.' % to, dir=parent)
+                    try:
+                        top = crsupdate.safe_extract(t, tmpd, 'coreruleset-%s' % to)
+                        if self._manifest_sha(top) != req['manifest_sha256']:
+                            raise Fail('verify', 'the unpacked files differ from the ones compared in the sandbox')
+                        os.chmod(top, 0o755)
+                        os.rename(top, target)
+                    finally:
+                        shutil.rmtree(tmpd, ignore_errors=True)
+                    log.append('installed crs-%s' % to)
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
+        else:
+            st = os.lstat(target) if os.path.lexists(target) else None
+            if st is None or not stat.S_ISDIR(st.st_mode) or st.st_uid != 0:
+                raise Fail('request', 'crs-%s is not a root-owned directory on the host' % to)
+        if not os.path.islink(crs):
+            # first switch: the directory becomes crs-<its version> and crs a link to it (no change in what loads)
+            cur = crsupdate.vstr(crsupdate.installed_version(crs))
+            if not cur:
+                raise Fail('install', 'cannot read the version of %s' % crs)
+            keep = os.path.join(parent, 'crs-%s' % cur)
+            if os.path.lexists(keep):
+                raise Fail('install', '%s already exists' % keep)
+            os.rename(crs, keep)
+            os.symlink(os.path.basename(keep), crs)
+            log.append('%s is now a link to crs-%s' % (crs, cur))
+        old = os.readlink(crs)
+        if old == os.path.basename(target):
+            return {'result': 'ok', 'summary': 'crs-%s is already in use' % to, 'crs': {'from': old, 'to': to}}
+        urls = req.get('health_urls') or []
+        pre = self.health(urls)
+        self._point(crs, os.path.basename(target))
+        try:
+            self.test_config()
+            log.append('nginx -t ok')
+            log.append(self.reload(int(req.get('wait_old_workers') or 120)))
+            post = self.health(urls)
+            diff = {u: [pre[u], post[u]] for u in urls if pre[u] != post[u]}
+            if diff:
+                raise Fail('health', 'health check changed for %d url(s)' % len(diff), health=diff)
+        except Fail as e:
+            self._point(crs, old)
+            try:
+                self.reload(int(req.get('wait_old_workers') or 120))
+            except Fail:
+                pass
+            e.summary += ' -- switched back to %s, nginx reloaded' % old
+            raise
+        self._prune_crs(parent, keep={os.path.basename(target), old})
+        return {'result': 'ok', 'summary': '; '.join(log + ['crs -> crs-%s' % to]), 'crs': {'from': old, 'to': to}}
+
+    @staticmethod
+    def _manifest_sha(path):
+        from . import crsupdate
+        return hashlib.sha256(json.dumps(crsupdate.manifest(path), sort_keys=True).encode()).hexdigest()
+
+    def _prune_crs(self, parent, keep):
+        from . import crsupdate
+        found = sorted((n for n in os.listdir(parent) if re.fullmatch(r'crs-\d+\.\d+\.\d+', n)
+                        and os.path.isdir(os.path.join(parent, n)) and not os.path.islink(os.path.join(parent, n))),
+                       key=lambda n: crsupdate.vtuple(n[4:]))
+        for n in found[:-self.CRS_KEEP] if len(found) > self.CRS_KEEP else []:
+            if n not in keep:
+                shutil.rmtree(os.path.join(parent, n), ignore_errors=True)
+
     def process(self):
         os.makedirs(self.state, mode=0o700, exist_ok=True)
         os.chmod(self.state, 0o700)
@@ -401,12 +559,19 @@ class Applier:
                 if refused:
                     raise Fail('integrity', refused)
                 req = self.load_request(path)
-                res.update(version=req['version'], change_id=req['change_id'])
-                res.update(self.apply(req))
+                if req.get('action') == 'crs_switch':
+                    res.update(action='crs_switch', change_id=req['change_id'])
+                    res.update(self.crs_switch(req))
+                else:
+                    res.update(version=req['version'], change_id=req['change_id'])
+                    res.update(self.apply(req))
             except Fail as e:
                 res.update(result='failed', step=e.step, summary=e.summary, **e.extra)
             except Exception as e:
                 res.update(result='failed', step='request', summary='%s: %s' % (type(e).__name__, clean(str(e), 300)))
+            mc = re.match(r'crs-c(\d+)$', base)
+            if mc:
+                res.update(action='crs_switch', change_id=int(mc.group(1)))
             m = re.match(r'v(\d+)-c(\d+)$', base)
             if m and 'version' not in res:
                 res.update(version=int(m.group(1)), change_id=int(m.group(2)))

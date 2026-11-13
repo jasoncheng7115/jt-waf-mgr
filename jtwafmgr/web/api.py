@@ -744,6 +744,18 @@ def crs_check(app, req):
     return json_response(202, {'requested': True})
 
 
+def crs_propose(app, req):
+    """Approver: switch the CRS to a staged release (install) or to a version on the host (rollback), as a change."""
+    b = req.body()
+    if not isinstance(b, dict):
+        raise ApiError(400, 'bad_request', 'an object')
+    try:
+        cid = _wf(app).propose_crs(b.get('mode'), b.get('version'), b.get('reason'), req.user['username'], role=req.user['role'])
+    except ChangeError as e:
+        raise _change_error(e)
+    return json_response(202, {'change_id': cid})
+
+
 def waf_model(app, req):
     from .. import decision
     return json_response(200, decision.model(app))
@@ -985,6 +997,7 @@ def register(router):
     R('GET', V + '/crs', crs, viewer('rules:read'))
     R('GET', V + '/crs/updates', crs_updates, viewer('rules:read'))
     R('POST', V + '/crs/updates/check', crs_check, ('admin',))
+    R('POST', V + '/crs/updates/propose', crs_propose, ('role', 'approver', None))
     R('GET', V + '/waf/model', waf_model, viewer('rules:read'))
     R('GET', V + '/lookups/ip/{ip}', lookup_ip, viewer('lookups:read'))
     R('GET', V + '/users', users, admin)

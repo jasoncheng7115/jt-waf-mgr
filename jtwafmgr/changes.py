@@ -13,6 +13,7 @@ side only writes a request into the spool directory and reads the result back.
 """
 import collections
 import datetime
+import hashlib
 import json
 import re
 import os
@@ -493,6 +494,116 @@ class Workflow:
             self.db.x('UPDATE changes SET spec=? WHERE id=?', (json.dumps(spec), cid))
         return cid, plan
 
+    # --- OWASP CRS versions --------------------------------------------------------------------------------------
+    def propose_crs(self, mode, version, reason, actor, role=None):
+        """Switch the CRS in use to a staged release (install) or to a version on the host (rollback), as a change:
+        compared in the sandbox, approved by a person (never automatic), switched by the root program."""
+        from . import crsupdate
+        if role not in ('approver', 'admin'):
+            raise ChangeError('forbidden', 403)
+        if mode not in ('install', 'rollback') or not crsupdate.vtuple(str(version or '')):
+            raise ChangeError('invalid_crs_request', 422)
+        reason = (reason or '').strip()
+        if not reason or len(reason) > 2000:
+            raise ChangeError('reason_required')
+        open_ = self.db.one("SELECT id FROM changes WHERE op='crs' AND state NOT IN (%s)" % ','.join('?' * len(FINAL)), FINAL)
+        if open_:
+            raise ChangeError('crs_change_pending', 409, change_id=open_[0])
+        loc = crsupdate.location(self.app.site)
+        if not loc or not loc['version']:
+            raise ChangeError('crs_not_found', 409)
+        if version == loc['version']:
+            raise ChangeError('crs_in_use', 409)
+        spec = {'mode': mode, 'to': version, 'from': loc['version'], 'crs_path': loc['path']}
+        if mode == 'install':
+            staged = crsupdate.read_status(self.cfg).get('staged') or {}
+            if staged.get('version') != version or not os.path.isdir(staged.get('path') or ''):
+                raise ChangeError('crs_not_staged', 409)
+            got = hashlib.sha256(json.dumps(crsupdate.manifest(staged['path']), sort_keys=True).encode()).hexdigest()
+            if got != staged.get('manifest_sha256'):
+                raise ChangeError('crs_stage_changed', 409)
+            spec['staged'] = {k: staged[k] for k in ('path', 'tarball', 'tarball_sha256', 'manifest_sha256')}
+            spec['staged']['tarball_path'] = os.path.join(os.path.dirname(staged['path']), staged['tarball'])
+        elif version not in loc['versions']:
+            raise ChangeError('crs_not_on_host', 409)
+        t = util.now()
+        with self.db.tx() as c:
+            cid = c.execute('INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at) '
+                            "VALUES ('crs', 'system', ?, 'loosen', 'checking', ?, ?, ?, ?)",
+                            (json.dumps(spec), reason, actor, t, t)).lastrowid
+        self.log(cid, actor, 'proposed', 'CRS %s -> %s (%s)' % (loc['version'], version, mode))
+        self.app.audit.log('change.proposed', actor, 'user', None, 'ok', change_id=cid, op='crs', mode=mode,
+                           crs_from=loc['version'], crs_to=version)
+        self._wake.set()
+        return cid
+
+    def _crs_checks(self, cid, r):
+        """Static: the staged files are still the verified ones. Sandbox: the same requests through both versions."""
+        from . import crsupdate
+        spec = json.loads(r['spec'])
+        checks = {'started_at': util.iso(util.now())}
+        new_dir = spec['staged']['path'] if spec['mode'] == 'install' else os.path.join(os.path.dirname(spec['crs_path']),
+                                                                                        'crs-%s' % spec['to'])
+        if spec['mode'] == 'install':
+            got = hashlib.sha256(json.dumps(crsupdate.manifest(new_dir), sort_keys=True).encode()).hexdigest() \
+                if os.path.isdir(new_dir) else None
+            if got != spec['staged']['manifest_sha256']:
+                checks['static'] = {'ok': False, 'error': 'crs_stage_changed'}
+                self._finish_checks(cid, checks, 'failed', 'the staged CRS files changed')
+                return
+        elif crsupdate.vstr(crsupdate.installed_version(new_dir)) != spec['to']:
+            checks['static'] = {'ok': False, 'error': 'crs_not_on_host'}
+            self._finish_checks(cid, checks, 'failed', 'crs-%s is not on the host' % spec['to'])
+            return
+        checks['static'] = {'ok': True}
+        if self.sandbox is not None and self.sandbox.available():
+            try:
+                sb = self.sandbox.run_crs_compare(spec['crs_path'], new_dir, self.equivalence_requests())
+            except Exception as e:      # noqa: BLE001
+                traceback.print_exc()
+                sb = {'ok': False, 'error': 'sandbox_error: %s' % type(e).__name__}
+        else:
+            sb = {'ok': not self.setting('sandbox.required'), 'skipped': 'sandbox not available on this host'}
+        checks['sandbox'] = sb
+        checks['finished_at'] = util.iso(util.now())
+        if not sb.get('ok'):
+            self._finish_checks(cid, checks, 'failed', 'sandbox test failed')
+            return
+        self._finish_checks(cid, checks, 'pending_approval', None)
+
+    def _send_crs(self, cid, r):
+        spec = json.loads(r['spec'])
+        req = {'request_id': 'crs-c%d' % cid, 'action': 'crs_switch', 'change_id': cid, 'mode': spec['mode'],
+               'to': spec['to'], 'crs_path': spec['crs_path'], 'health_urls': self.setting('health.urls'),
+               'wait_old_workers': self.setting('apply.wait_old_workers_seconds')}
+        if spec['mode'] == 'install':
+            req.update(tarball=spec['staged']['tarball_path'], tarball_sha256=spec['staged']['tarball_sha256'],
+                       manifest_sha256=spec['staged']['manifest_sha256'])
+        self._write_request(req)
+        self._state(cid, 'applying')
+        self.log(cid, 'system', 'apply_requested', 'CRS %s -> %s' % (spec['from'], spec['to']))
+
+    def _handle_crs_result(self, res, r):
+        cid = r['id']
+        ok = res.get('result') == 'ok'
+        summary = str(res.get('summary', ''))[:1000]
+        if ok:
+            self._state(cid, 'applied')
+            self.log(cid, 'system', 'applied', summary)
+            spec = json.loads(r['spec'])
+            try:
+                from . import alerts
+                self.db.x("UPDATE alerts SET state='handled', handled_by='system', handled_at=?, note=? "
+                          "WHERE kind='crs_update' AND state='open'", (util.now(), 'CRS %s in use (change #%d)' % (spec['to'], cid)))
+            except Exception:       # noqa: BLE001
+                pass
+        else:
+            self._state(cid, 'apply_failed', summary)
+            self.log(cid, 'system', 'apply_failed', summary)
+        self.app.audit.log('change.applied' if ok else 'change.apply_failed', 'system', 'system', None,
+                           'ok' if ok else 'failed', severity=None if ok else 'crit', change_id=cid, op='crs',
+                           summary=summary[:300])
+
     def propose_adoption(self, actor):
         if self.managed.adopted():
             raise ChangeError('already_adopted', 409)
@@ -550,6 +661,8 @@ class Workflow:
         r = self.get(cid)
         if r['state'] != 'checking':
             return
+        if r['op'] == 'crs':
+            return self._crs_checks(cid, r)
         checks = {'started_at': util.iso(util.now())}
         cur = self.managed.current_version()
         base = cur['version'] if cur else 0
@@ -753,7 +866,7 @@ class Workflow:
         r = self.get(cid)
         cur = self.managed.current_version()
         base = cur['version'] if cur else 0
-        if r['op'] != 'adopt' and (r['base_version'] or 0) != base:
+        if r['op'] not in ('adopt', 'crs') and (r['base_version'] or 0) != base:   # a CRS switch has no rule files
             # another change was applied meanwhile: check again against the new base
             self._state(cid, 'checking')
             self.log(cid, 'system', 'stale', 'version %s applied since the checks; checking again' % base)
@@ -779,6 +892,8 @@ class Workflow:
 
     def _send(self, cid):
         r = self.get(cid)
+        if r['op'] == 'crs':
+            return self._send_crs(cid, r)
         cur = self.managed.current_version()
         version = self._next_version()
         if r['op'] != 'adopt':
@@ -897,6 +1012,10 @@ class Workflow:
     def _handle_result(self, res):
         version, cid = res.get('version'), res.get('change_id')
         r = self.db.one('SELECT * FROM changes WHERE id=?', (cid,))
+        if res.get('action') == 'crs_switch':
+            if r and r['op'] == 'crs' and r['state'] == 'applying':
+                self._handle_crs_result(res, r)
+            return
         v = self.db.one('SELECT * FROM versions WHERE version=?', (version,))
         if not r or not v:
             return
@@ -1051,6 +1170,12 @@ def _check_tests(tests):
 
 
 def summarize(kind, spec, op):
+    if op == 'crs':
+        return 'OWASP CRS %s -> %s%s' % (spec.get('from'), spec.get('to'), ' (rollback)' if spec.get('mode') == 'rollback' else '')
+    return _summarize(kind, spec, op)
+
+
+def _summarize(kind, spec, op):
     def scope():
         parts = []
         h, p = spec.get('host') or {}, spec.get('path') or {}

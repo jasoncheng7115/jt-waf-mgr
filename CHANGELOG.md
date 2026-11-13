@@ -2,6 +2,17 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.21 (2026-11-13)
+
+- OWASP CRS updates, step 2: on the CRS page an approver proposes switching to the downloaded and verified release, or
+  back to a version kept on the host. It is a change: the sandbox runs the same recent requests (and the regression
+  samples) through the CRS in use and the other version and lists what is newly blocked or no longer blocked; a person
+  other than the proposer approves (never automatic). The root program then reads the staged tarball without
+  following links, checks its SHA-256 and the CRS signature again, unpacks it itself, refuses it unless its files are
+  exactly the ones compared, points the crs link at crs-<version> (a plain crs directory becomes crs-<version> + link
+  on the first switch), tests and reloads nginx, checks health and switches back on any failure. The three newest
+  versions are kept. When applied, the "CRS update ready" alert closes. API: `POST /api/v1/crs/updates/propose`.
+
 ## 0.4.20 (2026-11-13)
 
 - OWASP CRS updates, step 1 (off by default; Settings or the CRS page: "Keep the CRS current from here"): a new

@@ -104,6 +104,11 @@
           <span>{{ t('sandbox.equiv_requests') }} <b>{{ fmtNum(sb.requests) }}</b></span>
           <span>{{ t('sandbox.blocked_before') }} <b>{{ fmtNum(sb.blocked_before) }}</b></span>
           <span :class="{ warn: (sb.differences || []).length }">{{ t('sandbox.differences') }} <b>{{ fmtNum((sb.differences || []).length) }}</b></span>
+          <template v-if="sb.blocked_after !== undefined">
+            <span>{{ t('sandbox.blocked_after') }} <b>{{ fmtNum(sb.blocked_after) }}</b></span>
+            <span :class="{ warn: sb.newly_blocked }">{{ t('sandbox.newly_blocked') }} <b>{{ fmtNum(sb.newly_blocked) }}</b></span>
+            <span :class="{ warn: sb.no_longer_blocked }">{{ t('sandbox.no_longer_blocked') }} <b>{{ fmtNum(sb.no_longer_blocked) }}</b></span>
+          </template>
         </div>
         <ul v-if="(sb.differences || []).length" class="plainlist small">
           <li v-for="(d, i) in sb.differences" :key="i">

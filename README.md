@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.20
+# jt-waf-mgr v0.4.21
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -70,7 +70,9 @@ something you can read, and every change into a workflow you can trust:
   per channel; retries, rate limits and delivery records. Values from requests are never markup, links or mentions.
 - **OWASP CRS updates** (optional, off by default): a sandboxed daily check takes the newest release of the major
   version in use once it has been out a week, keeps it only with a valid signature by the pinned CRS release key and
-  stages it; the CRS page shows what is in use, what is new and what is verified.
+  stages it; the CRS page shows what is in use, what is new and what is verified. Switching to it (or back to a kept
+  version) is a change: both versions run the same recent requests in the sandbox, a person approves, the root
+  program re-verifies the signature, unpacks it itself, switches the crs link and switches back on any failure.
 - **Log servers (syslog / SIEM)**: up to 8 destinations, each with its own protocol (local socket, UDP, TCP, TLS),
   record format (JSON, CEF, LEEF 2.0, GELF 1.1, key=value) and content (audit records, WAF events, alerts); its own
   queue and retries; a test send that shows exactly what went out.
@@ -104,8 +106,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.20.tar.gz.sig jt-waf-mgr-0.4.20.tar.gz
-tar xzf jt-waf-mgr-0.4.20.tar.gz && cd jt-waf-mgr-0.4.20
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.21.tar.gz.sig jt-waf-mgr-0.4.21.tar.gz
+tar xzf jt-waf-mgr-0.4.21.tar.gz && cd jt-waf-mgr-0.4.21
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

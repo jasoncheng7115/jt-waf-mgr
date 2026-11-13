@@ -70,8 +70,10 @@ class Sandbox:
         n, _ = self.site.load()
         return [d.args[0] for d, ctx in walk(n.tree) if d.name == 'load_module' and d.args and not ctx]
 
-    def build(self, root, replace):
-        """Writes <root>/conf/*.conf. replace: {absolute production path: text to use instead}."""
+    def build(self, root, replace, crs_swap=None):
+        """Writes <root>/conf/*.conf. replace: {absolute production path: text to use instead}. crs_swap: (the CRS
+        directory the main file includes, another CRS version's directory) -- the same configuration with the other
+        CRS rules (a CRS update compared in the sandbox)."""
         conf = os.path.join(root, 'conf')
         tmp = os.path.join(root, 'tmp')
         logs = os.path.join(root, 'logs')
@@ -90,6 +92,9 @@ class Sandbox:
                     continue
                 p = mm.group(2)
                 p = p if os.path.isabs(p) else os.path.join(os.path.dirname(main), p)
+                if crs_swap and p.startswith(crs_swap[0].rstrip('/') + '/'):
+                    out.append('Include %s' % (crs_swap[1].rstrip('/') + p[len(crs_swap[0].rstrip('/')):]))
+                    continue
                 if p in replace:
                     dst = os.path.join(conf, 'cand-%s' % os.path.basename(p))
                     with open(dst, 'w', encoding='utf-8') as fh:
@@ -156,13 +161,13 @@ http {
         return AUDIT_REWRITE.sub(lambda x: self._audit_line(x, root), line)
 
     # --- running ----------------------------------------------------------------------------
-    def run(self, replace, cases):
+    def run(self, replace, cases, crs_swap=None):
         """Starts a sandbox with `replace`, sends `cases`, returns per-case results. Always cleans up."""
         os.makedirs(self.base, mode=0o700, exist_ok=True)
         root = tempfile.mkdtemp(prefix='sbx-', dir=self.base)
         pid = None
         try:
-            port = self.build(root, replace)
+            port = self.build(root, replace, crs_swap)
             conf = os.path.join(root, 'conf', 'nginx.conf')
             base_cmd = [self.nginx, '-p', root + '/', '-c', conf, '-e', os.path.join(root, 'logs', 'error.log')]
             t = subprocess.run(base_cmd + ['-t'], capture_output=True, text=True, timeout=120)
@@ -342,6 +347,24 @@ http {
         except SandboxError as e:
             return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
         return evaluate(cases, res, self.cfg)
+
+    def run_crs_compare(self, crs_dir, new_dir, requests):
+        """A CRS update: the same requests through the CRS in use and through new_dir (everything else as it is).
+        Differences in status or matched rules, with counts of newly blocked and no longer blocked requests."""
+        try:
+            old = self.run({}, requests)
+            new = self.run({}, requests, crs_swap=(crs_dir, new_dir))
+        except SandboxError as e:
+            return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
+        diffs, more, fewer = [], 0, 0
+        for c, a, b in zip(requests, old, new):
+            if a['status'] != b['status'] or sorted(a['rules']) != sorted(b['rules']):
+                more += a['status'] != 403 and b['status'] == 403
+                fewer += a['status'] == 403 and b['status'] != 403
+                diffs.append({'request': _case_view(c), 'before': [a['status'], a['rules']], 'after': [b['status'], b['rules']]})
+        return {'ok': True, 'requests': len(requests), 'blocked_before': sum(1 for a in old if a['status'] == 403),
+                'blocked_after': sum(1 for b in new if b['status'] == 403), 'newly_blocked': more, 'no_longer_blocked': fewer,
+                'changed': len(diffs), 'differences': diffs[:50]}
 
     def run_equivalence(self, files, managed, requests):
         """Adoption: the same requests through the current and the candidate configuration."""
