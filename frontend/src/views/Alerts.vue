@@ -95,8 +95,8 @@ const cols = computed(() => [
   { key: 'id', label: t('alerts.col.id'), align: 'num', hidden: true },
   { key: 'created_at', label: t('alerts.col.time'), required: true, text: (r) => fmtShortTime(r.created_at) },
   { key: 'severity', label: t('alerts.col.severity'), value: (r) => (r.severity === 'critical' ? 0 : 1), text: (r) => t('alerts.sev.' + r.severity) },
-  { key: 'kind', label: t('alerts.col.kind'), value: (r) => kindText(r) },
-  { key: 'summary', label: t('alerts.col.what'), value: (r) => r.summary + ' ' + (r.details.reason || '') },
+  { key: 'kind', label: t('alerts.col.kind'), class: 'c-kind', value: (r) => kindText(r) },
+  { key: 'summary', label: t('alerts.col.what'), class: 'c-fill', value: (r) => r.summary + ' ' + (r.details.reason || '') },
   { key: 'state', label: t('alerts.col.state'), value: (r) => t('alerts.state.' + r.state) },
   { key: 'actions', label: t('alerts.col.actions'), sortable: false, filterable: false },
 ])

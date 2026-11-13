@@ -114,15 +114,41 @@ def llm_configured(c):
 
 
 def readiness(cfg):
-    """None when a run can happen, else the reason."""
+    """None when a run can happen, else the reason. The LLM is optional: without one the program's own rules
+    still judge what they can (rules_only)."""
     if not cfg['analyst']['enabled']:
         return 'analyst_disabled'
+    return None
+
+
+def llm_ready(cfg):
+    """None when the LLM can be asked, else why not (the run then uses the program rules only)."""
     c = llm.Client(cfg)
     if not c.enabled:
         return 'llm_disabled'
     if not llm_configured(c):
         return 'llm_not_configured'
     return None
+
+
+RULES_MODEL = 'program rules (no LLM)'
+
+
+def rule_verdict(c, g):
+    """The program's own judgement of an attack candidate, or None when it needs the LLM: a name attackers look for
+    (RECON_NAME), asked for from outside only, never answered 2xx, no internal user -- a probe whatever the model
+    would say."""
+    if not g.get('recon_name') and not RECON_NAME.search((c['path'] or '').lower()):
+        return None
+    if c.get('answered_2xx') or c.get('internal_users') or g.get('internal_users'):
+        return None
+    path = c['path']
+    if not path.startswith('/') or len(path) > 200 or any(ch in path for ch in '?#*') or not re.fullmatch(r'[\x21-\x7e]+', path):
+        return None
+    return {'id': c['id'], 'verdict': 'attack_probe', 'confidence': 0.95, 'by': 'rules',
+            'reason': 'Program rule: a secret or configuration file name, asked for from outside only (%d sources, %d '
+                      'events), never answered 2xx, no internal user.' % (c['sources'], c['events']),
+            'regex': '^' + re.escape(path) + '$', 'label': 'secret file probe', 'problem': None}
 
 
 def _stale_after(cfg):
@@ -823,8 +849,9 @@ def run(app, force=False, log=print, trigger=None):
         log('analyst: not due (last run %s)' % util.iso(last['started_at']))
         return {'ran': False, 'reason': 'not_due', 'next_due': util.iso(last['started_at'] + a['interval_minutes'] * 60)}
     client = llm.Client(cfg)
+    client.use = llm_ready(cfg) is None         # without it: the program rules only
     run_id = db.x('INSERT INTO analyst_runs(node_id, started_at, trigger, window_hours, model) VALUES (?,?,?,?,?)',
-                  (cfg['node']['id'], now, trigger, a['window_hours'], client.model)).lastrowid
+                  (cfg['node']['id'], now, trigger, a['window_hours'], client.model if client.use else RULES_MODEL)).lastrowid
     st = {'candidates': [], 'verdicts': [], 'proposals': [], 'skipped': [], 'alerts': [], 'events_scanned': 0, 'conflicts': set(),
           'conflict_dirs': set(), 'usage': {}, 'error': None,
           'reply': '', 'llm_seconds': None, 'prompt_chars': 0, 'run_id': run_id}
@@ -849,7 +876,8 @@ def run(app, force=False, log=print, trigger=None):
           scrub(st['reply'][:REPLY_EXCERPT]), scrub(json.dumps(st['alerts'], ensure_ascii=False)), st['events_scanned'], run_id))
     split = collections.Counter(v['verdict'] or 'invalid' for v in st['verdicts'])
     progress(cfg, run_id, 'error' if err else 'done', candidates=len(st['candidates']), proposals=len(st['proposals']))
-    app.audit.log('analyst.run', ACTOR, 'system', None, 'error' if err else 'ok', run_id=run_id, model=client.model,
+    app.audit.log('analyst.run', ACTOR, 'system', None, 'error' if err else 'ok', run_id=run_id,
+                  model=client.model if client.use else RULES_MODEL,
                   events_scanned=st['events_scanned'],
                   trigger=trigger, candidates=len(st['candidates']), verdicts=dict(split),
                   proposals=[p['change_id'] for p in st['proposals']], skipped=len(st['skipped']),
@@ -913,8 +941,20 @@ def _analyse(app, client, a, st, log):
         return
     by_id = {c['id']: (c, g) for c, g in zip(cands, chosen)}
     fp_by_id = {c['id']: (c, g) for c, g in zip(fps, fchosen)}
+    # the program's own rules first: what they settle never goes to the model (and works without one)
+    rule_v = {}
+    for c, g in zip(cands, chosen) if a.get('rules', True) else ():
+        v = rule_verdict(c, g)
+        if v:
+            rule_v[c['id']] = v
+    use_llm = getattr(client, 'use', True)
+    ask_c = [c for c in cands if c['id'] not in rule_v] if use_llm else []
+    ask_f = list(fps) if use_llm else []
+    if not use_llm:
+        for c in [c for c in cands if c['id'] not in rule_v] + list(fps):
+            st['skipped'].append({'id': c['id'], 'path': c['path'], 'reason': 'no_llm'})
     # in batches: a long answer from a small model can take longer than a gateway in front of the LLM server waits
-    batches, b_c, b_f = [], list(cands), list(fps)
+    batches, b_c, b_f = [], list(ask_c), list(ask_f)
     while b_c or b_f:
         take_c = b_c[:BATCH]
         take_f = b_f[:BATCH - len(take_c)]
@@ -925,7 +965,7 @@ def _analyse(app, client, a, st, log):
     for n, (bc, bf) in enumerate(batches, 1):
         msgs = build_messages(bc, a['window_hours'], bf)
         st['prompt_chars'] += sum(len(m['content']) for m in msgs)
-        prog('llm', candidates=len(cands) + len(fps), groups=len(groups), model=client.model[:120], batch=n, batches=len(batches))
+        prog('llm', candidates=len(ask_c) + len(ask_f), groups=len(groups), model=client.model[:120], batch=n, batches=len(batches))
         schema = reply_schema([c['id'] for c in bc], [c['id'] for c in bf])
         text = None
         for attempt in (1, 2):
@@ -951,10 +991,11 @@ def _analyse(app, client, a, st, log):
         verdicts.update(v1)
         ignored += ig1
         model_alerts += al1
+    verdicts.update(rule_v)
     st['llm_seconds'] = round(st['llm_seconds'], 1)
     st['usage'] = dict(usage_sum)
     st['reply'] = '\n---\n'.join(replies)
-    if failed and len(failed) == len(batches):
+    if batches and failed and len(failed) == len(batches):
         raise llm.LLMError(failed[0].split(':')[0], 'all %d batches failed' % len(batches))
     if failed:
         st['error'] = 'partial: %d of %d batches failed (%s)' % (len(failed), len(batches), failed[0][:120])
@@ -1009,7 +1050,8 @@ def _analyse(app, client, a, st, log):
             continue
         spec = {'target': 'path', 'regex': v['regex'], 'msg': _msg(v['label'], g['path']), 'host': {'mode': 'any', 'value': ''}}
         try:
-            cid = app.workflow.propose('add', 'confident_block', spec, _reason(v, c, client.model, a['window_hours']), ACTOR,
+            cid = app.workflow.propose('add', 'confident_block', spec, _reason(v, c, RULES_MODEL if v.get('by') == 'rules' else client.model,
+                                                                                  a['window_hours']), ACTOR,
                                        via='api', owner=ACTOR, tests=_tests(c, sorted(raws, key=lambda r: -g['variants'][r])))
         except ChangeError as e:
             v['problem'] = 'refused_%s' % (e.details.get('reason') or e.code)
@@ -1018,7 +1060,7 @@ def _analyse(app, client, a, st, log):
         st['proposals'].append({'id': c['id'], 'type': 'confident_block', 'path': c['path'], 'change_id': cid,
                                 'regex': v['regex']})
         proposed.append(_matcher(spec))
-    _alerts(app, a, st, by_id, fp_by_id, verdicts, model_alerts, adopted, client.model, log)
+    _alerts(app, a, st, by_id, fp_by_id, verdicts, model_alerts, adopted, client.model if use_llm else RULES_MODEL, log)
 
 
 def in_conflict(st, path):
@@ -1183,6 +1225,7 @@ def status(app):
     due = (last['started_at'] + a['interval_minutes'] * 60) if last else util.now()
     return {'enabled': bool(a['enabled']), 'llm_enabled': c.enabled, 'configured': llm_configured(c),
             'ready': why is None, 'not_ready_reason': why, 'model': c.model, 'key_set': bool(c.key),
+            'mode': 'llm' if llm_ready(cfg) is None else 'rules_only', 'llm_not_ready_reason': llm_ready(cfg),
             'interval_minutes': a['interval_minutes'], 'window_hours': a['window_hours'], 'max_proposals': a['max_proposals'],
             'min_events': a['min_events'], 'min_sources': a['min_sources'], 'min_confidence': MIN_CONFIDENCE,
             'max_candidates': MAX_CANDIDATES, 'decline_days': DECLINE_DAYS,

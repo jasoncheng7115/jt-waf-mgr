@@ -64,6 +64,9 @@ DEFAULTS = {
                              'session', 'sessionid', 'pin', 'totp', 'passphrase'],
     },
     'managed': {
+        # who wrote the rules imported unchanged at adoption, as the rule list shows it: 'site' (the site's own) or
+        # 'jason_tools' (a site whose rules Jason Tools wrote before adoption)
+        'imported_author': 'site',
         # jt-waf-mgr writes only these files (created by the adoption step).
         'dir': '/etc/nginx/modsec/jt-waf-mgr',
         # Existing site rule files to import at adoption; empty = detect from the main ModSecurity file
@@ -167,6 +170,15 @@ DEFAULTS = {
         'api_max_ttl': 7 * 86400,
         'ui_max_ttl': 30 * 86400,
         'reload_seconds': 60,
+        # automatic blocks of sources that guess secret / configuration files (program rule, no LLM): one external
+        # address asking for auto_recon_paths different such names within auto_recon_minutes is blocked for
+        # auto_recon_ttl seconds; at most auto_recon_per_hour such blocks an hour; an address a person unblocked is
+        # left alone for 7 days. Off by default.
+        'auto_recon': False,
+        'auto_recon_paths': 5,
+        'auto_recon_minutes': 60,
+        'auto_recon_ttl': 86400,
+        'auto_recon_per_hour': 30,
     },
     'traffic': {
         # request counts from the nginx access logs (traffic.py): per site and hour, counts only -- no address,
@@ -217,6 +229,9 @@ DEFAULTS = {
         'max_proposals': 5,
         'min_events': 5,
         'min_sources': 2,
+        # the program's own rules (no LLM needed): a secret or configuration file name asked for from outside only,
+        # never answered 2xx, no internal user -> a confident-block proposal without asking the model
+        'rules': True,
     },
     'notify': {
         # notifications (e-mail and chat channels): set in Settings > Notifications; sent by jt-waf-mgr-notify.service
@@ -310,10 +325,13 @@ class Config:
             raise ConfigError('syslog.content: a list of audit, event, alert')
         if not isinstance(sl.get('more', []), list) or len(sl.get('more', [])) > 7:
             raise ConfigError('syslog.more: up to 7 more destinations')
+        if data['managed'].get('imported_author', 'site') not in ('site', 'jason_tools'):
+            raise ConfigError('managed.imported_author: site or jason_tools')
         bl = data['blocks']
         for k, lo, hi in (('max_active', 1, 20000), ('max_per_token', 1, 20000), ('token_per_hour', 1, 100000),
                           ('min_ttl', 10, 86400), ('default_ttl', 10, 30 * 86400), ('api_max_ttl', 60, 30 * 86400),
-                          ('ui_max_ttl', 60, 30 * 86400), ('reload_seconds', 5, 3600)):
+                          ('ui_max_ttl', 60, 30 * 86400), ('reload_seconds', 5, 3600), ('auto_recon_paths', 3, 100),
+                          ('auto_recon_minutes', 5, 1440), ('auto_recon_ttl', 600, 30 * 86400), ('auto_recon_per_hour', 1, 1000)):
             if not isinstance(bl[k], int) or isinstance(bl[k], bool) or not lo <= bl[k] <= hi:
                 raise ConfigError('blocks.%s: %d-%d' % (k, lo, hi))
         if not bl['min_ttl'] <= bl['default_ttl'] <= bl['ui_max_ttl']:

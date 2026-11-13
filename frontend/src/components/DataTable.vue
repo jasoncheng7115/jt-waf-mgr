@@ -55,7 +55,10 @@
           </tr>
           <tr v-if="showFilters" class="dt-filters">
             <th v-for="c in visibleCols" :key="c.key">
-              <input v-if="c.filterable !== false" v-model="colFilter[c.key]" type="search" :aria-label="t('table.filter_column', { col: c.label })"
+              <!-- a column with few different values (kind, author, action, state...) gets a drop-down of them -->
+              <SelectBox v-if="c.filterable !== false && pickOptions[c.key]" v-model="colPick[c.key]" :options="pickOptions[c.key]" class="dt-pick"
+                         :aria-label="t('table.filter_column', { col: c.label })" />
+              <input v-else-if="c.filterable !== false" v-model="colFilter[c.key]" type="search" :aria-label="t('table.filter_column', { col: c.label })"
                      :placeholder="t('table.filter')" />
             </th>
           </tr>
@@ -203,13 +206,37 @@ function keyOf(r, i) {
   return k === undefined || k === null ? i : k
 }
 
-const activeFilters = computed(() => Object.values(colFilter).filter((v) => v && String(v).trim()).length)
+const colPick = reactive({})
+// the values a column can be filtered by from a list: only text columns with 2-25 different short values
+function pickText(c, r) { const v = valueOf(c, r); return typeof v === 'string' ? v.trim() : '' }
+const pickOptions = computed(() => {
+  const out = {}
+  if (!showFilters.value) return out
+  for (const c of visibleCols.value) {
+    if (c.filterable === false || c.align === 'num' || c.pick === false) continue
+    const seen = new Set()
+    let ok = true
+    for (const r of props.rows) {
+      const v = pickText(c, r)
+      if (!v) continue
+      if (v.length > 60 || (seen.add(v), seen.size > 25)) { ok = false; break }
+    }
+    if (!ok || seen.size < 2) continue
+    const coll = new Intl.Collator(lang.value, { numeric: true, sensitivity: 'base' })
+    out[c.key] = [{ value: '', label: t('table.filter_all') }].concat([...seen].sort(coll.compare).map((v) => ({ value: v, label: v })))
+  }
+  return out
+})
+const activeFilters = computed(() => Object.values(colFilter).filter((v) => v && String(v).trim()).length
+  + Object.values(colPick).filter((v) => v).length)
 const filtered = computed(() => {
   const q = quick.value.trim().toLowerCase()
   const cf = Object.entries(colFilter).filter(([, v]) => v && String(v).trim()).map(([k, v]) => [props.columns.find((c) => c.key === k), String(v).trim().toLowerCase()]).filter(([c]) => c)
   let out = props.rows
   if (q) out = out.filter((r) => visibleCols.value.some((c) => textOf(c, r).toLowerCase().includes(q)))
   if (cf.length) out = out.filter((r) => cf.every(([c, v]) => textOf(c, r).toLowerCase().includes(v)))
+  const cp = Object.entries(colPick).filter(([k, v]) => v && pickOptions.value[k]).map(([k, v]) => [props.columns.find((c) => c.key === k), v]).filter(([c]) => c)
+  if (cp.length) out = out.filter((r) => cp.every(([c, v]) => pickText(c, r) === v))
   const c = props.columns.find((x) => x.key === sortKey.value)
   if (c) {
     const coll = new Intl.Collator(lang.value, { numeric: true, sensitivity: 'base' })
@@ -228,7 +255,7 @@ const filtered = computed(() => {
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
 const from = computed(() => page.value * pageSize.value)
 const pageRows = computed(() => filtered.value.slice(from.value, from.value + pageSize.value))
-watch([quick, colFilter, pageSize, sortKey, sortDir], () => { page.value = 0 }, { deep: true })
+watch([quick, colFilter, colPick, pageSize, sortKey, sortDir], () => { page.value = 0 }, { deep: true })
 watch(pages, (n) => { if (page.value > n - 1) page.value = n - 1 })
 
 function sortBy(c) {
@@ -239,6 +266,7 @@ function sortBy(c) {
 function clearFilters() {
   quick.value = ''
   for (const k of Object.keys(colFilter)) colFilter[k] = ''
+  for (const k of Object.keys(colPick)) colPick[k] = ''
 }
 const sizeOptions = computed(() => [10, 25, 50, 100, 200].map((n) => ({ value: n, label: t('table.per_page', { n }) })))
 

@@ -19,8 +19,8 @@
         <span v-if="st.requested" class="badge b-warn">{{ t('geoip.queued') }}</span>
         <span v-if="!st.enabled" class="badge b-warn">{{ t('geoip.disabled') }}</span></p>
       <div class="actions">
-        <button type="button" class="btn small" :disabled="busy || !st.configured || st.requested" @click="update"><Icon name="download" />{{ t('geoip.update_now') }}</button>
-        <button type="button" class="btn small ghost" :disabled="busy" @click="load"><Icon name="refresh" />{{ t('common.refresh') }}</button>
+        <button type="button" class="btn" :disabled="busy || !st.configured || st.requested" @click="update"><Icon name="download" />{{ t('geoip.update_now') }}</button>
+        <button type="button" class="btn ghost" :disabled="busy" @click="load"><Icon name="refresh" />{{ t('common.refresh') }}</button>
       </div>
     </template>
   </section>

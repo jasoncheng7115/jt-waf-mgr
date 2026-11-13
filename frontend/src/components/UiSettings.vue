@@ -9,6 +9,9 @@
       <p class="ghint">{{ t('uiset.group.' + g.key + '.hint') }}</p>
       <p v-if="g.key === 'analyst'" class="alert info aidisclaimer" role="note"><Icon name="info" /> {{ t('analysis.disclaimer') }}</p>
       <FlowSteps v-if="g.key === 'llm'" compact :steps="llmSteps" />
+      <AnalystTimeline v-if="g.key === 'analyst' && s && s['analyst.window_hours']" :window-hours="Number(form['analyst.window_hours']) || 1"
+                       :interval-minutes="Number(form['analyst.interval_minutes']) || 10" :next-due="(anStatus && anStatus.next_due) || ''"
+                       :enabled="!!form['analyst.enabled']" />
       <div class="srows">
         <template v-for="k in g.keys" :key="k">
           <div v-if="s[k]" class="srow" :class="{ changed: isDirty(k) }">
@@ -93,6 +96,7 @@ import Icon from './Icon.vue'
 import ErrorBox from './ErrorBox.vue'
 import SelectBox from './SelectBox.vue'
 import FlowSteps from './FlowSteps.vue'
+import AnalystTimeline from './AnalystTimeline.vue'
 import { unfold } from '../cardFold.js'
 
 const route = useRoute()
@@ -102,7 +106,7 @@ const emit = defineEmits(['saved'])
 const GROUPS = [
   { key: 'geoip', icon: 'globe', keys: ['geoip.enabled', 'geoip.account_id', 'geoip.license_key', 'geoip.editions', 'geoip.update_days'] },
   { key: 'llm', icon: 'server', keys: ['llm.url', 'llm.api_key', 'llm.model', 'llm.timeout_seconds', 'llm.enabled'] },
-  { key: 'analyst', icon: 'timer', keys: ['analyst.enabled', 'analyst.interval_minutes', 'analyst.window_hours', 'analyst.max_proposals', 'analyst.min_events', 'analyst.min_sources'] },
+  { key: 'analyst', icon: 'timer', keys: ['analyst.enabled', 'analyst.rules', 'analyst.interval_minutes', 'analyst.window_hours', 'analyst.max_proposals', 'analyst.min_events', 'analyst.min_sources'] },
   { key: 'notify', icon: 'notify', keys: ['notify.enabled', 'notify.language', 'notify.base_url', 'notify.max_per_hour', 'notify.remind_hours', 'notify.report_hour'] },
   { key: 'n_email', icon: 'mail', channel: 'email', keys: ['notify.email_enabled', 'notify.smtp_host', 'notify.smtp_port', 'notify.smtp_tls', 'notify.smtp_username', 'notify.smtp_password', 'notify.smtp_from', 'notify.email_to'] },
   { key: 'n_telegram', icon: 'chat', channel: 'telegram', keys: ['notify.telegram_enabled', 'notify.telegram_token', 'notify.telegram_chat_id'] },
@@ -112,9 +116,9 @@ const GROUPS = [
   { key: 'n_zulip', icon: 'chat', channel: 'zulip', keys: ['notify.zulip_enabled', 'notify.zulip_site', 'notify.zulip_bot_email', 'notify.zulip_api_key', 'notify.zulip_stream', 'notify.zulip_topic'] },
   { key: 'n_nextcloud', icon: 'chat', channel: 'nextcloud', keys: ['notify.nextcloud_enabled', 'notify.nextcloud_url', 'notify.nextcloud_token', 'notify.nextcloud_secret'] },
   { key: 'n_webhook', icon: 'link', channel: 'webhook', keys: ['notify.webhook_enabled', 'notify.webhook_url', 'notify.webhook_secret', 'notify.webhook_token'] },
-  { key: 'blocks', icon: 'lock', keys: ['blocks.enabled', 'blocks.protected', 'blocks.max_active', 'blocks.max_per_token', 'blocks.token_per_hour', 'blocks.default_ttl', 'blocks.api_max_ttl', 'blocks.ui_max_ttl', 'blocks.reload_seconds'] },
+  { key: 'blocks', icon: 'lock', keys: ['blocks.enabled', 'blocks.protected', 'blocks.max_active', 'blocks.max_per_token', 'blocks.token_per_hour', 'blocks.default_ttl', 'blocks.api_max_ttl', 'blocks.ui_max_ttl', 'blocks.reload_seconds', 'blocks.auto_recon', 'blocks.auto_recon_paths', 'blocks.auto_recon_minutes', 'blocks.auto_recon_ttl', 'blocks.auto_recon_per_hour'] },
   { key: 'traffic', icon: 'chart', keys: ['traffic.enabled', 'traffic.logs', 'traffic.keep_days', 'traffic.alert', 'traffic.spike_factor', 'traffic.min_requests', 'traffic.error_percent'] },
-  { key: 'network', icon: 'network', keys: ['waf.focus_sites', 'network.known_scanners', 'evidence.catch_all_hosts', 'integrity.automation_paths'] },
+  { key: 'network', icon: 'network', keys: ['managed.imported_author', 'waf.focus_sites', 'network.known_scanners', 'evidence.catch_all_hosts', 'integrity.automation_paths'] },
   { key: 'syslog', icon: 'send', keys: ['syslog.enabled', 'syslog.address', 'syslog.protocol', 'syslog.format', 'syslog.facility'] },
   { key: 'policy', icon: 'lock', keys: ['ui.login_notice', 'compliance.level', 'auth.password_max_age_days', 'auth.password_min_age_hours', 'auth.password_history', 'auth.dormant_days', 'auth.max_sessions_per_user', 'auth.lockout_threshold', 'auth.lockout_minutes'] },
 ]
@@ -327,6 +331,7 @@ function pinTop(el) {
 }
 // Focus sites: the server names nginx serves, offered as one-click choices next to the text box. Only plain names fit
 // the setting (no wildcards, regexes or "_").
+const anStatus = ref(null)
 const hostChoices = ref([])
 const hostQ = ref('')
 const focusSet = computed(() => new Set(String(form['waf.focus_sites'] || '').split('\n').map((x) => x.trim().toLowerCase()).filter(Boolean)))
@@ -358,6 +363,9 @@ async function loadHosts() {
 onMounted(async () => {
   try { load(await get('/settings/ui')) } catch (e) { error.value = e }
   if (s.value && s.value['waf.focus_sites']) loadHosts()
+  if (shownGroups.value.some((g) => g.key === 'analyst')) {
+    try { anStatus.value = await get('/analyst/status') } catch (e) { /* the timeline then starts from now */ }
+  }
   goToHash()
   if (shownGroups.value.some((g) => g.key === 'llm')) {
     try {
@@ -393,7 +401,7 @@ onMounted(async () => {
 .w-lg { width: 100%; max-width: 560px; }
 .secret { display: flex; gap: 8px; align-items: center; }
 .secret input { flex: 1; min-width: 0; }
-.btn.on { border-color: var(--warn); color: var(--warn); }
+.btn.on { background: var(--panel); border-color: var(--warn); color: var(--warn); font-weight: 400; }
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; margin: 0; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch .knob { position: relative; width: 38px; height: 22px; border-radius: 11px; background: var(--border); transition: background .15s; flex: none; }

@@ -80,7 +80,7 @@ class AnalystBase(unittest.TestCase):
             'llm': {'enabled': True, 'url': 'http://127.0.0.1:%d/v1' % self.srv.server_address[1], 'model': 'strata-test',
                     'api_key': KEY, 'timeout_seconds': 20},
             'analyst': {'enabled': True, 'interval_minutes': 180, 'window_hours': 24, 'max_proposals': 5, 'min_events': 3,
-                        'min_sources': 2}})
+                        'min_sources': 2, 'rules': False}})          # the LLM's part; the program rules: TestRules
         self.app = App(self.env.cfg)
         self.wf = self.app.workflow
         self.wf.set_setting('sandbox.required', False, 'test')
@@ -195,6 +195,54 @@ class TestCandidates(AnalystBase):
         sk = json.loads(self.last_run()['skipped'])
         self.assertIn({'path': '/.git/config', 'reason': 'open_change', 'open_change': 2}, sk)
         self.assertEqual(self.srv.seen, [])           # nothing left to ask the model about
+
+
+class TestRules(AnalystBase):
+    """The program's own rules: they decide secret-file probes without the LLM (and without one at all)."""
+
+    def setUp(self):
+        super().setUp()
+        self.app.cfg.data['analyst']['rules'] = True
+
+    def test_secret_file_probe_is_decided_by_the_program(self):
+        self.adopt()
+        self.probes('/.env', 4)
+        self.probes('/phpinfo.php', 4)                  # not a secret file name: the model decides
+        self.answer(lambda p: [{'id': i, 'verdict': 'legitimate', 'confidence': 0.9, 'reason': 'x', 'regex': None,
+                                'label': None} for i in p.values()])
+        out = self.run_analyst()
+        self.assertEqual(len(out['proposals']), 1, self.last_run()['skipped'])
+        r = self.wf.get(out['proposals'][0])
+        self.assertEqual(json.loads(r['spec'])['regex'], r'^/\.env$')
+        self.assertIn('Program rule', r['reason'])
+        self.assertIn(analyst.RULES_MODEL, r['reason'])
+        asked = [c['path'] for body in self.srv.seen for c in candidates_of(body['body'] if 'body' in body else body)]
+        self.assertNotIn('/.env', asked)
+        self.assertIn('/phpinfo.php', asked)
+
+    def test_without_an_llm(self):
+        self.adopt()
+        self.app.cfg.data['llm']['model'] = ''
+        self.probes('/.aws/credentials', 4)
+        self.probes('/phpinfo.php', 4)
+        out = self.run_analyst()
+        self.assertTrue(out['ran'])
+        self.assertEqual(len(out['proposals']), 1)
+        self.assertEqual(self.srv.seen, [])
+        run = self.last_run()
+        self.assertEqual(run['model'], analyst.RULES_MODEL)
+        self.assertIn('no_llm', [x['reason'] for x in json.loads(run['skipped'])])
+        self.assertEqual(analyst.status(self.app)['mode'], 'rules_only')
+
+    def test_answered_2xx_or_internal_use_is_left_to_the_model(self):
+        self.adopt()
+        self.probes('/config.json', 4)
+        self.ev('/config.json', ip='203.0.113.40', status=200)     # a site serves it: not a sure probe
+        self.answer(lambda p: [])
+        out = self.run_analyst()
+        self.assertEqual(out['proposals'], [])
+        self.assertTrue(any(c['path'] == '/config.json' for body in self.srv.seen
+                            for c in candidates_of(body['body'] if 'body' in body else body)))
 
 
 class TestRuns(AnalystBase):
@@ -391,8 +439,12 @@ class TestRuns(AnalystBase):
         self.assertFalse(os.path.exists(req))          # removed even when disabled (the path unit would loop)
         self.app.cfg['analyst']['enabled'] = True
         self.app.cfg['llm']['model'] = ''
-        self.assertEqual(analyst.run(self.app, force=True, log=self.logs.append)['reason'], 'llm_not_configured')
-        self.assertEqual(self.app.db.one('SELECT COUNT(*) FROM analyst_runs')[0], n)
+        # without an LLM the run still happens, with the program rules only, and asks no server
+        seen = len(self.srv.seen)
+        r = analyst.run(self.app, force=True, log=self.logs.append)
+        self.assertTrue(r['ran'])
+        self.assertEqual(len(self.srv.seen), seen)
+        self.assertEqual(self.app.db.one('SELECT model FROM analyst_runs ORDER BY id DESC LIMIT 1')[0], analyst.RULES_MODEL)
 
     def test_prompt_injection_does_not_decide(self):
         self.adopt()

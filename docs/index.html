@@ -27,7 +27,8 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
 nav.links { display: flex; gap: 12px; flex: 1; overflow-x: auto; white-space: nowrap; }
 nav.links a { color: var(--text); font-size: 14.5px; font-weight: 500; } nav.links a:hover { color: var(--blue); text-decoration: none; }
-@media (max-width: 1240px) { nav.links { gap: 9px; } nav.links a { font-size: 13.5px; } }
+@media (max-width: 1500px) { nav.links { gap: 9px; } nav.links a { font-size: 13.5px; } }
+@media (max-width: 1240px) { nav.links { gap: 7px; } nav.links a { font-size: 12.5px; } }
 .langs { display: flex; gap: 4px; }
 .langs button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; }
 .langs button:hover { border-color: var(--blue); }
@@ -84,7 +85,9 @@ pre .c { color: #8193ab; }
 ul.ticks { padding-left: 0; list-style: none; } ul.ticks li { padding-left: 32px; position: relative; margin: 9px 0; color: var(--ink); }
 ul.ticks li::before { content: "✓"; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(37, 99, 196, .30); }
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: center; }
-.two.top { align-items: start; } .two.top .shot { margin-top: 8px; }
+.two.top { align-items: start; }
+.flowshot { margin-top: 34px; }
+.flowshot h3 { margin: 0 0 6px; font-size: 19px; } .two.top .shot { margin-top: 8px; }
 .reccard { margin-top: 30px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px 16px; box-shadow: var(--shadow); }
 .reccard h3 { margin: 0 0 4px; font-size: 18px; }
 ul.ticks.recgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; margin: 0; }
@@ -118,6 +121,7 @@ a.shotlink::after { content: "⤢"; position: absolute; right: 10px; bottom: 10p
 a.shotlink:hover::after, a.shotlink:focus-visible::after { opacity: 1; }
 /* install / upgrade / uninstall */
 .inst { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.inst > .iblock.wide { grid-column: 1 / -1; }
 .iblock { background: #fff; border: 1px solid var(--border); border-top: 3px solid var(--c); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); min-width: 0;
   background: linear-gradient(180deg, color-mix(in srgb, var(--c) 6%, #fff), #fff 45%); }
 .iblock.c-install { grid-column: 1 / -1; --c: #2563c4; --c2: #3a86e6; }
@@ -153,7 +157,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="logo-mark.svg" alt="">jt-waf-mgr</a>
   <nav class="links">
-    <a href="#features" data-t="nav_features"></a><a href="#flow" data-t="nav_flow"></a><a href="#ai" data-t="nav_ai"></a>
+    <a href="#features" data-t="nav_features"></a><a href="#flow" data-t="nav_flow"></a><a href="#ai" data-t="nav_ai"></a><a href="#alerts" data-t="nav_alerts"></a>
     <a href="#notify" data-t="nav_notify"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
     <a href="#install" data-t="nav_install"></a><a href="#specs" data-t="nav_specs"></a><a href="how.html" id="how-link" data-t="nav_how"></a>
   </nav>
@@ -164,7 +168,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.24</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.25</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -202,6 +206,11 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <li><b data-t="s3"></b><span data-t="s3d"></span></li><li><b data-t="s4"></b><span data-t="s4d"></span></li>
     <li><b data-t="s5"></b><span data-t="s5d"></span></li><li><b data-t="s6"></b><span data-t="s6d"></span></li>
   </ol>
+  <div class="two top flowshot">
+    <div><h3 data-t="fl_list_h"></h3>
+      <ul class="ticks"><li data-t="fl1"></li><li data-t="fl2"></li><li data-t="fl3"></li><li data-t="fl4"></li></ul></div>
+    <a class="shotlink" href="shots/en/changes.png" data-shot="changes"><img class="shot" src="shots/en/thumb/changes.webp" alt="" loading="lazy"></a>
+  </div>
 </div></section>
 
 <section id="ai"><div class="wrap">
@@ -217,7 +226,13 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   </div>
 </div></section>
 
-<section id="notify" class="alt"><div class="wrap two">
+<section id="alerts" class="alt"><div class="wrap two top">
+  <a class="shotlink" href="shots/en/alerts.png" data-shot="alerts"><img class="shot" src="shots/en/thumb/alerts.webp" alt="" loading="lazy"></a>
+  <div><h2 data-t="al_h"></h2><p class="sub" data-t="al_sub"></p>
+    <ul class="ticks"><li data-t="al1"></li><li data-t="al2"></li><li data-t="al3"></li><li data-t="al4"></li><li data-t="al5"></li></ul></div>
+</div></section>
+
+<section id="notify"><div class="wrap two">
   <a class="shotlink" href="shots/en/notifications.png" data-shot="notifications"><img class="shot" src="shots/en/thumb/notifications.webp" alt="" loading="lazy"></a>
   <div><h2 data-t="n_h"></h2><p class="sub" data-t="n_sub"></p>
     <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
@@ -225,7 +240,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <ul class="ticks"><li data-t="n1"></li><li data-t="n2"></li><li data-t="n3"></li><li data-t="n4"></li></ul></div>
 </div></section>
 
-<section id="security"><div class="wrap">
+<section id="security" class="alt"><div class="wrap">
   <h2 data-t="sec_h"></h2><p class="sub" data-t="sec_sub"></p>
   <div class="grid">
     <div class="card"><h3><span class="ic">⚿</span><span data-t="sec1_h"></span></h3><p data-t="sec1"></p></div>
@@ -237,7 +252,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   </div>
 </div></section>
 
-<section id="screens" class="alt"><div class="wrap">
+<section id="screens"><div class="wrap">
   <h2 data-t="sc_h"></h2><p class="sub" data-t="sc_sub"></p>
   <div class="shots">
     <figure><a class="shotlink" href="shots/en/events.png" data-shot="events"><img src="shots/en/thumb/events.webp" alt="" loading="lazy"></a><figcaption data-t="sc_events"></figcaption></figure>
@@ -252,7 +267,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   </div>
 </div></section>
 
-<section id="install"><div class="wrap">
+<section id="install" class="alt"><div class="wrap">
   <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
   <p class="guide-note"><span data-t="ms_note"></span> <a id="ms-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY.md" data-t="ms_link"></a><br>
     <span data-t="off_note"></span> <a id="off-guide" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE.md" data-t="off_link"></a><br>
@@ -261,8 +276,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
-tar xzf jt-waf-mgr-0.4.24.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.24
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
+tar xzf jt-waf-mgr-0.4.25.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.25
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
@@ -279,6 +294,15 @@ sudo ln -s /etc/nginx/sites-available/waf.example.com.conf /etc/nginx/sites-enab
 <span class="c" data-t="c_vreload"></span>
 sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre></div>
       <ul class="ticks"><li data-t="cn1"></li><li data-t="cn2"></li><li data-t="cn3"></li><li data-t="cn4"></li><li data-t="cn5"></li></ul>
+    </div>
+    <div class="iblock c-install wide">
+      <div class="ihead"><span class="ic">⊘</span><div><h3 data-t="ipb_h"></h3><p data-t="ipb_d"></p></div></div>
+      <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_ipfile"></span>
+sudo install -D -m 644 /dev/null /etc/nginx/jt-waf-mgr/blocked-ips.conf
+<span class="c" data-t="c_ipinc"></span>
+<span class="c">#   include /etc/nginx/jt-waf-mgr/blocked-ips.conf;</span>
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre></div>
+      <ul class="ticks"><li data-t="ipb1"></li><li data-t="ipb2"></li><li data-t="ipb3"></li><li data-t="ipb4"></li></ul>
     </div>
     <div class="iblock c-upgrade">
       <div class="ihead"><span class="ic">↻</span><div><h3 data-t="ub_h"></h3><p data-t="ub_d"></p></div></div>
@@ -299,7 +323,7 @@ sudo ./uninstall.sh --purge</pre></div>
   </div>
 </div></section>
 
-<section id="specs" class="alt"><div class="wrap">
+<section id="specs"><div class="wrap">
   <h2 data-t="sp_h"></h2><p class="sub" data-t="sp_sub"></p>
   <div class="grid specs">
     <div class="card"><h3><span class="ic">▣</span><span data-t="sp1_h"></span></h3><p class="by" data-t="sp1_by"></p><ul class="src"><li data-t="sp1_1"></li><li data-t="sp1_2"></li><li data-t="sp1_3"></li></ul></div>
@@ -364,6 +388,27 @@ const T = {
   sp6_2: "Your self-hosted LLM server for the event analysis.",
   sp6_3: "OWASP CRS releases from GitHub, signature-checked before use.",
   sp6_4: "The world-map outline comes from jt-glogarch (same author, AGPL-3.0).",
+  ipb_h: "Optional: temporary IP blocks",
+  ipb_d: "For fail2ban on a mail server, a SOAR playbook or an approver: block an address for a while on every site, also those without ModSecurity. jt-waf-mgr writes one deny list; you include it once.",
+  c_ipfile: "# 1. an empty list file, so nginx -t passes before the first block",
+  c_ipinc: "# 2. in nginx.conf, inside http { }:",
+  ipb1: "3. Settings → Temporary IP blocks: switch on, and list networks that must never be blocked (for example your CDN).",
+  ipb2: "4. Admin → API tokens: one token per calling host, scope blocks:write, limited to that host's address.",
+  ipb3: "5. Connect the other system: the README has a ready fail2ban action; the API manual (section 4.9) has every call.",
+  ipb4: "The Blocked IPs page checks that the list is really loaded and lists servers with their own allow / deny, which it does not cover.",
+  nav_alerts: "Alerts",
+  al_h: "What needs a person, in one list",
+  al_sub: "Alerts collect what the event analysis, the request counts and the system itself find: each with its severity, where it came from and what to do next.",
+  al1: "Attack in progress: secret and configuration file probes across sites, with the paths and sites involved.",
+  al2: "Attack may have passed: a probe that got a 2xx answer, flagged critical.",
+  al3: "False positives affecting users, outside configuration changes, traffic spikes or many 5xx answers, a new CRS release.",
+  al4: "One click drafts a block or an exclusion; it then goes through the usual checks and approval.",
+  al5: "An approver marks an alert handled with a note; open ones are reminded through the notification channels.",
+  fl_list_h: "Every change in one list",
+  fl1: "Who proposed it: a person, an API token (with its owner and address) or the event analysis, marked AI.",
+  fl2: "Direction at a glance: tightening or loosening; loosening always waits for a person.",
+  fl3: "Each one shows its evidence, sandbox result and rule text before anyone approves it.",
+  fl4: "Applied changes become numbered versions you can roll back to.",
   nav_features: 'Features', nav_flow: 'Change workflow', nav_ai: 'Event analysis', nav_notify: 'Notifications', nav_security: 'Security', nav_screens: 'Screenshots', nav_install: 'Install',
   lead: 'A self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4. Read what the WAF did, tune it through an evidence-checked, sandbox-tested and approved workflow, let your own LLM review the events, and get told what needs a person.',
   releases: 'Releases', get_started: 'Get started',
@@ -476,7 +521,7 @@ const T = {
   sp3_7: "暫時封鎖 IP：fail2ban 等系統透過 API 填入的 nginx deny 清單。",
   sp4_h: "Jason Tools 撰寫的規則",
   sp4_by: "Jason Tools 撰寫",
-  sp4_1: "jt-waf-mgr 依表單產生的規則：確定阻擋、最窄排除、遮蔽。規則清單標示為「Jason Tools」。",
+  sp4_1: "jt-waf-mgr 依表單產生的規則：確定封鎖、最窄排除、遮蔽。規則清單標示為「Jason Tools」。",
   sp4_2: "給 jt-waf-mgr 稽核記錄用的 Wazuh 規則與解碼器。",
   sp4_3: "站台自己手寫的規則仍屬於站台：納管時原樣匯入，規則清單標示為「站台自寫」。",
   sp5_h: "內含的第三方程式碼",
@@ -490,12 +535,33 @@ const T = {
   sp6_2: "事件分析用的地端 LLM 伺服器。",
   sp6_3: "來自 GitHub 的 OWASP CRS 發行版，使用前驗證簽章。",
   sp6_4: "世界地圖輪廓取自 jt-glogarch（同一作者，AGPL-3.0）。",
+  ipb_h: "選用：暫時封鎖 IP",
+  ipb_d: "給郵件主機的 fail2ban、SOAR 劇本或核准者使用：在所有站台暫時封鎖一個位址，沒開 ModSecurity 的站台也算。jt-waf-mgr 寫一個 deny 清單，你只要 include 一次。",
+  c_ipfile: "# 1. 先建立空的清單檔，第一次封鎖之前 nginx -t 也會通過",
+  c_ipinc: "# 2. 在 nginx.conf 的 http { } 裡加一行：",
+  ipb1: "3. 設定 → 暫時封鎖 IP：啟用，並列出永遠不能封鎖的網段（例如你的 CDN）。",
+  ipb2: "4. 管理 → API 權杖：每台呼叫的主機一組權杖，scope 選 blocks:write，來源限定為那台主機的位址。",
+  ipb3: "5. 接上其他系統：README 有現成的 fail2ban 動作，API 手冊第 4.9 節有每個呼叫的說明。",
+  ipb4: "「封鎖中的 IP」頁會檢查清單是否真的被載入，並列出自己有 allow / deny、清單涵蓋不到的 server。",
+  nav_alerts: "警示",
+  al_h: "需要人處理的事，集中在一個清單",
+  al_sub: "事件分析、請求量統計與系統本身發現的狀況都集中成警示：每筆有嚴重度、來源，以及下一步可以做什麼。",
+  al1: "攻擊進行中：跨站台猜機密與設定檔，列出涉及的路徑與站台。",
+  al2: "攻擊可能已成功：探測得到 2xx 回應，標為嚴重。",
+  al3: "影響使用者的誤判、設定被外部修改、流量暴增或 5xx 變多、有新的 CRS 版本。",
+  al4: "一鍵草擬封鎖或排除，之後照一般流程檢查與核准。",
+  al5: "核准者寫下備註後標記已處理；沒處理的會透過通知管道定期提醒。",
+  fl_list_h: "所有變更在同一個清單",
+  fl1: "看得出是誰提出的：人、API 權杖（含擁有者與來源位址），或標示 AI 的事件分析。",
+  fl2: "一眼看出方向：收緊或放寬；放寬一律等人核准。",
+  fl3: "核准前每筆都附上證據、沙箱結果與規則內容。",
+  fl4: "套用後成為有編號的版本，可以退回。",
   nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
   lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
   releases: '下載發行版', get_started: '開始使用',
   features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，以及你啟用時的一個 IP 封鎖清單檔（由你自己 include）；其他 nginx 設定一律不碰。',
   f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路（頁面內繪製的世界地圖，不使用地圖服務）、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
-  f2_h: '安全的規則變更', f2: '排除、確定阻擋、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
+  f2_h: '安全的規則變更', f2: '排除、確定封鎖、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
   f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
   f4_h: '地端 LLM 分析', f4: '你自己的 OpenAI 相容 LLM 伺服器定期檢視事件，提出很窄的封鎖與排除。由程式決定，由人核准。',
   f5_h: '待處理警示', f5: '可能沒被封鎖的攻擊、影響使用者的誤判、設定被外部修改、完整性問題：處理前一直開著，並定期提醒。',
@@ -616,6 +682,27 @@ const T = {
   sp6_2: "イベント分析に使うオンプレミスの LLM サーバー。",
   sp6_3: "GitHub から取得する OWASP CRS のリリース。使う前に署名を検証します。",
   sp6_4: "世界地図の輪郭は jt-glogarch（同じ作者、AGPL-3.0）から取っています。",
+  ipb_h: "任意：一時的な IP ブロック",
+  ipb_d: "メールサーバーの fail2ban、SOAR プレイブック、承認者向け：すべてのサイトでアドレスを一時的にブロックします（ModSecurity を使わないサイトも）。jt-waf-mgr が deny リストを書き、お客様は一度 include するだけです。",
+  c_ipfile: "# 1. 空のリストファイル（最初のブロック前でも nginx -t が通るように）",
+  c_ipinc: "# 2. nginx.conf の http { } の中に 1 行：",
+  ipb1: "3. 設定 → 一時的な IP ブロック：オンにし、決してブロックしないネットワーク（CDN など）を登録します。",
+  ipb2: "4. 管理 → API トークン：呼び出し元ホストごとに 1 つ、スコープ blocks:write、そのホストのアドレスに限定。",
+  ipb3: "5. 他のシステムを接続：README にそのまま使える fail2ban のアクション、API マニュアル 4.9 節に各呼び出しの説明があります。",
+  ipb4: "「ブロック中の IP」ページで、リストが本当に読み込まれているかを確認し、独自の allow / deny を持つため効かない server を表示します。",
+  nav_alerts: "警告",
+  al_h: "人の対応が必要なことを 1 つの一覧に",
+  al_sub: "イベント分析、リクエスト量の集計、システム自身が見つけたことを警告として集約します。それぞれに重大度、発生元、次にできることが付きます。",
+  al1: "攻撃進行中：複数サイトにわたる機密・設定ファイルの探索。関係するパスとサイトを表示。",
+  al2: "攻撃が成功した可能性：2xx の応答を得た探索。重大として表示。",
+  al3: "利用者に影響する誤検知、外部からの設定変更、トラフィックの急増や 5xx の増加、新しい CRS リリース。",
+  al4: "ワンクリックでブロックや除外の下書きを作成し、通常どおり確認と承認を経ます。",
+  al5: "承認者がメモを残して対応済みにします。未対応のものは通知チャネルで定期的にリマインドします。",
+  fl_list_h: "すべての変更を 1 つの一覧に",
+  fl1: "提案者が分かります：人、API トークン（所有者と送信元アドレス付き）、AI と表示されるイベント分析。",
+  fl2: "方向がひと目で分かります：強化か緩和か。緩和は必ず人の承認を待ちます。",
+  fl3: "承認の前に、証拠、サンドボックスの結果、ルールの内容を確認できます。",
+  fl4: "適用した変更は番号付きのバージョンになり、戻すことができます。",
   nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
   lead: 'nginx + libmodsecurity v3 + OWASP CRS 4 のためのセルフホスト型 Web 管理ツール。WAF が何をしたかを読み取り、証拠確認・サンドボックス試験・承認を経るフローで調整し、自前の LLM にイベントを確認させ、人の対応が必要なことを知らせます。',
   releases: 'リリース', get_started: 'はじめる',

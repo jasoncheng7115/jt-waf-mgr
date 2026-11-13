@@ -550,6 +550,7 @@ class _Provenance:
         self.app = app
         self._changes = {}
         self._plugin_hdr = {}
+        self.imported_author = app.cfg['managed'].get('imported_author') or 'site'
 
     def _change(self, cid):
         if cid not in self._changes:
@@ -592,6 +593,8 @@ class _Provenance:
         if ch in ('change', 'person', 'token', 'analyst'):
             it = self.items.get(rid) or {}
             return 'site' if it.get('kind') == 'raw' else 'jason_tools'
+        if ch == 'adopted':
+            return self.imported_author
         return 'site'
 
     def _of(self, d):

@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.24
+# jt-waf-mgr v0.4.25
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -29,7 +29,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 
 - **看得懂發生了什麼**：封鎖 / 只記錄，依站台、攻擊類型、來源（含國家與網路業者）、規則與時間；「只因 CRS 分數被封鎖」
   的排在最前面，因為最可能是誤判。
-- **安全地修改**：範本（排除、確定阻擋、遮蔽、外掛開關、專家模式原始規則）→ 靜態檢查（正規表示式、ReDoS）→ 存取記錄
+- **安全地修改**：範本（排除、確定封鎖、遮蔽、外掛開關、專家模式原始規則）→ 靜態檢查（正規表示式、ReDoS）→ 存取記錄
   的證據 → 用正式設定加回歸樣本的拋棄式 nginx 沙箱 → 核准 → 小型 root 程式測試、reload、健康檢查，失敗自動還原 → 版本
   可一鍵退回。
 - **讓模型幫忙，但不讓它自己決定**：排程分析用你自己的 OpenAI 相容 LLM 伺服器，對探測提出範圍很窄的封鎖、對誤判提出範圍
@@ -49,7 +49,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量放在一起，讓 WAF 的數字有分母可以比較。
   在管理的「設定」→「請求量統計」啟用或關閉並設定警示；選用的警示（預設關閉）：流量暴增（該站台前 7 天同一時段平常量的
   N 倍）或大量 5xx 回應。
-- **WAF 判斷流程**：依目前的實際設定畫出一個請求在這些站台上怎麼被判定（各站台引擎、計分、門檻、排除、確定阻擋）。
+- **WAF 判斷流程**：依目前的實際設定畫出一個請求在這些站台上怎麼被判定（各站台引擎、計分、門檻、排除、確定封鎖）。
 - **規則**：每條規則標示來源（OWASP CRS 與版本、CRS 外掛、納管時匯入、人員 / API 權杖 / 事件分析提出的變更）、每日命中、
   語法高亮。0.4.23 新增「撰寫者」，可篩選並顯示各撰寫者的規則數：OWASP CRS、OWASP CRS 外掛、第三方外掛、ModSecurity
   基本設定、Jason Tools（jt-waf-mgr 依表單產生的規則與 Jason Tools 規則包）、站台自寫（手寫的規則：納管時匯入、原始規則、
@@ -97,8 +97,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
-tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
+tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -176,6 +176,21 @@ ModSecurity 的也算。使用方式：
    ```
 2. 設定 → 暫時封鎖 IP：啟用，並列出永遠不能封鎖的網段（例如站台前面的 CDN）。
 3. 管理 → API 權杖：建立有 `blocks:write`（與 `blocks:read`）的權杖，來源限定為呼叫端主機的位址。
+4. 範例：透過 API 封鎖與解除的 fail2ban 動作：
+   ```ini
+   # /etc/fail2ban/action.d/jt-waf-block.conf  (chmod 600: it holds the token)
+   [Definition]
+   actionban   = curl -fsS -m 10 -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+                 -d '{"ip": "<ip>", "ttl": <bantime>, "source": "<source>", "reason": "fail2ban <name>"}' <waf>/api/v1/blocks
+   actionunban = curl -fsS -m 10 -X DELETE -H "Authorization: Bearer <token>" "<waf>/api/v1/blocks/<ip>?source=<source>"
+   [Init]
+   waf    = https://waf.example.com
+   token  = jwm_...
+   source = mail1/<name>
+   ```
+   jail 裡改用 `action = jt-waf-block`。`bantime` 要在 60 秒到 7 天之間（更長或永久會被拒絕）；jail 原本的 `ignoreip` 照樣
+   排除內部位址（反正也會被拒絕）。
+   也可以在 設定 → 暫時封鎖 IP 開啟「自動封鎖猜機密檔的來源」：外部位址一小時內要求 5 個不同的機密或設定檔名，就由程式規則封鎖 24 小時。
 
 封鎖預設 24 小時，權杖最長 7 天、手動最長 30 天，沒有永久封鎖。內部網路、已知掃描器、信任的代理與保護清單永遠不會被
 封鎖。nginx 比對的是 `real_ip` 之後的位址，所以在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。自己有

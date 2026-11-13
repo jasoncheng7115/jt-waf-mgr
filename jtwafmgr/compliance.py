@@ -210,6 +210,17 @@ class Monitor:
                 continue
         if applied and not drift and all(p.startswith(mdir) or p in main or p in adopted_src for p in touched):
             return 'jt-waf-mgr'
+        # a version the apply program has written but not reported yet (it waits for old nginx workers, and the web
+        # service takes the result between proposal checks): the files on disk are exactly that version's
+        if all(p.startswith(mdir) or p in main or p in adopted_src for p in touched):
+            try:
+                pending = [json.loads(h) for (h,) in self.db.q(
+                    "SELECT hashes FROM versions WHERE state IN ('pending','applied') AND created_at >= ? "
+                    'ORDER BY version DESC LIMIT 5', (last['ts'] - 1800,))]
+                if pending and wf.managed.disk_hashes() in pending:
+                    return 'jt-waf-mgr'
+            except Exception:       # noqa: BLE001 -- unreadable files or rows: not proven ours
+                pass
         # the temporary IP block list: written only by the apply program from the database
         bf = self.cfg['blocks']['file']
         if touched and all(p == bf for p in touched):

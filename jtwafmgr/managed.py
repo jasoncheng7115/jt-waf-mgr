@@ -113,6 +113,17 @@ class Managed:
     def current_version(self):
         return self.db.one("SELECT * FROM versions WHERE state='applied' ORDER BY version DESC LIMIT 1")
 
+    def disk_hashes(self):
+        """{placement: sha256 of the file on disk (None when missing)}, the shape of versions.hashes."""
+        out = {}
+        for p in PLACEMENTS:
+            try:
+                with open(self.path(p), 'rb') as fh:
+                    out[p] = hashlib.sha256(fh.read()).hexdigest()
+            except OSError:
+                out[p] = None
+        return out
+
     def disk_state(self):
         """On-disk hashes of the managed files and whether they still match the last applied version."""
         cur = self.current_version()

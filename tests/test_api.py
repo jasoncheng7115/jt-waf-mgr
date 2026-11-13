@@ -352,6 +352,7 @@ class RuleAuthorTest(unittest.TestCase):
         p = api_mod._Provenance.__new__(api_mod._Provenance)
         p.items = {10301: {'kind': 'confident_block'}, 10302: {'kind': 'raw'}}
         p._plugin_hdr = {}
+        p.imported_author = 'site'
         a = p._author
         self.assertEqual(a({'id': 930110, 'file': '/x/crs/rules/R.conf'}, {'channel': 'crs'}), 'owasp_crs')
         self.assertEqual(a({'id': 200002, 'file': '/x/modsecurity.conf'}, {'channel': 'base'}), 'modsecurity')
@@ -359,6 +360,10 @@ class RuleAuthorTest(unittest.TestCase):
         self.assertEqual(a({'id': 10301, 'file': '/m/before-crs.conf'}, {'channel': 'analyst'}), 'jason_tools')
         self.assertEqual(a({'id': 10302, 'file': '/m/before-crs.conf'}, {'channel': 'token'}), 'site')       # raw rule
         self.assertEqual(a({'id': 10100, 'file': '/m/before-crs.conf'}, {'channel': 'adopted'}), 'site')
+        p.imported_author = 'jason_tools'                        # a site whose rules Jason Tools wrote before adoption
+        self.assertEqual(a({'id': 10100, 'file': '/m/before-crs.conf'}, {'channel': 'adopted'}), 'jason_tools')
+        self.assertEqual(a({'id': 10302, 'file': '/m/before-crs.conf'}, {'channel': 'token'}), 'site')       # raw stays
+        p.imported_author = 'site'
         self.assertEqual(a({'id': 13510, 'file': '/m/before-crs.conf'}, {'channel': 'adopted'}), 'jason_tools')  # the pack
         self.assertEqual(a({'id': 9, 'file': '/e/jt-modsecurity-app-exclusions.conf'}, {'channel': 'site_file'}), 'jason_tools')
         self.assertEqual(a({'id': 10111, 'file': '/e/vhost/a.conf'}, {'channel': 'vhost'}), 'site')

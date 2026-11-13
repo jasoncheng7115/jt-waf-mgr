@@ -270,7 +270,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 
 `direction` 是 `tighten`（收緊：封鎖或檢查更多）或 `loosen`（放寬：更少）。無法判斷的一律視為放寬。放寬一定要人核准。
 
-**種類 `confident_block`**（確定阻擋：確定是攻擊的請求直接封鎖，不看異常分數）：
+**種類 `confident_block`**（確定封鎖：確定是攻擊的請求直接封鎖，不看異常分數）：
 
 - `target`：`path`（預設；URL 解碼、正規化、轉小寫）、`uri`（路徑加查詢字串，轉小寫）、`ua`（User-Agent）、`host`，
   或 `header`（這時用 `header` 指定名稱，例如 `X-Api-Version`）。
@@ -310,7 +310,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 `raw_admin_only`。（權杖可以停用、啟用或刪除既有的專家模式項目。）
 
 **整批**（`"op": "bundle"`）：多個操作合成一筆變更，一起檢查、核准、套用（一個版本、一次 reload、一次還原）。`ops` 放
-1 到 100 個 `{"op", "kind", "spec", "item_id"}`，其中確定阻擋最多 20 個。只有每個操作都是收緊時，整批才算收緊。
+1 到 100 個 `{"op", "kind", "spec", "item_id"}`，其中確定封鎖最多 20 個。只有每個操作都是收緊時，整批才算收緊。
 
 ```sh
 curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
@@ -504,7 +504,7 @@ checking or pending_approval -> cancelled
 
 - **靜態**：規則能從範本產生；產生後檔案中的每條規則都通過專家模式檢查（不可關閉引擎、不可用讀檔運算子、不可改稽核
   記錄設定等）；規則編號沒有重複。
-- **證據**：確定阻擋會掃描存取記錄中正規表示式比對到的請求。如果某個會被封鎖的外部請求在一般站台上得到 2xx/3xx 回應、
+- **證據**：確定封鎖會掃描存取記錄中正規表示式比對到的請求。如果某個會被封鎖的外部請求在一般站台上得到 2xx/3xx 回應、
   某個內部位址（已知掃描器除外）會被封鎖，或掃描沒有在時限內完成，檢查就不通過。排除則以最近 30 天的事件呈現它會影響
   哪些請求。證據檢查沒過時，只能由人寫下理由後覆核（在網頁介面重新檢查）。
 - **沙箱**：用正式設定加上這筆變更的拋棄式 nginx，重送變更的 `tests` 與回歸測試樣本。主機沒有沙箱時，只有管理者把沙箱
@@ -519,7 +519,7 @@ checking or pending_approval -> cancelled
   外部請求、也沒有內部請求時，可能不經人核准就套用（每天有上限）。所以腳本在等待時也要接受 `approved`、`applying`、
   `applied`。
 
-## 7. 實例：從腳本提出一筆確定阻擋
+## 7. 實例：從腳本提出一筆確定封鎖
 
 這個腳本為 `/.env` 探測提出封鎖規則，等檢查完成，然後印出給核准者的連結。需要 `curl`、`jq`，以及一個有
 `changes:propose` 與 `changes:read`、並限定腳本所在主機為來源的權杖。

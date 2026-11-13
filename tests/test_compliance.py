@@ -421,6 +421,25 @@ class TestMonitor(unittest.TestCase):
         self.assertEqual(mon._cause({'ts': now - 60}, ch), 'jt-waf-mgr')
         self.assertEqual(mon._cause({'ts': now - 60}, dict(ch, removed=[old, '/etc/nginx/other.conf'])), 'outside')
 
+    def test_a_version_being_applied_is_not_an_outside_change(self):
+        """The apply program writes the files, then waits for old nginx workers before it reports: in between the
+        version is still pending and the files differ from the last applied one. Files equal to that pending version
+        are jt-waf-mgr's own; anything else stays outside."""
+        import json as _j
+        mon, now = self.app.monitor, time.time()
+        mg = self.app.workflow.managed
+        mdir = self.env.cfg['managed']['dir'].rstrip('/') + '/'
+        disk = {'before': 'a' * 64, 'after': 'b' * 64}
+        mg.disk_hashes = lambda: dict(disk)
+        mg.disk_state = lambda: {'drift': True}
+        self.app.db.x("INSERT INTO versions(version, created_at, change_id, kind, files, hashes, state, result) "
+                      "VALUES (7, ?, 9, 'change', '{}', ?, 'pending', '{}')", (now, _j.dumps(disk)))
+        ch = {'added': [], 'removed': [], 'changed': [mdir + 'before-crs.conf']}
+        self.assertEqual(mon._cause({'ts': now - 60}, ch), 'jt-waf-mgr')
+        disk['before'] = 'c' * 64                                    # someone else's edit on top
+        self.assertEqual(mon._cause({'ts': now - 60}, ch), 'outside')
+        self.assertEqual(mon._cause({'ts': now - 60}, dict(ch, changed=['/etc/nginx/nginx.conf'])), 'outside')
+
     def test_backup_download_needs_a_fresh_code_and_is_audited(self):
         from jtwafmgr import auth
         from jtwafmgr.web import api

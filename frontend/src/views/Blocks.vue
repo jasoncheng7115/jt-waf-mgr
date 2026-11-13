@@ -48,7 +48,7 @@
       <DataTable id="blocks" :columns="cols" :rows="data.items" :row-key="(r) => r.id" :page-size="50">
         <template #cell-ip="{ row }"><RouterLink class="mono" :to="'/lookup/' + encodeURIComponent(row.ip.split('/')[0])">{{ safeText(row.ip, 64) }}</RouterLink></template>
         <template #cell-source="{ row }"><span class="mono small">{{ safeText(row.source, 64) }}</span>
-          <div class="sub">{{ safeText(row.created_by, 64) }} · {{ row.via === 'token' ? t('blocks.via_token') : t('blocks.via_ui') }}</div></template>
+          <div class="sub">{{ safeText(row.created_by, 64) }} · {{ row.via === 'token' ? t('blocks.via_token') : row.via === 'system' ? t('blocks.via_system') : t('blocks.via_ui') }}</div></template>
         <template #cell-reason="{ row }"><TruncText :text="row.reason" :max="120" /></template>
         <template #cell-created_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.created_at) }}</span></template>
         <template #cell-expires_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.expires_at) }}</span></template>
@@ -66,6 +66,16 @@
           <button type="button" class="btn primary" :disabled="busy || !note" @click="end"><Icon name="check" />{{ t('blocks.end') }}</button>
           <button type="button" class="btn ghost" @click="ending = null"><Icon name="cancel" />{{ t('common.cancel') }}</button>
         </div>
+      </section>
+      <section class="card">
+        <h2><Icon name="link" /> {{ t('blocks.connect') }}</h2>
+        <ol class="steps">
+          <li>{{ t('blocks.connect1') }}</li>
+          <li>{{ t('blocks.connect2') }} <RouterLink v-if="isAdmin" to="/admin/tokens">{{ t('nav.tokens') }}</RouterLink></li>
+          <li>{{ t('blocks.connect3') }}</li>
+        </ol>
+        <pre class="code small">{{ f2b }}</pre>
+        <p class="muted small">{{ t('blocks.connect_note') }}</p>
       </section>
       <section v-if="data.uncovered.length" class="card">
         <h2><Icon name="warning" /> {{ t('blocks.uncovered') }}</h2>
@@ -118,6 +128,12 @@ function dur(s) {
 }
 const ttlOpts = computed(() => [3600, 6 * 3600, 86400, 3 * 86400, 7 * 86400, 30 * 86400]
   .filter((s) => !data.value || s <= data.value.limits.ui_max_ttl).map((s) => ({ value: s, label: dur(s) })))
+// a fail2ban action that blocks and unblocks through this server's API (the token is filled in by the admin)
+const f2b = computed(() => ['# /etc/fail2ban/action.d/jt-waf-block.conf   (chmod 600)', '[Definition]',
+  'actionban   = curl -fsS -m 10 -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \\',
+  '              -d \'{"ip": "<ip>", "ttl": <bantime>, "source": "<source>", "reason": "fail2ban <name>"}\' <waf>/api/v1/blocks',
+  'actionunban = curl -fsS -m 10 -X DELETE -H "Authorization: Bearer <token>" "<waf>/api/v1/blocks/<ip>?source=<source>"',
+  '[Init]', 'waf    = ' + window.location.origin, 'token  = jwm_...', 'source = <host>/<name>'].join('\n'))
 function shortFile(f) { return safeText(String(f || '').split('/').slice(-2).join('/'), 120) }
 
 const cols = computed(() => [
@@ -160,4 +176,6 @@ onMounted(load)
 <style scoped>
 ul.plain { list-style: none; padding: 0; margin: 6px 0 0; }
 ul.plain li { padding: 3px 0; }
+ol.steps { margin: 6px 0 10px; padding-left: 22px; }
+ol.steps li { margin: 4px 0; }
 </style>

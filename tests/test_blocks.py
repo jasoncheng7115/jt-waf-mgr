@@ -170,6 +170,35 @@ class LogicTest(unittest.TestCase):
         self.assertTrue(st['included'], st)
         self.assertEqual(st['included_in'], 'http')
 
+    def _probe(self, ip, paths, ago=60):
+        for i, p in enumerate(paths):
+            self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, outcome, rule_ids, "
+                          "local_rule_ids, families, message, matches) VALUES ('n', ?, ?, 'www.example.com', 'GET', ?, '', ?, "
+                          "'external', 'blocked', '', '', '', '', '[]')", ('%s-%d-%d' % (ip, i, ago), time.time() - ago, p, ip))
+
+    def test_auto_recon(self):
+        secrets = ['/.env', '/config.json', '/.aws/credentials', '/wp-config.php.bak', '/docker-compose.yml', '/id_rsa.pem']
+        self._probe('203.0.113.70', secrets)                       # six secret names: a scanner
+        self._probe('203.0.113.71', secrets[:3] + ['/', '/about'])  # three: below the threshold
+        self._probe('198.51.100.10', secrets)                      # protected network: never
+        self._probe('203.0.113.72', secrets, ago=3 * 3600)         # outside the window
+        self.assertEqual(self.b.auto_recon(), [])                  # off by default
+        self.env.cfg.data['blocks']['auto_recon'] = True
+        self.assertEqual(self.b.auto_recon(), ['203.0.113.70'])
+        r = self.b.blocked('203.0.113.70')[0]
+        self.assertEqual((r['source'], r['via'], r['created_by']), ('jt-waf-mgr/recon', 'system', 'system'))
+        self.assertIn('guessed 6 secret', r['reason'])
+        self.assertEqual(self.b.auto_recon(), [])                  # already blocked
+        # a person ends it: the rule leaves this address alone for a week
+        self.b.remove('admin1', block_id=r['id'], note='our own scanner')
+        self.assertEqual(self.b.auto_recon(), [])
+        # the hourly cap
+        self.env.cfg.data['blocks']['auto_recon_per_hour'] = 1
+        self._probe('203.0.113.73', secrets)
+        self.assertEqual(self.b.auto_recon(), [])                  # one rule block already this hour
+        acts = [r['action'] for r in self.app.db.q("SELECT action FROM audit WHERE action LIKE 'block.%' ORDER BY id")]
+        self.assertEqual(acts.count('block.refused'), 1)           # the protected address, refused once only
+
     def test_render(self):
         t = blocks.render(['203.0.113.7', '2001:db8::/64'], '/etc/nginx/jt-waf-mgr/blocked-ips.conf')
         lines = [l for l in t.splitlines() if not l.startswith('#')]

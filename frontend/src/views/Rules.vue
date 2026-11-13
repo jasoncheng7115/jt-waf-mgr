@@ -72,7 +72,7 @@
       <template #cell-phase="{ row }"><span class="mono">{{ row.phase ?? '—' }}</span></template>
       <template #cell-disruptive="{ row }"><span class="mono">{{ safeText(row.disruptive, 20) || '—' }}</span></template>
       <template #cell-msg="{ row }">
-        <div><TruncText :text="row.msg || row.comment || row.directive" :max="2000" width="min(46em, 52vw)" expand /></div>
+        <div><TruncText :text="row.msg || row.comment || row.directive" :max="2000" expand /></div>
         <div class="sub mono" :title="safeText(row.file, 500)">{{ shortFile(row.file) }}:{{ row.line }}</div>
       </template>
       <template #cell-hosts="{ row }"><span v-for="h in row.hosts || []" :key="h" class="chip host"><TruncText :text="h" :max="60" /></span><span v-if="!(row.hosts || []).length" class="muted">{{ t('rules.global') }}</span></template>
@@ -166,7 +166,7 @@ const cols = computed(() => [
     : [{ key: 'category', label: t('rules.category'), nowrap: true, value: (r) => t('category.' + (r.category || 'other')) }]),
   { key: 'phase', label: t('rule.phase'), align: 'num', hidden: true },
   { key: 'disruptive', label: t('rule.action') },
-  { key: 'msg', label: t('rule.description'), value: (r) => r.msg || r.comment || r.directive || '', text: (r) => [r.msg, r.comment, r.directive, r.file].filter(Boolean).join(' ') },
+  { key: 'msg', label: t('rule.description'), class: 'c-fill', value: (r) => r.msg || r.comment || r.directive || '', text: (r) => [r.msg, r.comment, r.directive, r.file].filter(Boolean).join(' ') },
   { key: 'hosts', label: t('rule.hosts'), text: (r) => ((r.hosts || []).length ? r.hosts.join(' ') : t('rules.global')) },
   { key: 'provenance', label: t('prov.title'), value: (r) => (r.provenance ? tOr('prov.' + r.provenance.channel, r.provenance.channel) : '') },
   { key: 'hits_7d', label: t('rule.hits_7d'), align: 'num', hidden: true },

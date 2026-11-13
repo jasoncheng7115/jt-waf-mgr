@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.24
+# jt-waf-mgr v0.4.25
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -110,8 +110,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
-tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
+tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -194,6 +194,22 @@ CRS は jt-waf-mgr が扱います。新しいホストに必要なのは、ngin
    ```
 2. 設定 → 一時的な IP ブロック：オンにし、決してブロックしないネットワーク（たとえばサイトの前の CDN）を登録します。
 3. 管理 → API トークン：`blocks:write`（と `blocks:read`）を持ち、呼び出し元ホストのアドレスに限定したトークンを作ります。
+4. 例：API でブロックと解除を行う fail2ban のアクション：
+   ```ini
+   # /etc/fail2ban/action.d/jt-waf-block.conf  (chmod 600: it holds the token)
+   [Definition]
+   actionban   = curl -fsS -m 10 -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+                 -d '{"ip": "<ip>", "ttl": <bantime>, "source": "<source>", "reason": "fail2ban <name>"}' <waf>/api/v1/blocks
+   actionunban = curl -fsS -m 10 -X DELETE -H "Authorization: Bearer <token>" "<waf>/api/v1/blocks/<ip>?source=<source>"
+   [Init]
+   waf    = https://waf.example.com
+   token  = jwm_...
+   source = mail1/<name>
+   ```
+   jail では `action = jt-waf-block` を使います。`bantime` は 60 秒から 7 日の間にしてください（それより長い、または永久の
+   ブロックは拒否されます）。内部アドレスは jail の `ignoreip` で除外したままにします（いずれにしても拒否されます）。
+   任意で、設定 → 一時的な IP ブロック →「機密ファイルを探す送信元を自動でブロック」：1 時間以内に 5 つの異なる機密・設定ファイル名を
+   要求した外部アドレスを、プログラムのルールで 24 時間ブロックします。
 
 ブロックの既定は 24 時間、トークンからは最長 7 日、手動では最長 30 日で、永久ブロックはありません。内部ネットワーク、
 既知のスキャナー、信頼するプロキシ、保護リストは決してブロックされません。nginx は `real_ip` 後のアドレスで判定するため、

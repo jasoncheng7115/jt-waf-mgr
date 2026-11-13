@@ -22,6 +22,9 @@
         <Icon name="warning" /> {{ tOr('analysis.why.' + st.not_ready_reason, st.not_ready_reason) }}
         {{ isAdmin ? t('analysis.settings_hint_admin') : t('analysis.settings_hint') }}
       </div>
+      <div v-if="st.ready && st.mode === 'rules_only'" class="alert info">
+        <Icon name="info" /> {{ t('analysis.rules_only') }}
+      </div>
       <dl class="kv two">
         <dt>{{ t('analysis.enabled') }}</dt>
         <dd><span class="badge" :class="st.enabled ? 'b-ok' : 'b-logged'">{{ st.enabled ? t('analysis.on') : t('analysis.off') }}</span></dd>

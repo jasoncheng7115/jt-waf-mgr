@@ -2,6 +2,31 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.25 (2026-11-13)
+
+- Chinese interface and documents: 「封鎖」 everywhere instead of 「阻擋」 (the confident block is now 「確定封鎖」); the
+  interface check refuses the old word.
+- Program rules for the event analysis (no LLM needed): a secret or configuration file name asked for from outside
+  only, never answered 2xx and not used internally is proposed as a confident block by the program itself; such
+  candidates are no longer sent to the model. Without an LLM the analysis now still runs, with these rules only
+  (`analyst.rules`, on by default; the Analysis page says which mode runs).
+- Automatic temporary IP blocks for sources that guess secret files (off by default; Settings > Temporary IP blocks): one
+  external address asking for 5 different secret or configuration file names within 60 minutes is blocked for 24 hours
+  on every site; at most 30 such blocks an hour; an address a person unblocked is left alone for 7 days.
+- "Configuration changed outside" no longer fires for jt-waf-mgr's own apply: files equal to a version that is written
+  but not yet reported (the apply program waits for old nginx workers) are jt-waf-mgr's.
+- Interface: the AI tag is readable in light mode; toggled buttons are solid; the change workflow settings are laid
+  out in rows like the others; health check URLs can be picked from the sites nginx serves; a timeline shows the
+  scheduled analysis (interval and window) as the values change; the GeoIP card's buttons are full size; long
+  summaries no longer push a horizontal scrollbar into the change and alert lists; missing labels in the
+  configuration card.
+- Rule authors: a setting for who wrote the rules imported at adoption (the site, or Jason Tools when Jason Tools
+  wrote them before adoption).
+- Project site: an alerts section and the change list next to the workflow steps (synthetic data).
+- Temporary IP blocks, how to connect: the Blocked IPs page has the steps and a ready fail2ban action (with this
+  server's address filled in); the README has the same action, and the project site an "Optional: temporary IP
+  blocks" install block.
+
 ## 0.4.24 (2026-11-13)
 
 - Temporary IP blocks (optional, off until switched on): other systems block a single address for a while through

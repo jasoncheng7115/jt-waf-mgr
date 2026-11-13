@@ -46,6 +46,7 @@ EDITABLE = {
     'analyst.max_proposals': ('int', {'min': 0, 'max': 20}),
     'analyst.min_events': ('int', {'min': 1, 'max': 10000}),
     'analyst.min_sources': ('int', {'min': 1, 'max': 1000}),
+    'analyst.rules': ('bool', {}),
     # notifications (sent by jt-waf-mgr-notify.service; see notify.py)
     'notify.enabled': ('bool', {}),
     'notify.language': ('choice', {'choices': LANGUAGES}),
@@ -100,6 +101,11 @@ EDITABLE = {
     'blocks.api_max_ttl': ('int', {'min': 60, 'max': 2592000}),
     'blocks.ui_max_ttl': ('int', {'min': 60, 'max': 2592000}),
     'blocks.reload_seconds': ('int', {'min': 5, 'max': 3600}),
+    'blocks.auto_recon': ('bool', {}),
+    'blocks.auto_recon_paths': ('int', {'min': 3, 'max': 100}),
+    'blocks.auto_recon_minutes': ('int', {'min': 5, 'max': 1440}),
+    'blocks.auto_recon_ttl': ('int', {'min': 600, 'max': 2592000}),
+    'blocks.auto_recon_per_hour': ('int', {'min': 1, 'max': 1000}),
     'traffic.enabled': ('bool', {}),
     'traffic.logs': ('list', {'re': r'/[\w./*-]{1,300}', 'max_items': 20}),
     'traffic.keep_days': ('int', {'min': 1, 'max': 3650}),
@@ -115,6 +121,7 @@ EDITABLE = {
     # interface, people and policy
     'ui.login_notice': ('str', {'max': 2000, 'multiline': True}),
     'compliance.level': ('choice', {'choices': ('', 'low', 'medium', 'high')}),
+    'managed.imported_author': ('choice', {'choices': ('site', 'jason_tools')}),
     'waf.focus_sites': ('list', {'re': r'[a-z0-9.-]{1,253}', 'max_items': 50}),
     'network.known_scanners': ('list', {'cidr': True, 'max_items': 200}),
     'evidence.catch_all_hosts': ('list', {'re': r'[a-z0-9.-]{1,253}', 'max_items': 50}),

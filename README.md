@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.24
+# jt-waf-mgr v0.4.25
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -119,8 +119,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
-tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.25.tar.gz.sig jt-waf-mgr-0.4.25.tar.gz
+tar xzf jt-waf-mgr-0.4.25.tar.gz && cd jt-waf-mgr-0.4.25
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -206,6 +206,23 @@ list to one nginx file of `deny` lines, which covers every site, also those with
 2. Settings → Temporary IP blocks: switch it on, and list the networks that must never be blocked (for example a CDN
    in front of your sites).
 3. Admin → API tokens: a token with `blocks:write` (and `blocks:read`), limited to the calling host's address.
+4. Example: a fail2ban action that blocks and unblocks through the API:
+   ```ini
+   # /etc/fail2ban/action.d/jt-waf-block.conf  (chmod 600: it holds the token)
+   [Definition]
+   actionban   = curl -fsS -m 10 -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+                 -d '{"ip": "<ip>", "ttl": <bantime>, "source": "<source>", "reason": "fail2ban <name>"}' <waf>/api/v1/blocks
+   actionunban = curl -fsS -m 10 -X DELETE -H "Authorization: Bearer <token>" "<waf>/api/v1/blocks/<ip>?source=<source>"
+   [Init]
+   waf    = https://waf.example.com
+   token  = jwm_...
+   source = mail1/<name>
+   ```
+   A jail then uses `action = jt-waf-block`. Keep `bantime` between 60 seconds and 7 days (a longer or permanent ban is
+   refused), and keep the jail's own `ignoreip` for internal addresses: they are refused anyway.
+ 
+   Optionally, Settings → Temporary IP blocks → "Block sources that guess secret files automatically": an outside address
+   asking for 5 different secret or configuration file names within an hour is blocked for 24 hours by a program rule.
 
 Blocks last 24 hours by default, at most 7 days from a token and 30 days by hand; nothing is permanent. Internal
 networks, known scanners, trusted proxies and the protected list are never blocked. nginx checks the address after

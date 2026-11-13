@@ -23,6 +23,7 @@ One active entry per (address, source): the same source sending the same address
 source gets its own entry, and removing one source's entry leaves the others (the address stays blocked until
 the last one ends).
 """
+import collections
 import hashlib
 import ipaddress
 import json
@@ -108,6 +109,7 @@ class Blocks:
         self.app = app
         self.cfg, self.db = app.cfg, app.db
         self._rate = {}          # token id -> [timestamps of adds in the last hour]
+        self._auto_refused = set()   # addresses the recon rule may not block (protected...): not retried
         self._lock = threading.Lock()
 
     # --- reading --------------------------------------------------------------------------------
@@ -157,7 +159,7 @@ class Blocks:
             return True
 
     def _refuse(self, actor, via, src_ip, code, **detail):
-        self.app.audit.log('block.refused', actor, via if via == 'token' else 'user', src_ip, 'denied',
+        self.app.audit.log('block.refused', actor, via if via in ('token', 'system') else 'user', src_ip, 'denied',
                            reason=code, **{k: util.clip(str(v), 200) for k, v in detail.items()})
 
     def add(self, ip, ttl, source, reason, actor, via='user', token_id=None, role=None, src_ip=None):
@@ -180,6 +182,8 @@ class Blocks:
             if not b['min_ttl'] <= ttl <= top:
                 raise BlockError('invalid_ttl', min=b['min_ttl'], max=top)
             net = check_target(self.cfg, ip, allow_range=via == 'user' and role in ('approver', 'admin'))
+            if via == 'system' and '/' in net:
+                raise BlockError('single_address_only')
             if via == 'token' and not self._rate_ok(token_id):
                 raise BlockError('rate_limited', 429, per_hour=b['token_per_hour'])
         except BlockError as e:
@@ -214,7 +218,7 @@ class Blocks:
                 alerts.raise_alert(self.db, self.app.audit, 'blocks', 'other', 'warning', 'blocks_full',
                                    {'reason': 'the IP block list is full (%d); new blocks are refused' % b['max_active']})
             raise BlockError(code, 409, limit=b['max_active'] if bid is None else b['max_per_token'])
-        self.app.audit.log(action, actor, via if via == 'token' else 'user', src_ip, 'ok', ip=net, source=source,
+        self.app.audit.log(action, actor, via if via in ('token', 'system') else 'user', src_ip, 'ok', ip=net, source=source,
                            ttl=ttl, block_id=bid, token_id=token_id, reason=util.clip(reason, 200))
         self.sync()
         return public(self.db.one('SELECT * FROM ip_blocks WHERE id=?', (bid,)))
@@ -357,13 +361,58 @@ class Blocks:
                 'limits': {k: self.cfg['blocks'][k] for k in ('max_active', 'max_per_token', 'token_per_hour', 'default_ttl',
                                                               'min_ttl', 'api_max_ttl', 'ui_max_ttl', 'reload_seconds')}}
 
+    AUTO_SOURCE = 'jt-waf-mgr/recon'
+
+    def auto_recon(self, now=None):
+        """Program rule (no LLM): an external address that asked for auto_recon_paths different secret or
+        configuration file names (analyst.RECON_NAME) within auto_recon_minutes is blocked for auto_recon_ttl.
+        Returns the addresses blocked."""
+        from .analyst import RECON_NAME
+        b = self.cfg['blocks']
+        if not (b['enabled'] and b['auto_recon']):
+            return []
+        now = now or util.now()
+        per = collections.defaultdict(set)
+        for r in self.db.q("SELECT DISTINCT src_ip, path FROM events WHERE ts>=? AND origin='external'",
+                           (now - b['auto_recon_minutes'] * 60,)):
+            p = (r['path'] or '').lower()
+            if RECON_NAME.search(p):
+                per[r['src_ip']].add(p)
+        hits = sorted(((ip, ps) for ip, ps in per.items() if len(ps) >= b['auto_recon_paths']), key=lambda x: -len(x[1]))
+        if not hits:
+            return []
+        done = self.db.one('SELECT COUNT(*) FROM ip_blocks WHERE source=? AND created_at>=?', (self.AUTO_SOURCE, now - 3600))[0]
+        out = []
+        for ip, paths in hits:
+            if done >= b['auto_recon_per_hour']:
+                break
+            if self.db.one("SELECT 1 FROM ip_blocks WHERE ip=? AND (state='active' OR (source=? AND state='removed' AND "
+                           "ended_at>=?))", (ip, self.AUTO_SOURCE, now - 7 * 86400)):
+                continue          # already blocked, or a person ended this rule's block lately
+            if ip in self._auto_refused:
+                continue
+            sample = ', '.join(sorted(paths)[:6])
+            try:
+                self.add(ip, b['auto_recon_ttl'], self.AUTO_SOURCE,
+                         'guessed %d secret or configuration files in %d minutes: %s' % (len(paths), b['auto_recon_minutes'], sample),
+                         'system', via='system')
+            except BlockError:
+                self._auto_refused.add(ip)        # protected, internal, full...: audited once, not every minute
+                continue
+            done += 1
+            out.append(ip)
+        return out
+
     def run(self, stop, interval=5):
         """The web service's thread: expire, write when needed (also after a restart: the database decides)."""
-        last_purge = 0
+        last_purge = last_auto = 0
         while not stop.is_set():
             try:
                 if self.cfg['blocks']['enabled']:
                     self.expire()
+                    if time.time() - last_auto >= 60:
+                        last_auto = time.time()
+                        self.auto_recon()
                     self.sync()
                     if time.time() - last_purge > 86400:
                         self.purge()

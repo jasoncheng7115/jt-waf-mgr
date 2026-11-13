@@ -99,5 +99,46 @@ if cfg['blocks']['enabled']:
     app.blocks.add('203.0.113.66', 86400, 'mail2/zimbra-webmail', '4 failed logins in 24 h', 'mail2', via='token', token_id='e2etoken')
     app.blocks.add('203.0.113.67', 3600, 'mail2/zimbra-webmail', '5 failed logins in 24 h', 'mail2', via='token', token_id='e2etoken')
     app.blocks.add('192.0.2.0/24', 7 * 86400, 'ui', 'scanner range', 'admin', role='admin')
+# changes in every state and from every kind of proposer (rows only: this environment is not adopted), and the alerts
+# an operator sees on a busy day -- synthetic, for the pages and the project site's screenshots
+def chg(op, kind, rid, spec, direction, state, reason, by, via, ago, text, owner=None):
+    app.db.x('INSERT INTO changes(op, kind, item_id, rule_id, spec, direction, state, reason, proposed_by, proposed_via, created_at, '
+             'updated_at, base_version, rule_text, checks, tests, evidence_override, applied_version, error, proposed_owner) '
+             "VALUES (?,?,NULL,?,?,?,?,?,?,?,?,?,1,?,'{}','[]',0,NULL,NULL,?)",
+             (op, kind, rid, json.dumps(spec), direction, state, reason, by, via, now - ago, now - ago + 120, text, owner or by))
+def blockrule(rid, rx, msg):
+    return ('SecRule REQUEST_FILENAME "@rx %s" "id:%d,phase:1,pass,log,msg:\'jt confident block: %s\',tag:\'jt-confident-block\'"' % (rx, rid, msg))
+for i, (rx, label, ago, state) in enumerate([
+        (r'^/server/config\.json$', 'config file probe', 2400, 'pending_approval'),
+        (r'^/kube-config\.yaml$', 'kubernetes config probe', 2500, 'pending_approval'),
+        (r'^/aws-secrets\.json$', 'cloud secret probe', 2600, 'pending_approval'),
+        (r'^/ai_config\.json$', 'ai config probe', 5400, 'pending_approval'),
+        (r'^/env\.old$', 'env backup probe', 5500, 'applied')]):
+    chg('add', 'confident_block', 10260 - i, {'target': 'path', 'regex': rx, 'source': 'external', 'msg': 'jt analyst: ' + label,
+        'host': {'mode': 'any'}}, 'tighten', state,
+        'Probe for %s from outside only; no internal user, never answered 2xx.\n[jt analyst] model example-model, confidence 0.95. '
+        'Last 168h, external sources only: 6 events, 3 sources.' % rx.strip('^$').replace('\\', ''), 'analyst', 'api', ago,
+        blockrule(10260 - i, rx, 'jt analyst: ' + label), owner='analyst')
+chg('add', 'confident_block', 10224, {'target': 'header', 'header': 'Upgrade', 'regex': '(?i)h2c', 'source': 'external',
+    'msg': 'h2c upgrade request'}, 'tighten', 'applied', 'Block requests that ask to upgrade to h2c.', 'admin', 'user', 7200,
+    'SecRule REQUEST_HEADERS:Upgrade "@rx (?i)h2c" "id:10224,phase:1,pass,log,msg:\'jt confident block: h2c upgrade request\'"')
+chg('add', 'confident_block', 10230, {'target': 'ua', 'regex': '(?i)sqlmap', 'source': 'external', 'msg': 'sqlmap'}, 'tighten',
+    'pending_approval', 'SOAR playbook: sqlmap user agent seen on shop.example.com.', 'soar-playbook', 'api', 900,
+    'SecRule REQUEST_HEADERS:User-Agent "@rx (?i)sqlmap" "id:10230,phase:1,pass,log,msg:\'jt confident block: sqlmap\'"', owner='admin')
+chg('add', 'exclusion', 10120, {'host': {'mode': 'exact', 'value': 'shop.example.com'}, 'path': {'mode': 'exact', 'value': '/api/notes'},
+    'action': 'remove_target', 'rule_ids': [941100], 'targets': ['ARGS:body']}, 'loosen', 'applied',
+    'Rich-text notes are HTML by design (941100 on ARGS:body).', 'approver', 'user', 86400,
+    'SecRule REQUEST_FILENAME "@streq /api/notes" "id:10120,phase:1,pass,nolog,ctl:ruleRemoveTargetById=941100;ARGS:body"')
+for kind, sev, ded, det, ago in (
+        ('config_outside', 'critical', 'config_outside:1', {'event': 'config.changed_outside', 'reason': 'nginx.conf changed outside jt-waf-mgr'}, 1500),
+        ('attack_in_progress', 'warning', 'attack_in_progress:1', {'path': '/ai_config.json, /bitbucket-pipelines.yml, /config.yaml, /public/config.json, /settings.py.bak',
+         'host': 'app.example.com', 'reason': 'Several sources probe secret and backup files on app.example.com in a short time.'}, 3000),
+        ('attack_in_progress', 'warning', 'attack_in_progress:2', {'path': '/.kube/config, /auth.json, /config.ini, /.environment, /config.inc.php',
+         'host': 'www.example.com', 'reason': 'Scans for configuration files across several sites.'}, 3100),
+        ('traffic_spike', 'warning', 'traffic_spike:shop.example.com', {'host': 'shop.example.com', 'reason': '6200 requests in the hour from 14:00, 8.4 times the usual 740 an hour'}, 4200),
+        ('crs_update', 'warning', 'crs_update:4.31.0', {'reason': 'OWASP CRS 4.31.0 downloaded and verified; compare it in the sandbox and propose it'}, 9000)):
+    aid = alerts.raise_alert(app.db, app.audit, 'analyst' if kind.startswith('attack') else ('traffic' if kind.startswith('traffic') else 'system'),
+                             kind, sev, ded, det, link='/alerts')
+    app.db.x('UPDATE alerts SET created_at=?, last_seen=? WHERE dedup=?', (now - ago, now - ago, ded))
 json.dump(sec, open(R + '/totp.json', 'w'))
 print('events', app.db.one('SELECT COUNT(*) n FROM events')['n'])

@@ -22,8 +22,12 @@ const fromText = computed(() => [props.owner ? t('change.token_owner', { owner: 
 
 <style scoped>
 .apifrom { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.aitag { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, #7c3aed 14%, var(--panel)); color: #6d28d9;
-  border-color: color-mix(in srgb, #7c3aed 40%, var(--border)); font-weight: 600; }
-:global([data-theme="dark"]) .apifrom { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.aitag { color: #c4b5fd; }
+/* the AI tag: dark violet on a pale violet tint in light mode, light violet on a deep tint in dark mode (both well over
+   4.5:1) */
+.aitag { display: inline-flex; align-items: center; gap: 4px; background: #ede9fe; color: #5b21b6;
+  border-color: #c4b5fd; font-weight: 600; }
+:global([data-theme="dark"]) .aitag { background: #2e1065; color: #ddd6fe; border-color: #6d28d9; }
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme="light"])) .aitag { background: #2e1065; color: #ddd6fe; border-color: #6d28d9; }
+}
 </style>

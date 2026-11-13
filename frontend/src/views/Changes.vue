@@ -115,7 +115,7 @@ const cols = computed(() => [
   { key: 'id', label: t('change.id'), required: true, align: 'num', value: (c) => c.id },
   { key: 'created_at', label: t('change.created'), nowrap: true, text: (c) => fmtShortTime(c.created_at) },
   { key: 'what', label: t('change.what'), nowrap: true, value: (c) => t('op.' + c.op) + ' · ' + t('kind.' + c.kind) + (c.rule_id ? ' ' + c.rule_id : '') },
-  { key: 'summary', label: t('change.summary'), text: (c) => (c.summary || '') + ' ' + (c.reason || '') },
+  { key: 'summary', label: t('change.summary'), class: 'c-fill', text: (c) => (c.summary || '') + ' ' + (c.reason || '') },
   { key: 'direction', label: t('change.direction'), value: (c) => t('direction.' + c.direction) },
   { key: 'state', label: t('change.state'), value: (c) => t('cstate.' + c.state), text: (c) => t('cstate.' + c.state) + ' ' + (c.error || '') },
   { key: 'proposed_by', label: t('change.proposed_by'), nowrap: true, value: (c) => (c.proposed_by === 'analyst' ? t('change.by_analyst') : c.proposed_by || ''),
