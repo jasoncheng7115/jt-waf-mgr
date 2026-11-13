@@ -261,6 +261,9 @@ table.grid td.empty, .empty { color: var(--muted); text-align: center; padding: 
 .idlink { margin-right: 6px; }
 
 .trunc { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.trunc.expandable { cursor: pointer; }
+.trunc.expandable:hover, .trunc.expandable:focus-visible { text-decoration: underline dotted; text-underline-offset: 3px; outline: none; }
+.trunc.open { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
 .c-host .trunc, .c-req .trunc { max-width: 100%; }
 .method { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--muted); flex: none; }
 .reqline { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; font-size: 15px; }
@@ -654,7 +657,9 @@ td .pickval + .geotag { margin-top: 2px; }
 .openlink:hover { color: var(--accent); }
 .openlink .icon { width: .95em; height: .95em; }
 .hb-line { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.sub.sub-inl { display: inline; margin-left: 10px; white-space: nowrap; font-family: var(--sans); font-size: 12.5px; }
+/* label | sub (origin, country) | bar | number: the sub text in its own column so it lines up */
+.hbars.hb-inl { grid-template-columns: max-content fit-content(32%) minmax(100px, 1fr) max-content; }
+.hb-sub { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12.5px; }
 .hb-pick { min-width: 0; }
 .hb-pickbar { cursor: pointer; }
 .hb-on .hb-bar { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
@@ -702,6 +707,7 @@ td .pickval + .geotag { margin-top: 2px; }
   .dt-count { margin-left: 0; }
   .dt-pager { justify-content: flex-start; }
   .hbars { grid-template-columns: fit-content(55%) minmax(60px, 1fr) max-content; }
+  .hbars.hb-inl { grid-template-columns: max-content minmax(0, 1fr) minmax(50px, 30%) max-content; }
   .hb-row { column-gap: 8px; }
   /* the hourly columns keep a readable scale and scroll inside their box */
   .timebars { overflow-x: auto; }

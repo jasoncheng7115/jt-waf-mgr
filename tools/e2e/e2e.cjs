@@ -205,7 +205,9 @@ async function audit(page, where) {
   await page.waitForSelector('.pvmsg', { timeout: 5000 }).catch(() => {});
   const pv1 = await page.locator('.pvmsg .pvtitle b').innerText().catch(() => '');
   await page.locator('.pvbar .seg button', { hasText: 'English' }).click();
-  await page.waitForLoadState('networkidle');
+  // the preview is fetched again: wait for the new title, not just for a quiet network (it may not have started yet)
+  await page.waitForFunction((old) => { const b = document.querySelector('.pvmsg .pvtitle b'); return b && b.innerText !== old }, pv1,
+    { timeout: 8000 }).catch(() => {});
   const pv2 = await page.locator('.pvmsg .pvtitle b').innerText().catch(() => '');
   ok(pv1 && pv2 && pv1 !== pv2 && /^[\x20-\x7e]+$/.test(pv2), 'notify: preview in two languages (' + pv1 + ' / ' + pv2 + ')');
   await page.keyboard.press('Escape');

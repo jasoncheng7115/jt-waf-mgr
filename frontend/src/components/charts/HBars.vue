@@ -4,7 +4,7 @@
      pickable: the label (and the bar: click / Enter) emits `pick(item)` instead of following `to`;
      `to` then becomes a small secondary "open" link next to the label (aria-label from openLabel). -->
 <template>
-  <div class="hbars">
+  <div class="hbars" :class="{ 'hb-inl': inlineSub }">
     <div v-if="!items.length" class="empty small">{{ t('common.no_data') }}</div>
     <div v-for="it in items" :key="it.key" class="hb-row" :class="{ 'hb-on': pickable && it.active }">
       <div class="hb-label" :class="{ mono: it.mono || mono }">
@@ -12,11 +12,12 @@
           <button type="button" class="pickval hb-pick" :class="{ on: it.active }" :aria-pressed="it.active ? 'true' : 'false'"
                   :title="it.active ? t('filter.unpick') : t('filter.pick')" @click="pick(it)"><span class="pv-text">{{ clip(it.label) }}</span><Icon name="filter" class="pv-icon" /></button>
           <RouterLink v-if="it.to" :to="it.to" class="openlink" :title="openLabel || t('filter.open')" :aria-label="(openLabel || t('filter.open')) + ': ' + clip(it.label, 100)"><Icon name="external" /></RouterLink>
-          <span v-if="it.sub && inlineSub" class="sub sub-inl">{{ clip(it.sub, 120) }}</span>
         </div>
-        <template v-else><RouterLink v-if="it.to" :to="it.to">{{ clip(it.label) }}</RouterLink><span v-else>{{ clip(it.label) }}</span><span v-if="it.sub && inlineSub" class="sub sub-inl">{{ clip(it.sub, 120) }}</span></template>
+        <template v-else><RouterLink v-if="it.to" :to="it.to">{{ clip(it.label) }}</RouterLink><span v-else>{{ clip(it.label) }}</span></template>
         <div v-if="it.sub && !inlineSub" class="sub">{{ clip(it.sub, 120) }}</div>
       </div>
+      <!-- inlineSub: the sub text (origin, country) is a column of its own, aligned from row to row -->
+      <div v-if="inlineSub" class="hb-sub sub">{{ it.sub ? clip(it.sub, 120) : '' }}</div>
       <div class="hb-bar" :class="{ 'hb-pickbar': pickable }" tabindex="0" @pointermove="show($event, it)" @pointerleave="hide" @focus="show($event, it)" @blur="hide"
            @click="pickable && pick(it)" @keydown.enter.prevent="pickable && pick(it)">
         <span v-for="s in series.filter((x) => (it.values[x.key] || 0) > 0)" :key="s.key" class="hb-seg" :class="'tone-' + s.tone" :style="{ width: w(it.values[s.key]) + '%' }"></span>

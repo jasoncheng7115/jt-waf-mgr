@@ -2,6 +2,12 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.16 (2026-11-13)
+
+- Overview, by source address: internal / external and the country are a column of their own, aligned from row to row.
+- Rules list: a long description is cut with "..." (the table no longer runs off the right edge); hover shows it
+  all, a click unfolds it and a second click folds it again.
+
 ## 0.4.15 (2026-11-13)
 
 - Event analysis: the verdict history a "false positive" must agree with counts only runs that had candidates (the last

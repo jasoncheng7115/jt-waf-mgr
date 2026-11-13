@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.15
+# jt-waf-mgr v0.4.16
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -89,8 +89,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.15.tar.gz.sig jt-waf-mgr-0.4.15.tar.gz
-tar xzf jt-waf-mgr-0.4.15.tar.gz && cd jt-waf-mgr-0.4.15
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.16.tar.gz.sig jt-waf-mgr-0.4.16.tar.gz
+tar xzf jt-waf-mgr-0.4.16.tar.gz && cd jt-waf-mgr-0.4.16
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

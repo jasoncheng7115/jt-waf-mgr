@@ -32,7 +32,7 @@
       <template #cell-phase="{ row }"><span class="mono">{{ row.phase ?? '—' }}</span></template>
       <template #cell-disruptive="{ row }"><span class="mono">{{ safeText(row.disruptive, 20) || '—' }}</span></template>
       <template #cell-msg="{ row }">
-        <div><TruncText :text="row.msg || row.comment || row.directive" :max="200" /></div>
+        <div><TruncText :text="row.msg || row.comment || row.directive" :max="2000" width="min(46em, 52vw)" expand /></div>
         <div class="sub mono" :title="safeText(row.file, 500)">{{ shortFile(row.file) }}:{{ row.line }}</div>
       </template>
       <template #cell-hosts="{ row }"><span v-for="h in row.hosts || []" :key="h" class="chip host"><TruncText :text="h" :max="60" /></span><span v-if="!(row.hosts || []).length" class="muted">{{ t('rules.global') }}</span></template>
