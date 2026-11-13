@@ -70,7 +70,9 @@ class Sandbox:
         n, _ = self.site.load()
         return [d.args[0] for d, ctx in walk(n.tree) if d.name == 'load_module' and d.args and not ctx]
 
-    def build(self, root, replace, crs_swap=None):
+    def build(self, root, replace, crs_swap=None, crs_add=None):
+        # crs_add: (main file, anchor Include or None, [Include paths]) -- a first CRS installation: the paths go
+        # right after the anchor (or at the end of that main file)
         """Writes <root>/conf/*.conf. replace: {absolute production path: text to use instead}. crs_swap: (the CRS
         directory the main file includes, another CRS version's directory) -- the same configuration with the other
         CRS rules (a CRS update compared in the sandbox)."""
@@ -85,6 +87,8 @@ class Sandbox:
             out = []
             with open(main, encoding='utf-8', errors='replace') as fh:
                 text = fh.read()
+            add = crs_add if crs_add and crs_add[0] == main else None
+            added = False
             for line in text.splitlines():
                 mm = re.match(r'(\s*)Include\s+"?([^"\s]+)"?\s*$', line, re.I)
                 if not mm:
@@ -92,6 +96,11 @@ class Sandbox:
                     continue
                 p = mm.group(2)
                 p = p if os.path.isabs(p) else os.path.join(os.path.dirname(main), p)
+                if add and not added and add[1] == p:
+                    out.append('Include %s' % p)
+                    out += ['Include %s' % x for x in add[2]]
+                    added = True
+                    continue
                 if crs_swap and p.startswith(crs_swap[0].rstrip('/') + '/'):
                     out.append('Include %s' % (crs_swap[1].rstrip('/') + p[len(crs_swap[0].rstrip('/')):]))
                     continue
@@ -109,6 +118,8 @@ class Sandbox:
                     out.append('Include %s' % dst)
                 else:
                     out.append('Include %s' % p)
+            if add and not added:
+                out += ['Include %s' % x for x in add[2]]
             dst = os.path.join(conf, 'main-%d.conf' % i)
             with open(dst, 'w', encoding='utf-8') as fh:
                 fh.write('\n'.join(out) + '\n')
@@ -161,13 +172,13 @@ http {
         return AUDIT_REWRITE.sub(lambda x: self._audit_line(x, root), line)
 
     # --- running ----------------------------------------------------------------------------
-    def run(self, replace, cases, crs_swap=None):
+    def run(self, replace, cases, crs_swap=None, crs_add=None):
         """Starts a sandbox with `replace`, sends `cases`, returns per-case results. Always cleans up."""
         os.makedirs(self.base, mode=0o700, exist_ok=True)
         root = tempfile.mkdtemp(prefix='sbx-', dir=self.base)
         pid = None
         try:
-            port = self.build(root, replace, crs_swap)
+            port = self.build(root, replace, crs_swap, crs_add)
             conf = os.path.join(root, 'conf', 'nginx.conf')
             base_cmd = [self.nginx, '-p', root + '/', '-c', conf, '-e', os.path.join(root, 'logs', 'error.log')]
             t = subprocess.run(base_cmd + ['-t'], capture_output=True, text=True, timeout=120)
@@ -356,6 +367,20 @@ http {
             new = self.run({}, requests, crs_swap=(crs_dir, new_dir))
         except SandboxError as e:
             return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
+        return self._compare(requests, old, new)
+
+    def run_crs_first(self, main, anchor, new_dir, requests):
+        """A first CRS installation: the same requests without and with the CRS (its example setup and its rules)."""
+        try:
+            old = self.run({}, requests)
+            new = self.run({}, requests, crs_add=(main, anchor, [os.path.join(new_dir, 'crs-setup.conf.example'),
+                                                               os.path.join(new_dir, 'rules', '*.conf')]))
+        except SandboxError as e:
+            return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
+        return self._compare(requests, old, new)
+
+    @staticmethod
+    def _compare(requests, old, new):
         diffs, more, fewer = [], 0, 0
         for c, a, b in zip(requests, old, new):
             if a['status'] != b['status'] or sorted(a['rules']) != sorted(b['rules']):

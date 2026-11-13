@@ -249,11 +249,13 @@ def run(app, force=False, log=print, api=API, now=None, keyfile=None, fpr=None):
         return st
     loc = location(app.site)
     st['location'] = {k: loc[k] for k in ('path', 'link', 'target', 'version')} if loc else None
-    if not loc or not loc['version']:
-        st.update(state='error', error='no CRS in use found (a main ModSecurity file including <crs>/rules/*.conf)')
+    if loc and not loc['version']:
+        st.update(state='error', error='cannot read the version of the CRS in %s' % loc['path'])
         _write_status(cfg, st)
         return st
-    cur = vtuple(loc['version'])
+    # no CRS yet (a fresh ModSecurity): the newest 4.x release that has waited is staged for a first installation
+    first = loc is None
+    cur = vtuple(loc['version']) if loc else (4, 0, -1)
     try:
         rels = releases(api)
     except Exception as e:      # noqa: BLE001 -- offline, rate limit, proxy: reported, tried again tomorrow
@@ -262,7 +264,8 @@ def run(app, force=False, log=print, api=API, now=None, keyfile=None, fpr=None):
         log('crs: ' + st['error'])
         return st
     action, rel, major = choose(cur, rels, cfg['crs']['wait_days'], now)
-    st.update(installed=loc['version'], state=action, newer_major=vstr(major[0]) if major else None)
+    st.update(installed=loc['version'] if loc else None, state=action, newer_major=vstr(major[0]) if major else None,
+              first_install=first)
     if rel:
         st['candidate'] = {'version': vstr(rel[0]), 'published_at': util.iso(rel[1]),
                            'ready_at': util.iso(rel[1] + cfg['crs']['wait_days'] * 86400)}
@@ -320,16 +323,16 @@ def run(app, force=False, log=print, api=API, now=None, keyfile=None, fpr=None):
                             'manifest_sha256': hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest(),
                             'files': len(files), 'verified_at': util.iso(now)}
             app.audit.log('crs.staged', 'crs-update', 'system', None, 'ok', severity='warning', version=ver,
-                          installed=loc['version'], tarball_sha256=tsha)
+                          installed=loc['version'] if loc else None, tarball_sha256=tsha)
             try:
                 from . import alerts
                 alerts.raise_alert(app.db, app.audit, 'system', 'crs_update', 'warning', 'crs_update:%s' % ver,
-                                   {'version': ver, 'installed': loc['version'],
+                                   {'version': ver, 'installed': loc['version'] if loc else None,
                                     'reason': 'OWASP CRS %s is downloaded and verified; compare it in the sandbox and '
                                               'approve it on the CRS page' % ver}, link='/crs')
             except Exception:       # noqa: BLE001
                 pass
-            log('crs: %s staged (installed %s)' % (ver, loc['version']))
+            log('crs: %s staged (installed %s)' % (ver, loc['version'] if loc else 'none'))
     elif old and os.path.isdir(old.get('path', '')) and vtuple(old.get('version')) and vtuple(old['version']) > cur:
         st['staged'] = old
     _write_status(cfg, st)

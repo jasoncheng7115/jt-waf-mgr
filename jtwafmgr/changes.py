@@ -501,7 +501,7 @@ class Workflow:
         from . import crsupdate
         if role not in ('approver', 'admin'):
             raise ChangeError('forbidden', 403)
-        if mode not in ('install', 'rollback') or not crsupdate.vtuple(str(version or '')):
+        if mode not in ('install', 'rollback', 'first_install') or not crsupdate.vtuple(str(version or '')):
             raise ChangeError('invalid_crs_request', 422)
         reason = (reason or '').strip()
         if not reason or len(reason) > 2000:
@@ -510,12 +510,29 @@ class Workflow:
         if open_:
             raise ChangeError('crs_change_pending', 409, change_id=open_[0])
         loc = crsupdate.location(self.app.site)
-        if not loc or not loc['version']:
-            raise ChangeError('crs_not_found', 409)
-        if version == loc['version']:
-            raise ChangeError('crs_in_use', 409)
-        spec = {'mode': mode, 'to': version, 'from': loc['version'], 'crs_path': loc['path']}
-        if mode == 'install':
+        if mode == 'first_install':
+            # no CRS yet: crs-<version> + a crs link next to the main ModSecurity file, its Includes after modsecurity.conf
+            if loc:
+                raise ChangeError('crs_in_use', 409)
+            _, m = self.app.site.load()
+            if not m.main_files:
+                raise ChangeError('crs_not_found', 409)
+            main = m.main_files[0]
+            from .apply import Applier
+            with open(main, encoding='utf-8', errors='replace') as fh:
+                incs = Applier.includes(main, fh.read())
+            anchor = next((p for p in sorted(incs, key=incs.get) if os.path.basename(p) == 'modsecurity.conf'), None)
+            crs_path = os.path.join(os.path.dirname(main), 'crs')
+            if os.path.lexists(crs_path):
+                raise ChangeError('crs_path_exists', 409)
+            spec = {'mode': mode, 'to': version, 'from': None, 'crs_path': crs_path, 'main_conf': main, 'anchor': anchor}
+        else:
+            if not loc or not loc['version']:
+                raise ChangeError('crs_not_found', 409)
+            if version == loc['version']:
+                raise ChangeError('crs_in_use', 409)
+            spec = {'mode': mode, 'to': version, 'from': loc['version'], 'crs_path': loc['path']}
+        if mode in ('install', 'first_install'):
             staged = crsupdate.read_status(self.cfg).get('staged') or {}
             if staged.get('version') != version or not os.path.isdir(staged.get('path') or ''):
                 raise ChangeError('crs_not_staged', 409)
@@ -531,9 +548,9 @@ class Workflow:
             cid = c.execute('INSERT INTO changes(op, kind, spec, direction, state, reason, proposed_by, created_at, updated_at) '
                             "VALUES ('crs', 'system', ?, 'loosen', 'checking', ?, ?, ?, ?)",
                             (json.dumps(spec), reason, actor, t, t)).lastrowid
-        self.log(cid, actor, 'proposed', 'CRS %s -> %s (%s)' % (loc['version'], version, mode))
+        self.log(cid, actor, 'proposed', 'CRS %s -> %s (%s)' % (spec['from'] or 'none', version, mode))
         self.app.audit.log('change.proposed', actor, 'user', None, 'ok', change_id=cid, op='crs', mode=mode,
-                           crs_from=loc['version'], crs_to=version)
+                           crs_from=spec['from'], crs_to=version)
         self._wake.set()
         return cid
 
@@ -542,9 +559,9 @@ class Workflow:
         from . import crsupdate
         spec = json.loads(r['spec'])
         checks = {'started_at': util.iso(util.now())}
-        new_dir = spec['staged']['path'] if spec['mode'] == 'install' else os.path.join(os.path.dirname(spec['crs_path']),
-                                                                                        'crs-%s' % spec['to'])
-        if spec['mode'] == 'install':
+        new_dir = spec['staged']['path'] if spec['mode'] != 'rollback' else os.path.join(os.path.dirname(spec['crs_path']),
+                                                                                         'crs-%s' % spec['to'])
+        if spec['mode'] != 'rollback':
             got = hashlib.sha256(json.dumps(crsupdate.manifest(new_dir), sort_keys=True).encode()).hexdigest() \
                 if os.path.isdir(new_dir) else None
             if got != spec['staged']['manifest_sha256']:
@@ -558,7 +575,10 @@ class Workflow:
         checks['static'] = {'ok': True}
         if self.sandbox is not None and self.sandbox.available():
             try:
-                sb = self.sandbox.run_crs_compare(spec['crs_path'], new_dir, self.equivalence_requests())
+                if spec['mode'] == 'first_install':
+                    sb = self.sandbox.run_crs_first(spec['main_conf'], spec['anchor'], new_dir, self.equivalence_requests())
+                else:
+                    sb = self.sandbox.run_crs_compare(spec['crs_path'], new_dir, self.equivalence_requests())
             except Exception as e:      # noqa: BLE001
                 traceback.print_exc()
                 sb = {'ok': False, 'error': 'sandbox_error: %s' % type(e).__name__}
@@ -576,12 +596,14 @@ class Workflow:
         req = {'request_id': 'crs-c%d' % cid, 'action': 'crs_switch', 'change_id': cid, 'mode': spec['mode'],
                'to': spec['to'], 'crs_path': spec['crs_path'], 'health_urls': self.setting('health.urls'),
                'wait_old_workers': self.setting('apply.wait_old_workers_seconds')}
-        if spec['mode'] == 'install':
+        if spec['mode'] != 'rollback':
             req.update(tarball=spec['staged']['tarball_path'], tarball_sha256=spec['staged']['tarball_sha256'],
                        manifest_sha256=spec['staged']['manifest_sha256'])
+        if spec['mode'] == 'first_install':
+            req.update(main_conf=spec['main_conf'], anchor=spec['anchor'])
         self._write_request(req)
         self._state(cid, 'applying')
-        self.log(cid, 'system', 'apply_requested', 'CRS %s -> %s' % (spec['from'], spec['to']))
+        self.log(cid, 'system', 'apply_requested', 'CRS %s -> %s' % (spec['from'] or 'none', spec['to']))
 
     def _handle_crs_result(self, res, r):
         cid = r['id']
@@ -1171,6 +1193,8 @@ def _check_tests(tests):
 
 def summarize(kind, spec, op):
     if op == 'crs':
+        if spec.get('mode') == 'first_install':
+            return 'OWASP CRS %s: first installation' % spec.get('to')
         return 'OWASP CRS %s -> %s%s' % (spec.get('from'), spec.get('to'), ' (rollback)' if spec.get('mode') == 'rollback' else '')
     return _summarize(kind, spec, op)
 

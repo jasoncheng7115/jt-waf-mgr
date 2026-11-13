@@ -63,6 +63,9 @@ sudo ln -sfn coreruleset-$CRS crs        # 之後升級 CRS 只要換連結
 sudo cp crs/crs-setup.conf.example crs-setup.conf
 ```
 
+> 另一個做法：裝好 jt-waf-mgr 後，在 CRS 頁開啟「由本系統保持 CRS 最新」，等它下載並驗證 CRS 4，再按「在沙箱比對並提出安裝」，
+> 核准後由 jt-waf-mgr 安裝、建立 `crs` 連結與 `crs-setup.conf`，並在主設定檔的 `modsecurity.conf` 之後加上 Include。
+
 ## 4. 主設定檔與站台規則檔
 
 `/etc/nginx/modsec/main.conf`：

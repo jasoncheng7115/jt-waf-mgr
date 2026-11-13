@@ -136,6 +136,16 @@ class TestCrsUpdate(unittest.TestCase):
         self.srv.files.pop('/dl/coreruleset-4.30.1-minimal.tar.gz')
         self.assertEqual(self.check()['staged']['version'], '4.30.1')
 
+    def test_no_crs_yet_stages_a_first_installation(self):
+        from tests.test_crs_switch import _without_crs
+        _without_crs(os.path.dirname(self.env.cfg['paths']['nginx_conf']))
+        self.app.site._nginx = None
+        self.manage()
+        self.release('4.30.1', 10)
+        st = self.check()
+        self.assertEqual((st['state'], st['first_install'], st['installed'], st['staged']['version']),
+                         ('ready', True, None, '4.30.1'), st)
+
     def test_a_new_release_waits(self):
         self.manage(wait=7)
         self.release('4.30.1', 2)

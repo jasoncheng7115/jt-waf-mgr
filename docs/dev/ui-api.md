@@ -226,6 +226,14 @@ manifest that was compared, turns a plain `crs/` directory into `crs-<version>` 
 `crs` link at the new directory, runs `nginx -t`, reloads and health-checks, and switches back on any failure; it keeps
 the three newest `crs-*` directories. When applied, the open `crs_update` alert is closed.
 
+Step 3 (0.4.22), a host without the CRS: the unit stages the newest 4.x release (`status.first_install: true`); `mode:
+"first_install"` proposes installing it. The sandbox compares the requests without and with the CRS (its example setup
+and rules added after `modsecurity.conf`). The root program refuses unless no CRS is included and `crs` next to the
+main file does not exist yet; it installs `crs-<version>`, links `crs` to it, copies `crs-setup.conf.example` to
+`crs-setup.conf` when there is none, and inserts `Include <dir>/crs-setup.conf` and `Include <dir>/crs/rules/*.conf`
+right after the `modsecurity.conf` Include (else at the end); any failure puts the main file back and removes what it
+created. Error `crs_path_exists`: a crs directory is there but not included.
+
 ## Lookups
 
 `GET /api/v1/lookups/ip/{ip}` (viewer) →

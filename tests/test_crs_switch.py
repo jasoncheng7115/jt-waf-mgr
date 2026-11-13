@@ -12,7 +12,7 @@ from jtwafmgr import auth, config, crsupdate
 from jtwafmgr.app import App
 from jtwafmgr.apply import Applier, Fail
 from jtwafmgr.changes import ChangeError
-from tests.helpers import FIXTURE_SITE, TempEnv, jload
+from tests.helpers import FIXTURE_SITE, TempEnv, jload, rd
 from tests.test_crsupdate import gpg, make_key, tarball
 
 
@@ -211,3 +211,105 @@ class TestSandboxCrsSwap(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def _without_crs(site):
+    """A fresh ModSecurity: the main file without the CRS Includes, no crs link, no crs-setup.conf."""
+    main = os.path.join(site, 'modsec', 'main.conf')
+    text = rd(main)
+    with open(main, 'w') as fh:
+        fh.write(''.join(l for l in text.splitlines(keepends=True) if 'crs' not in l or 'local-' in l))
+    os.unlink(os.path.join(site, 'modsec', 'crs'))
+    shutil.rmtree(os.path.join(site, 'modsec', 'crs-4.30.0'))
+    os.unlink(os.path.join(site, 'modsec', 'crs-setup.conf'))
+    return main
+
+
+class TestCrsFirstInstall(_Keys, unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp(prefix='jtwaf-crsf-')
+        self.site = os.path.join(self.d, 'site')
+        shutil.copytree(FIXTURE_SITE, self.site, symlinks=True)
+        self.main = _without_crs(self.site)
+        self.cfg = config.load(None, {'paths': {'nginx_conf': os.path.join(self.site, 'nginx.conf'), 'nginx_bin': '/bin/true'},
+                                      'managed': {'dir': os.path.join(self.d, 'managed'), 'spool': os.path.join(self.d, 'spool'),
+                                                  'apply_state': os.path.join(self.d, 'apply-state')},
+                                      'crs': {'dir': os.path.join(self.d, 'crsstate')}})
+        os.makedirs(self.cfg['managed']['apply_state'])
+        self.ap = Applier(self.cfg)
+        self.ap.check_binary = lambda: None
+        self.ap.reload = lambda wait: 'reloaded (test)'
+        self.ap.test_config = lambda: 'ok'
+        self.ap.health = lambda urls: {u: 200 for u in urls}
+        self.crs = os.path.join(self.site, 'modsec', 'crs')
+        self.anchor = os.path.join(self.site, 'modsec', 'modsecurity.conf')
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def req(self, st, **kw):
+        r = {'action': 'crs_switch', 'change_id': 3, 'mode': 'first_install', 'to': '4.30.1', 'crs_path': self.crs,
+             'main_conf': self.main, 'anchor': self.anchor,
+             'tarball': os.path.join(os.path.realpath(self.cfg['crs']['dir']), 'stage', st['tarball']),
+             'tarball_sha256': st['tarball_sha256'], 'manifest_sha256': st['manifest_sha256'], 'health_urls': []}
+        r.update(kw)
+        return r
+
+    def test_first_installation(self):
+        st = self.stage(self.cfg['crs']['dir'])
+        res = self.ap.crs_switch(self.ap.check_crs(self.req(st)))
+        self.assertEqual(res['result'], 'ok', res)
+        lines = [l.strip() for l in rd(self.main).splitlines() if l.strip()]
+        i = lines.index('Include modsecurity.conf')
+        self.assertEqual(lines[i + 1:i + 3], ['Include %s' % os.path.join(self.site, 'modsec', 'crs-setup.conf'),
+                                             'Include %s' % os.path.join(self.crs, 'rules', '*.conf')])
+        self.assertEqual(os.readlink(self.crs), 'crs-4.30.1')
+        self.assertEqual(rd(os.path.join(self.site, 'modsec', 'crs-setup.conf')), '# example\n')
+        self.assertEqual(self.ap.crs_dirs(), {self.crs})                                # the CRS is included now
+
+    def test_a_failure_takes_everything_out_again(self):
+        st = self.stage(self.cfg['crs']['dir'])
+        before = rd(self.main)
+
+        def bad():
+            raise Fail('nginx_t', 'nginx -t failed')
+        self.ap.test_config = bad
+        with self.assertRaises(Fail) as cm:
+            self.ap.crs_switch(self.ap.check_crs(self.req(st)))
+        self.assertIn('taken out again', cm.exception.summary)
+        self.assertEqual(rd(self.main), before)
+        for p in (self.crs, os.path.join(self.site, 'modsec', 'crs-4.30.1'), os.path.join(self.site, 'modsec', 'crs-setup.conf')):
+            self.assertFalse(os.path.lexists(p), p)
+
+    def test_refusals(self):
+        st = self.stage(self.cfg['crs']['dir'])
+        for bad in (dict(crs_path=os.path.join(self.site, 'crs')), dict(main_conf='/etc/passwd'), dict(anchor='/etc/x.conf')):
+            with self.assertRaises(Fail, msg=bad):
+                self.ap.check_crs(self.req(st, **bad))
+        os.makedirs(self.crs)                                     # something already there
+        with self.assertRaises(Fail):
+            self.ap.check_crs(self.req(st))
+
+    def test_the_check_stages_a_first_installation_and_it_becomes_a_change(self):
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        env.cfg.data['paths']['nginx_conf'] = os.path.join(self.site, 'nginx.conf')
+        env.cfg.data['crs']['dir'] = self.cfg['crs']['dir']
+        env.cfg.data['managed']['spool'] = os.path.join(self.d, 'spool2')
+        app = App(env.cfg)
+        self.assertIsNone(crsupdate.location(app.site))
+        st = self.stage(self.cfg['crs']['dir'])
+        crsupdate._write_status(env.cfg, {'state': 'ready', 'first_install': True, 'staged': st})
+        app.workflow.set_setting('sandbox.required', False, 'test')
+        for n, r in (('appr', 'approver'), ('boss', 'admin')):
+            app.auth.create_user(n, r, password='a long test password')
+        cid = app.workflow.propose_crs('first_install', '4.30.1', 'fresh host: install CRS 4', 'appr', role='approver')
+        spec = json.loads(app.workflow.get(cid)['spec'])
+        self.assertEqual((spec['main_conf'], spec['anchor'], spec['crs_path']), (self.main, self.anchor, self.crs))
+        self.assertEqual(app.workflow.public(app.workflow.get(cid))['summary'], 'OWASP CRS 4.30.1: first installation')
+        app.workflow.run_checks(cid)
+        self.assertEqual(app.workflow.get(cid)['state'], 'pending_approval')
+        app.workflow.approve(cid, app.auth.user_row('boss'), note='fresh host')
+        req = jload(os.path.join(env.cfg['managed']['spool'], 'crs-c%d.req' % cid))
+        self.assertEqual((req['mode'], req['main_conf'], req['anchor']), ('first_install', self.main, self.anchor))
+        self.ap.check_crs(req)                                    # the root program accepts what the workflow sends

@@ -2,6 +2,15 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.22 (2026-11-13)
+
+- OWASP CRS updates, step 3: a host without the CRS. The check stages the newest 4.x release that has waited; the CRS
+  page offers "compare in the sandbox and propose installing CRS <version>" (the same requests without and with the
+  CRS). Once approved, the root program installs crs-<version> next to the main ModSecurity file, links crs to it,
+  creates crs-setup.conf from its example when there is none and adds the two Includes right after modsecurity.conf;
+  nginx -t, reload and health checks, and any failure takes everything out again. The ModSecurity installation guide
+  mentions this way.
+
 ## 0.4.21 (2026-11-13)
 
 - OWASP CRS updates, step 2: on the CRS page an approver proposes switching to the downloaded and verified release, or

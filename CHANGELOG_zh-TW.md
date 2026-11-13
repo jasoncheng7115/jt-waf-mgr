@@ -2,6 +2,13 @@
 
 [English](CHANGELOG.md) · **繁體中文** · [日本語](CHANGELOG_ja.md)
 
+## 0.4.22 (2026-11-13)
+
+- OWASP CRS 更新第三階段：還沒有 CRS 的主機。檢查服務會準備最新且已等滿天數的 4.x 版；CRS 頁提供「在沙箱比對並提出安裝 CRS
+  <版本>」（同一批請求在沒有與加上 CRS 時的差異）。核准後 root 程式在主設定檔旁安裝 crs-<版本>、建立 crs 連結，沒有
+  crs-setup.conf 時從範例建立，並在 modsecurity.conf 之後加上兩行 Include；nginx -t、reload、健康檢查，任何一步失敗就全部還原。
+  ModSecurity 安裝手冊也加註了這個做法。
+
 ## 0.4.21 (2026-11-13)
 
 - OWASP CRS 更新第二階段：核准者在 CRS 頁提出切換到已下載並驗證的新版，或退回主機上保留的版本。這是一筆變更：沙箱用同一批

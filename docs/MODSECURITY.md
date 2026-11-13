@@ -69,6 +69,10 @@ sudo ln -sfn coreruleset-$CRS crs        # a later CRS upgrade only moves the li
 sudo cp crs/crs-setup.conf.example crs-setup.conf
 ```
 
+> Another way: install jt-waf-mgr first, switch on "Keep the CRS current from here" on the CRS page, wait until it
+> has downloaded and verified CRS 4, then "Compare in the sandbox and propose installing"; once approved, jt-waf-mgr
+> installs it, creates the `crs` link and `crs-setup.conf`, and adds the Includes right after `modsecurity.conf`.
+
 ## 4. Main file and the site's rule files
 
 `/etc/nginx/modsec/main.conf`:

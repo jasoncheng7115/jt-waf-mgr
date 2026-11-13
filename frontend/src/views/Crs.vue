@@ -37,7 +37,7 @@
       <section v-if="upd" class="card crsupd">
         <h2><Icon name="download" /> {{ t('crsupd.title') }}</h2>
         <dl class="kv">
-          <dt>{{ t('crsupd.in_use') }}</dt><dd><b>{{ upd.location ? upd.location.version || '—' : '—' }}</b>
+          <dt>{{ t('crsupd.in_use') }}</dt><dd><b>{{ upd.location ? upd.location.version || '—' : t('crsupd.none') }}</b>
             <span v-if="upd.location" class="mono small muted"> {{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"> → {{ safeText(upd.location.target, 200) }}</template></span></dd>
           <template v-if="upd.versions.length"><dt>{{ t('crsupd.on_disk') }}</dt><dd class="mono">{{ upd.versions.join(', ') }}</dd></template>
           <dt>{{ t('crsupd.managed') }}</dt><dd>
@@ -58,9 +58,9 @@
           <label class="field"><span>{{ t('crsupd.reason') }}</span>
             <textarea v-model="reason" rows="2" maxlength="2000" class="w-lg" :placeholder="t('crsupd.reason_hint')"></textarea></label>
           <div class="actions">
-            <button v-for="x in switchTargets" :key="x.mode + x.version" type="button" class="btn small" :class="{ primary: x.mode === 'install' }"
+            <button v-for="x in switchTargets" :key="x.mode + x.version" type="button" class="btn small" :class="{ primary: x.mode !== 'rollback' }"
                     :disabled="busy || reason.trim().length < 5" @click="propose(x)">
-              <Icon :name="x.mode === 'install' ? 'test' : 'rollback'" />{{ t(x.mode === 'install' ? 'crsupd.propose' : 'crsupd.rollback', { v: x.version }) }}</button>
+              <Icon :name="x.mode === 'rollback' ? 'rollback' : 'test'" />{{ t({ install: 'crsupd.propose', rollback: 'crsupd.rollback', first_install: 'crsupd.propose_first' }[x.mode], { v: x.version }) }}</button>
           </div>
           <p class="muted small">{{ t('crsupd.switch_hint') }}</p>
         </div>
@@ -187,7 +187,10 @@ const reason = ref('')
 const proposed = ref(null)
 // what the CRS can switch to: the staged release, and the other versions kept on the host
 const switchTargets = computed(() => {
-  if (!upd.value || !upd.value.location) return []
+  if (!upd.value) return []
+  if (!upd.value.location) {      // no CRS yet: a verified release can be installed for the first time
+    return st.value.staged ? [{ mode: 'first_install', version: st.value.staged.version }] : []
+  }
   const cur = upd.value.location.version
   const out = []
   if (st.value.staged && st.value.staged.version !== cur) out.push({ mode: 'install', version: st.value.staged.version })

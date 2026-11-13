@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.21
+# jt-waf-mgr v0.4.22
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -66,7 +66,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **OWASP CRS の更新**（任意、既定はオフ）：制限付きの毎日の確認で、使用中のメジャーバージョンの最新リリースを公開から 1 週間後に
   取得し、固定した CRS リリース鍵による有効な署名があるものだけを保管します。CRS ページで使用中・最新・検証済みのバージョンを表示します。
   切り替え（または保持している旧バージョンへの戻し）は変更として扱い、両バージョンにサンドボックスで同じ最近の要求を通して比較し、人が承認し、
-  root プログラムが署名を再検証して自ら展開し、crs リンクを切り替え、失敗すれば元に戻します。
+  root プログラムが署名を再検証して自ら展開し、crs リンクを切り替え、失敗すれば元に戻します。CRS のないホストも同じ流れで CRS 4 を
+  インストールできます（Include は modsecurity.conf の直後に追加）。
 - **ログサーバー（syslog / SIEM）**：最大 8 か所。それぞれプロトコル（ローカルソケット、UDP、TCP、TLS）、メッセージ形式（JSON、
   CEF、LEEF 2.0、GELF 1.1、key=value）、送信内容（監査記録、WAF イベント、アラート）を選べ、キューと再送も個別。テスト送信で
   実際に送った内容を表示します。
@@ -99,8 +100,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.21.tar.gz.sig jt-waf-mgr-0.4.21.tar.gz
-tar xzf jt-waf-mgr-0.4.21.tar.gz && cd jt-waf-mgr-0.4.21
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.22.tar.gz.sig jt-waf-mgr-0.4.22.tar.gz
+tar xzf jt-waf-mgr-0.4.22.tar.gz && cd jt-waf-mgr-0.4.22
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

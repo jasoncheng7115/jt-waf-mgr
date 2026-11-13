@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.21
+# jt-waf-mgr v0.4.22
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -60,7 +60,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   的內容永遠不會變成格式、連結或提及。
 - **OWASP CRS 更新**（選用，預設關閉）：受限的每日檢查，取使用中主版本的最新版，發布滿一週才下載，只保留有 CRS 官方金鑰
   有效簽章的版本並放進暫存區；CRS 頁顯示使用中、最新與已驗證的版本。切換到新版（或退回保留的舊版）是一筆變更：新舊兩版在沙箱
-  跑同一批最近的請求比對，由人核准，root 程式重新驗章、自己解開、切換 crs 連結，任何一步失敗就切回。
+  跑同一批最近的請求比對，由人核准，root 程式重新驗章、自己解開、切換 crs 連結，任何一步失敗就切回。還沒有 CRS 的主機也能用
+  同樣的流程安裝 CRS 4（Include 加在 modsecurity.conf 之後）。
 - **外送記錄（syslog / SIEM）**：最多 8 個目的地，各自選協定（本機 socket、UDP、TCP、TLS）、訊息格式（JSON、CEF、LEEF 2.0、
   GELF 1.1、key=value）與送出內容（稽核記錄、WAF 事件、警示）；各有自己的佇列與重試；測試送出會顯示實際送出的內容。
 - **帳號**：scrypt 密碼、approver / admin 必須雙因素驗證、鎖定、含歷史與期限的密碼政策、帳號到期與審查；API 權杖有範圍與
@@ -87,8 +88,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.21.tar.gz.sig jt-waf-mgr-0.4.21.tar.gz
-tar xzf jt-waf-mgr-0.4.21.tar.gz && cd jt-waf-mgr-0.4.21
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.22.tar.gz.sig jt-waf-mgr-0.4.22.tar.gz
+tar xzf jt-waf-mgr-0.4.22.tar.gz && cd jt-waf-mgr-0.4.22
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼

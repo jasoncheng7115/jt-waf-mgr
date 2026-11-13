@@ -385,17 +385,26 @@ class Applier:
     def check_crs(self, req):
         """A CRS switch request: install (from the signed tarball the CRS unit staged) or rollback (to a version
         already on the host). Everything is checked again here, as root."""
-        if not isinstance(req.get('change_id'), int) or req.get('mode') not in ('install', 'rollback') or \
+        if not isinstance(req.get('change_id'), int) or req.get('mode') not in ('install', 'rollback', 'first_install') or \
                 not re.fullmatch(r'\d{1,3}\.\d{1,3}\.\d{1,3}', str(req.get('to') or '')):
             raise Fail('request', 'bad CRS switch request')
         crs = req.get('crs_path')
-        if crs not in self.crs_dirs():
+        if req['mode'] == 'first_install':
+            main = req.get('main_conf')
+            if self.crs_dirs():
+                raise Fail('request', 'a CRS is already included')
+            if main not in self.main_files() or crs != os.path.join(os.path.dirname(main), 'crs') or os.path.lexists(crs):
+                raise Fail('request', 'first installation: crs must be a new directory next to the main ModSecurity file')
+            with open(main, encoding='utf-8') as fh:
+                if req.get('anchor') is not None and req['anchor'] not in self.includes(main, fh.read()):
+                    raise Fail('request', 'the anchor is not an Include of %s' % main)
+        elif crs not in self.crs_dirs():
             raise Fail('request', 'crs_path %r is not the CRS directory a main ModSecurity file includes' % crs)
         urls = req.get('health_urls') or []
         if not isinstance(urls, list) or len(urls) > 100 or not all(
                 isinstance(u, str) and re.fullmatch(r'https?://[a-z0-9.-]+(?::\d{1,5})?/\S{0,500}', u) for u in urls):
             raise Fail('request', 'bad health check list')
-        if req['mode'] == 'install':
+        if req['mode'] in ('install', 'first_install'):
             stage = os.path.realpath(os.path.join(self.cfg['crs']['dir'], 'stage')) + os.sep
             tb = req.get('tarball') or ''
             if not isinstance(tb, str) or os.path.realpath(tb) != tb or not tb.startswith(stage) or \
@@ -444,7 +453,7 @@ class Applier:
         parent = os.path.dirname(crs)
         target = os.path.join(parent, 'crs-%s' % to)
         log = []
-        if req['mode'] == 'install':
+        if req['mode'] in ('install', 'first_install'):
             tb = req['tarball']
             data = self._read_nofollow(tb, crsupdate.MAX_DOWNLOAD)
             if hashlib.sha256(data).hexdigest() != req['tarball_sha256']:
@@ -484,6 +493,8 @@ class Applier:
             st = os.lstat(target) if os.path.lexists(target) else None
             if st is None or not stat.S_ISDIR(st.st_mode) or st.st_uid != 0:
                 raise Fail('request', 'crs-%s is not a root-owned directory on the host' % to)
+        if req['mode'] == 'first_install':
+            return self._crs_first(req, crs, target, log)
         if not os.path.islink(crs):
             # first switch: the directory becomes crs-<its version> and crs a link to it (no change in what loads)
             cur = crsupdate.vstr(crsupdate.installed_version(crs))
@@ -519,6 +530,57 @@ class Applier:
             raise
         self._prune_crs(parent, keep={os.path.basename(target), old})
         return {'result': 'ok', 'summary': '; '.join(log + ['crs -> crs-%s' % to]), 'crs': {'from': old, 'to': to}}
+
+    def _crs_first(self, req, crs, target, log):
+        """No CRS yet: crs -> crs-<version>, crs-setup.conf from its example (unless there is one), and the two
+        Includes right after the anchor in the main file. Any failure puts everything back as it was."""
+        main, anchor = req['main_conf'], req.get('anchor')
+        parent = os.path.dirname(crs)
+        setup = os.path.join(parent, 'crs-setup.conf')
+        with open(main, encoding='utf-8') as fh:
+            original = fh.read()
+        mode = os.stat(main).st_mode & 0o777
+        lines = original.splitlines(keepends=True)
+        new = ['Include %s\n' % setup, 'Include %s\n' % os.path.join(crs, 'rules', '*.conf')]
+        inc = self.includes(main, original)
+        pos = inc[anchor] + 1 if anchor is not None else len(lines)
+        if pos > 0 and lines and not lines[pos - 1].endswith('\n'):
+            lines[pos - 1] += '\n'
+        lines[pos:pos] = new
+        urls = req.get('health_urls') or []
+        pre = self.health(urls)
+        made_setup = not os.path.exists(setup)
+        try:
+            os.symlink(os.path.basename(target), crs)
+            if made_setup:
+                shutil.copyfile(os.path.join(target, 'crs-setup.conf.example'), setup)
+                os.chmod(setup, 0o644)
+            write_atomic(main, ''.join(lines).encode('utf-8'), mode)
+            self.test_config()
+            log.append('nginx -t ok')
+            log.append(self.reload(int(req.get('wait_old_workers') or 120)))
+            post = self.health(urls)
+            diff = {u: [pre[u], post[u]] for u in urls if pre[u] != post[u]}
+            if diff:
+                raise Fail('health', 'health check changed for %d url(s)' % len(diff), health=diff)
+        except Exception as e:      # noqa: BLE001 -- whatever went wrong, nothing of it stays
+            if not isinstance(e, Fail):
+                e = Fail('install', '%s: %s' % (type(e).__name__, clean(str(e), 300)))
+            write_atomic(main, original.encode('utf-8'), mode)
+            for p in [crs] + ([setup] if made_setup else []):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+            shutil.rmtree(target, ignore_errors=True)
+            try:
+                self.reload(int(req.get('wait_old_workers') or 120))
+            except Fail:
+                pass
+            e.summary += ' -- the CRS was taken out again, nginx reloaded'
+            raise e
+        log.append('crs -> crs-%s included in %s' % (req['to'], main))
+        return {'result': 'ok', 'summary': '; '.join(log), 'crs': {'from': None, 'to': req['to']}}
 
     @staticmethod
     def _manifest_sha(path):
