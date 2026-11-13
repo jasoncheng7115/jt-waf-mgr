@@ -56,7 +56,8 @@ FP_MAX_TARGETS = 5
 ALERT_KINDS = ('attack_in_progress',)        # what the model may raise; the others are decided here
 SCAN_PATHS = 5                                # one outside address blocked on this many paths: a scanner, not a user
 RECON_MAX_SOURCES = 5                         # more outside sources than this, each on few paths: maybe real visitors
-HISTORY_RUNS = 6                              # earlier runs whose verdicts a loosening verdict must agree with
+HISTORY_RUNS = 6                              # earlier runs (with candidates) a loosening verdict must agree with
+HISTORY_DAYS = 14
 # Names attackers look for: secrets, backups, deployment and cloud configuration, source control, CI files. Blocked
 # requests for them from outside only (no internal user) are reconnaissance, never users hit by a false positive.
 RECON_NAME = re.compile(
@@ -423,8 +424,10 @@ def verdict_history(app, runs=HISTORY_RUNS):
     """(host, path) -> verdicts of the latest finished runs, newest first: a loosening verdict that contradicts an
     earlier 'attack' is not stable enough to act on (a small model can flip on the same requests)."""
     hist = collections.defaultdict(list)
-    for r in app.db.q('SELECT candidates, verdicts FROM analyst_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT ?',
-                      (runs,)):
+    # runs without candidates (nothing to judge) do not count, or a quiet day would push the history out
+    for r in app.db.q("SELECT candidates, verdicts FROM analyst_runs WHERE finished_at IS NOT NULL AND started_at>=? "
+                      "AND candidates NOT IN ('', '[]') ORDER BY id DESC LIMIT ?",
+                      (util.now() - HISTORY_DAYS * 86400, runs)):
         try:
             cands = {c.get('id'): c for c in json.loads(r['candidates'] or '[]') if isinstance(c, dict)}
             vs = json.loads(r['verdicts'] or '[]')

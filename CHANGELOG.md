@@ -2,6 +2,11 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.15 (2026-11-13)
+
+- Event analysis: the verdict history a "false positive" must agree with counts only runs that had candidates (the last
+  six within 14 days). Quiet runs, which have nothing to judge, pushed earlier verdicts out within hours.
+
 ## 0.4.14 (2026-11-13)
 
 - Event analysis is harder to fool, after a small model called the same probes an attack, then a false positive,

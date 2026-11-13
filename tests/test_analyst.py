@@ -598,6 +598,9 @@ class TestFalsePositivesAndAlerts(AnalystBase):
             self.fpev(ip=ip)
         self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'attack', 'confidence': 0.9, 'reason': 'xss payload'})
         self.run_analyst()
+        for _ in range(analyst.HISTORY_RUNS + 2):       # quiet runs in between (nothing to judge) do not push it out
+            self.app.db.x("INSERT INTO analyst_runs(node_id, started_at, finished_at, window_hours) VALUES ('waf1', ?, ?, 24)",
+                          (time.time(), time.time()))
         self.answer_all(fp=lambda c: {'id': c['id'], 'verdict': 'false_positive', 'confidence': 0.95, 'reason': 'editor'})
         out = self.run_analyst()
         self.assertEqual(out['proposals'], [])
