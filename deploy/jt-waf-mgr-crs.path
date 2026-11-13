@@ -1,0 +1,9 @@
+[Unit]
+Description=jt-waf-mgr: check for a CRS release when an admin asks for it (CRS page)
+
+[Path]
+PathExists=/var/lib/jt-waf-mgr/crs/check.request
+Unit=jt-waf-mgr-crs.service
+
+[Install]
+WantedBy=multi-user.target

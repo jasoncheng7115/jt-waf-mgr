@@ -214,6 +214,18 @@ The unit takes the newest release of the major version in use once it has been o
 `/var/lib/jt-waf-mgr/crs/stage/crs-<version>` and opens a `crs_update` alert. A bad signature is audited as
 `crs.signature_bad` (critical).
 
+Step 2 (0.4.21): `POST /api/v1/crs/updates/propose` (approver; not API tokens) `{"mode": "install" | "rollback",
+"version": "4.31.0", "reason": "..."}` → 202 `{"change_id"}`: a change `op: "crs"` (one open at a time,
+`crs_change_pending`). Install takes the staged release (its files are hashed again: `crs_stage_changed`), rollback a
+`crs-<version>` directory kept on the host. Checks: the sandbox runs the same recent requests through the CRS in use
+and through the other version (`checks.sandbox`: `requests`, `blocked_before`, `blocked_after`, `newly_blocked`,
+`no_longer_blocked`, `changed`, `differences` (≤ 50)). Always approved by a person other than the proposer. The root
+program (`crs_switch` request) reads the staged tarball without following links, checks its SHA-256 and the signature
+again (pinned key), unpacks it itself into `<dir>/crs-<version>`, refuses it unless its files hash to exactly the
+manifest that was compared, turns a plain `crs/` directory into `crs-<version>` + link on the first switch, points the
+`crs` link at the new directory, runs `nginx -t`, reloads and health-checks, and switches back on any failure; it keeps
+the three newest `crs-*` directories. When applied, the open `crs_update` alert is closed.
+
 ## Lookups
 
 `GET /api/v1/lookups/ip/{ip}` (viewer) →

@@ -33,6 +33,33 @@
             <Meter :value="detectionPl" :max="4" :warn-at="2" :crit-at="2" :label="t('chart.paranoia_detection')" :text="t('chart.level_of', { n: detectionPl, max: 4 })" /></div>
         </div>
       </section>
+      <!-- OWASP CRS versions: what is in use, the newest release, a downloaded and verified one -->
+      <section v-if="upd" class="card crsupd">
+        <h2><Icon name="download" /> {{ t('crsupd.title') }}</h2>
+        <dl class="kv">
+          <dt>{{ t('crsupd.in_use') }}</dt><dd><b>{{ upd.location ? upd.location.version || '—' : '—' }}</b>
+            <span v-if="upd.location" class="mono small muted"> {{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"> → {{ safeText(upd.location.target, 200) }}</template></span></dd>
+          <template v-if="upd.versions.length"><dt>{{ t('crsupd.on_disk') }}</dt><dd class="mono">{{ upd.versions.join(', ') }}</dd></template>
+          <dt>{{ t('crsupd.managed') }}</dt><dd>
+            <label v-if="isAdmin" class="switch"><input type="checkbox" :checked="upd.manage" :disabled="busy" @change="setManage($event.target.checked)">
+              <span class="knob" aria-hidden="true"></span><span>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span></label>
+            <span v-else>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span>
+            <span class="muted small"> {{ t('crsupd.managed_hint', { n: upd.wait_days }) }}</span></dd>
+          <template v-if="st.checked_at"><dt>{{ t('crsupd.checked') }}</dt><dd>{{ fmtMinute(st.checked_at) }} · <span class="badge" :class="STATE_CLS[st.state] || 'b-logged'">{{ tOr('crsupd.state.' + st.state, st.state) }}</span></dd></template>
+          <template v-if="st.candidate"><dt>{{ t('crsupd.newest') }}</dt><dd>{{ st.candidate.version }} <span class="muted small">{{ t('crsupd.published', { at: fmtMinute(st.candidate.published_at), ready: fmtMinute(st.candidate.ready_at) }) }}</span></dd></template>
+          <template v-if="st.staged"><dt>{{ t('crsupd.staged') }}</dt><dd><b>{{ st.staged.version }}</b> <span class="muted small">{{ t('crsupd.staged_hint', { at: fmtMinute(st.staged.verified_at), n: st.staged.files }) }}</span></dd></template>
+          <template v-if="st.newer_major"><dt>{{ t('crsupd.major') }}</dt><dd>{{ t('crsupd.major_hint', { v: st.newer_major }) }}</dd></template>
+        </dl>
+        <p v-if="upd.manage && upd.external_updater" class="alert warn">{{ t('crsupd.external', { path: safeText(upd.external_updater, 200) }) }}</p>
+        <p v-if="upd.location && !upd.location.link" class="alert info">{{ t('crsupd.not_link') }}</p>
+        <p v-if="st.state === 'error'" class="alert error">{{ safeText(st.error, 300) }}</p>
+        <p v-if="st.staged" class="muted small">{{ t('crsupd.next') }}</p>
+        <ErrorBox :error="updError" />
+        <div v-if="isAdmin" class="actions">
+          <button type="button" class="btn small" :disabled="busy || !upd.manage" @click="checkNow"><Icon name="refresh" />{{ t('crsupd.check_now') }}</button>
+          <span v-if="checkMsg" class="muted small" role="status">{{ checkMsg }}</span>
+        </div>
+      </section>
       <section v-if="families.length" class="card">
         <h2><Icon name="shield" /> {{ t('crs.rules_by_family') }}</h2>
         <p class="muted small">{{ t('crs.rules_by_family_hint') }}</p>
@@ -83,9 +110,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { get } from '../api.js'
+import { get, patch, post } from '../api.js'
 import { t } from '../i18n.js'
-import { safeText, fmtNum, fmtBytes } from '../util.js'
+import { safeText, fmtNum, fmtBytes, fmtMinute } from '../util.js'
+import { hasRole } from '../store.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import StatusCard from '../components/StatusCard.vue'
@@ -135,6 +163,26 @@ const familyBars = computed(() => families.value.map((c) => ({
   sub: t('rules.group_counts', { n: fmtNum(c.on + c.partial + c.off + c.inactive), off: fmtNum(c.off + c.partial), inactive: fmtNum(c.inactive) }),
 })))
 const totals = computed(() => Object.fromEntries(STATES.map((k) => [k, families.value.reduce((a, c) => a + (c[k] || 0), 0)])))
+// CRS versions and updates
+const upd = ref(null)
+const st = computed(() => (upd.value && upd.value.status) || {})
+const busy = ref(false)
+const updError = ref(null)
+const checkMsg = ref('')
+const isAdmin = computed(() => hasRole('admin'))
+const STATE_CLS = { current: 'b-ok', ready: 'b-warn', waiting: 'b-int', error: 'b-blocked', off: 'b-logged' }
+async function loadUpd() { try { upd.value = await get('/crs/updates') } catch (e) { updError.value = e } }
+async function setManage(on) {
+  busy.value = true
+  updError.value = null
+  try { await patch('/settings/ui', { 'crs.manage': on }); await loadUpd() } catch (e) { updError.value = e } finally { busy.value = false }
+}
+async function checkNow() {
+  busy.value = true
+  updError.value = null
+  try { await post('/crs/updates/check', {}); checkMsg.value = t('crsupd.check_requested'); setTimeout(loadUpd, 8000) } catch (e) { updError.value = e } finally { busy.value = false }
+}
+onMounted(loadUpd)
 onMounted(() => { get('/rules', { source: 'crs', limit: 1 }).then((r) => { families.value = r.summary || [] }).catch(() => { /* optional */ }) })
 onMounted(async () => {
   try { crs.value = await get('/crs') } catch (e) { error.value = e }

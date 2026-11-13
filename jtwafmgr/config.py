@@ -153,6 +153,14 @@ DEFAULTS = {
         'hour': 3,
         'keep_days': 14,
     },
+    'crs': {
+        # OWASP CRS updates by jt-waf-mgr (jt-waf-mgr-crs.service): off = another program (or a person) keeps the
+        # CRS current. On: check daily, download and verify the newest release of the major version in use once it
+        # has been out for wait_days, and stage it; switching to it is a change a person approves (CRS page).
+        'manage': False,
+        'wait_days': 7,
+        'dir': '/var/lib/jt-waf-mgr/crs',
+    },
     'geoip': {
         # Country / city / network owner of external addresses, from MaxMind databases (free GeoLite2 needs
         # a MaxMind account). The web service only reads the files; jt-waf-mgr-geoip.service downloads them.
@@ -274,6 +282,8 @@ class Config:
             raise ConfigError('syslog.content: a list of audit, event, alert')
         if not isinstance(sl.get('more', []), list) or len(sl.get('more', [])) > 7:
             raise ConfigError('syslog.more: up to 7 more destinations')
+        if not isinstance(data['crs']['wait_days'], int) or not 0 <= data['crs']['wait_days'] <= 60:
+            raise ConfigError('crs.wait_days: 0-60')
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', data['node']['id']):
             raise ConfigError('node.id: letters, digits, _ . - only')
         host, _, port = data['server']['listen'].rpartition(':')

@@ -10,7 +10,7 @@ import json
 from . import util
 
 KINDS = ('attack_in_progress', 'attack_passed', 'false_positive', 'integrity', 'config_outside', 'apply_failed',
-         'backup_failed', 'auth_attack', 'other')
+         'backup_failed', 'auth_attack', 'crs_update', 'other')
 SEVERITIES = ('critical', 'warning')
 STATES = ('open', 'handled')
 

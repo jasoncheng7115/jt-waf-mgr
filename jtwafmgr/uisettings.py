@@ -91,6 +91,8 @@ EDITABLE = {
     'syslog.protocol': ('choice', {'choices': ('udp', 'tcp', 'tls')}),
     'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
     'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
+    'crs.manage': ('bool', {}),
+    'crs.wait_days': ('int', {'min': 0, 'max': 60}),
     'syslog.payload': ('choice', {'choices': ('json', 'cef', 'leef', 'gelf', 'kv')}),
     'syslog.content': ('list', {'choices': ('audit', 'event', 'alert'), 'max_items': 3}),
     'syslog.more': ('destinations', {}),       # the other log servers (up to 7), each with its own format and content

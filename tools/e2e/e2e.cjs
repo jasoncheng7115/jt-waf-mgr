@@ -204,6 +204,7 @@ async function audit(page, where) {
      'rules: state totals and a state per rule');
   await page.goto(base + '/crs', { waitUntil: 'networkidle' });
   ok((await page.locator('.statetotals a.stchip').count()) === 4 && (await page.locator('.hb-row').count()) > 0, 'crs: rules per attack type and state');
+  ok((await page.locator('.crsupd').innerText()).includes('4.30.0'), 'crs: the version in use and the update card');
   // several rules at once: tick, "switch off" opens the change form with its preview (or why it cannot)
   await page.goto(base + '/rules', { waitUntil: 'networkidle' });
   await page.locator('input.rowsel').first().check();

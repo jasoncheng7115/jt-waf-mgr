@@ -119,12 +119,14 @@ restore_from() {  # <backup dir>
     $SYSTEMCTL stop jt-waf-mgr-apply.path 2>/dev/null || true
     # nothing else may write the database while it is replaced
     for u in jt-waf-mgr-notify.path jt-waf-mgr-notify.timer jt-waf-mgr-analyst.path jt-waf-mgr-analyst.timer \
-             jt-waf-mgr-notify.service jt-waf-mgr-analyst.service; do $SYSTEMCTL stop "$u" 2>/dev/null || true; done
+             jt-waf-mgr-notify.service jt-waf-mgr-analyst.service jt-waf-mgr-crs.path jt-waf-mgr-crs.timer \
+             jt-waf-mgr-crs.service; do $SYSTEMCTL stop "$u" 2>/dev/null || true; done
     $SYSTEMCTL stop jt-waf-mgr.service 2>/dev/null || true
     rm -rf "$LIB/jtwafmgr" "$LIB/release" "$LIB/LICENSE"
     tar -C "${ROOT:-/}" -xf "$B/files.tar"
     # units that came with the newer version (not in the backup) go away with it
-    for u in jt-waf-mgr-notify.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.service; do
+    for u in jt-waf-mgr-notify.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.service \
+             jt-waf-mgr-crs.path jt-waf-mgr-crs.timer jt-waf-mgr-crs.service; do
         if ! tar -tf "$B/files.tar" | grep -qx "etc/systemd/system/$u" && [ -e "${ROOT:-}/etc/systemd/system/$u" ]; then
             $SYSTEMCTL disable --now "$u" >/dev/null 2>&1 || true
             rm -f "${ROOT:-}/etc/systemd/system/$u"
@@ -146,7 +148,8 @@ restore_from() {  # <backup dir>
     [ -z "$ROOT" ] && $SYSTEMCTL daemon-reload
     $SYSTEMCTL start jt-waf-mgr.service
     if [ "$(cat "$B/apply.armed")" = 1 ]; then $SYSTEMCTL start jt-waf-mgr-apply.path || true; fi
-    for u in jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.path; do
+    for u in jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.path \
+             jt-waf-mgr-crs.timer jt-waf-mgr-crs.path; do
         if [ -e "${ROOT:-}/etc/systemd/system/$u" ]; then $SYSTEMCTL start "$u" 2>/dev/null || true; fi
     done
 }
@@ -227,7 +230,8 @@ echo "$OLD" > "$B/version.old"; echo "$NEW" > "$B/version.new"; echo "$APPLY_ARM
                etc/systemd/system/jt-waf-mgr-geoip.path etc/systemd/system/jt-waf-mgr-analyst.service \
                etc/systemd/system/jt-waf-mgr-analyst.timer etc/systemd/system/jt-waf-mgr-analyst.path \
                etc/systemd/system/jt-waf-mgr-notify.service etc/systemd/system/jt-waf-mgr-notify.timer \
-               etc/systemd/system/jt-waf-mgr-notify.path; do [ -e "$p" ] && echo "$p"; done) )
+               etc/systemd/system/jt-waf-mgr-notify.path etc/systemd/system/jt-waf-mgr-crs.service \
+               etc/systemd/system/jt-waf-mgr-crs.timer etc/systemd/system/jt-waf-mgr-crs.path; do [ -e "$p" ] && echo "$p"; done) )
 python3 -I -c "
 import sqlite3, sys
 src = sqlite3.connect('file:$DB?mode=ro', uri=True)

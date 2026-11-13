@@ -719,6 +719,31 @@ def crs(app, req):
     return json_response(200, m.crs_status())
 
 
+def crs_updates(app, req):
+    """Where the CRS lives, the version in use, the newest release, a staged (downloaded and verified) one."""
+    from .. import crsupdate
+    st = crsupdate.read_status(app.cfg)
+    loc = crsupdate.location(app.site)
+    return json_response(200, {'manage': bool(app.cfg['crs']['manage']), 'wait_days': app.cfg['crs']['wait_days'],
+                               'external_updater': crsupdate.external_updater(),
+                               'location': {k: loc[k] for k in ('path', 'link', 'target', 'version')} if loc else None,
+                               'versions': sorted((loc or {}).get('versions', {}), key=crsupdate.vtuple),
+                               'status': st})
+
+
+def crs_check(app, req):
+    """Admin: ask jt-waf-mgr-crs.service to check for a release now (it runs when the request file appears)."""
+    from .. import crsupdate
+    if not app.cfg['crs']['manage']:
+        raise ApiError(409, 'crs_not_managed', 'switch on "jt-waf-mgr keeps the CRS current" first')
+    try:
+        crsupdate.request_check(app.cfg)
+    except OSError as e:
+        raise ApiError(500, 'request_failed', str(e)[:200])
+    app.audit.log('crs.check_requested', req.user['username'], 'user', req.client_ip, 'ok')
+    return json_response(202, {'requested': True})
+
+
 def waf_model(app, req):
     from .. import decision
     return json_response(200, decision.model(app))
@@ -958,6 +983,8 @@ def register(router):
     R('GET', V + '/rules/{id}/hits', rule_hits, viewer('rules:read'))
     R('GET', V + '/vhosts', vhosts, viewer('rules:read'))
     R('GET', V + '/crs', crs, viewer('rules:read'))
+    R('GET', V + '/crs/updates', crs_updates, viewer('rules:read'))
+    R('POST', V + '/crs/updates/check', crs_check, ('admin',))
     R('GET', V + '/waf/model', waf_model, viewer('rules:read'))
     R('GET', V + '/lookups/ip/{ip}', lookup_ip, viewer('lookups:read'))
     R('GET', V + '/users', users, admin)

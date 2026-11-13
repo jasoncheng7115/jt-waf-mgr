@@ -2,6 +2,18 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.20 (2026-11-13)
+
+- OWASP CRS updates, step 1 (off by default; Settings or the CRS page: "Keep the CRS current from here"): a new
+  sandboxed unit, jt-waf-mgr-crs (daily, or "check now"), takes the newest release of the major version in use once
+  it has been out `crs.wait_days` (7), downloads its minimal tarball and signature, keeps it only when the signature
+  is valid and made by the pinned CRS release key (shipped inside the signed program), unpacks plain files only into
+  a staging area with a manifest, and opens a "CRS update ready" alert. Nothing in nginx changes yet: comparing it
+  in the sandbox and switching to it (approved by a person) come next. A bad signature is audited as critical.
+- CRS page: "CRS versions and updates" with the version in use, the versions on the host, the newest release and
+  when it can be used, the downloaded and verified one, and a warning when another program also updates the CRS.
+- API: `GET /api/v1/crs/updates`, `POST /api/v1/crs/updates/check`; CLI: `jt-waf-mgr crs-update`.
+
 ## 0.4.19 (2026-11-13)
 
 - Log servers (syslog / SIEM): up to 8 destinations, each with its own address, protocol (local socket, UDP, TCP,

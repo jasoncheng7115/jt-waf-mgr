@@ -2,6 +2,16 @@
 
 [English](CHANGELOG.md) · **繁體中文** · [日本語](CHANGELOG_ja.md)
 
+## 0.4.20 (2026-11-13)
+
+- OWASP CRS 更新第一階段（預設關閉；設定或 CRS 頁的「由本系統保持 CRS 最新」）：新的受限服務 jt-waf-mgr-crs（每天，或「立即
+  檢查」）取使用中主版本的最新版，發布滿 `crs.wait_days`（7）天後下載 minimal 發行檔與簽章，只有簽章有效且由 CRS 官方金鑰
+  （隨簽章過的程式一起發佈）簽署才保留，只解開一般檔案到暫存區並建立檔案清單，然後開「CRS 有可用更新」警示。這一階段還不動
+  nginx：沙箱比對與切換（由人核准）在下一階段。簽章不符會以嚴重等級寫入稽核記錄。
+- CRS 頁：「CRS 版本與更新」顯示使用中版本、主機上的版本、最新版與可用日期、已下載並驗證的版本；主機上還有其他程式在更新
+  CRS 時會提醒。
+- API：`GET /api/v1/crs/updates`、`POST /api/v1/crs/updates/check`；指令：`jt-waf-mgr crs-update`。
+
 ## 0.4.19 (2026-11-13)
 
 - 外送記錄（syslog / SIEM）：最多 8 個目的地，各自有位址、協定（本機 socket、UDP、TCP、TLS）、訊息格式（JSON、CEF、

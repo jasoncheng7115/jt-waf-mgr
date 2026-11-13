@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.19
+# jt-waf-mgr v0.4.20
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -63,6 +63,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **通知**：メール（SMTP、テキスト＋HTML）、Telegram、Microsoft Teams（Workflows / Adaptive Card）、Slack、Discord、Zulip、
   Nextcloud Talk、汎用 webhook（HMAC-SHA256 署名）。イベント × チャネルのマトリクス、チャネルごとのテスト送信、再送・上限・
   送信記録。リクエスト由来の値が書式・リンク・メンションになることはありません。
+- **OWASP CRS の更新**（任意、既定はオフ）：制限付きの毎日の確認で、使用中のメジャーバージョンの最新リリースを公開から 1 週間後に
+  取得し、固定した CRS リリース鍵による有効な署名があるものだけを保管します。CRS ページで使用中・最新・検証済みのバージョンを表示します。
 - **ログサーバー（syslog / SIEM）**：最大 8 か所。それぞれプロトコル（ローカルソケット、UDP、TCP、TLS）、メッセージ形式（JSON、
   CEF、LEEF 2.0、GELF 1.1、key=value）、送信内容（監査記録、WAF イベント、アラート）を選べ、キューと再送も個別。テスト送信で
   実際に送った内容を表示します。
@@ -95,8 +97,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.19.tar.gz.sig jt-waf-mgr-0.4.19.tar.gz
-tar xzf jt-waf-mgr-0.4.19.tar.gz && cd jt-waf-mgr-0.4.19
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.20.tar.gz.sig jt-waf-mgr-0.4.20.tar.gz
+tar xzf jt-waf-mgr-0.4.20.tar.gz && cd jt-waf-mgr-0.4.20
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
