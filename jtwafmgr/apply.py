@@ -83,6 +83,8 @@ class Applier:
             return self.check_crs(req)
         if isinstance(req, dict) and req.get('action') == 'blocks':
             return self.check_blocks(req)
+        if isinstance(req, dict) and req.get('action') == 'countries':
+            return self.check_countries(req)
         if not isinstance(req, dict) or req.get('action') != 'apply':
             raise Fail('request', 'unknown action')
         if not isinstance(req.get('version'), int) or not isinstance(req.get('change_id'), int):
@@ -565,6 +567,97 @@ class Applier:
                 'summary': '%d entries %s, nginx reloaded (%s)' % (len(entries), 'written' if changed else
                                                                    'already on disk but not yet loaded', note)}
 
+    # --- country lists ---------------------------------------------------------------------------
+    def check_countries(self, req):
+        from .countries import SET_RE, set_name
+        sets = req.get('sets')
+        if not isinstance(sets, dict) or len(sets) > 200:
+            raise Fail('request', 'countries: sets must be a map of at most 200')
+        for name, ccs in sets.items():
+            try:
+                if not SET_RE.fullmatch(name) or set_name(ccs) != name:
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise Fail('request', 'countries: bad set %s' % clean(str(name), 60))
+        for k in ('manifest_sha256', 'want'):
+            if not re.fullmatch(r'[0-9a-f]{64}', str(req.get(k) or '')):
+                raise Fail('request', 'countries: bad %s' % k)
+        return req
+
+    def _country_sets_in_use(self):
+        """The list files the managed rules on disk read: kept (and rebuilt) whatever the request says, so a list a
+        rule still uses is never removed."""
+        d = re.escape(self.cfg['countries']['rules_dir'].rstrip('/') + '/')
+        out = set()
+        for f in FILES.values():
+            try:
+                text = self._read_nofollow(os.path.join(self.dir, f), 8 * 1024 * 1024).decode('utf-8', 'replace')
+            except (OSError, Fail):
+                continue
+            out.update(re.findall(d + r'([A-Z]{2}(?:-[A-Z]{2}){0,49})\.data', text))
+        return out
+
+    def countries_write(self, req):
+        """Build each set from the staged registry lists (every line checked), write the changed ones, remove
+        sets nobody uses, test and reload; on any failure put every file back."""
+        from . import countries
+        rd, data = self.cfg['countries']['rules_dir'].rstrip('/'), self.cfg['countries']['dir']
+        man = self._read_nofollow(os.path.join(data, 'data', countries.MANIFEST), 4 * 1024 * 1024)
+        if hashlib.sha256(man).hexdigest() != req['manifest_sha256']:
+            raise Fail('countries', 'the staged lists changed since the request was made; it will be sent again')
+        names = set(req['sets']) | self._country_sets_in_use()
+        if os.path.lexists(rd) and (os.path.islink(rd) or not os.path.isdir(rd)):
+            raise Fail('countries', '%s is a link or not a directory' % rd)
+        os.makedirs(rd, mode=0o755, exist_ok=True)
+        new = {}
+        for name in sorted(names):
+            try:
+                new[name] = countries.build_set(data, name.split('-'), opener=self._read_nofollow).encode()
+            except (countries.DataError, UnicodeDecodeError, OSError) as e:
+                raise Fail('countries', 'set %s: %s' % (name, clean(str(e), 200)))
+        old = {}
+        for n in os.listdir(rd):
+            p = os.path.join(rd, n)
+            if n.endswith('.data') and countries.SET_RE.fullmatch(n[:-5]):
+                if os.path.islink(p) or not os.path.isfile(p):
+                    raise Fail('countries', '%s is a link or not a regular file' % p)
+                old[n[:-5]] = self._read_nofollow(p, countries.MAX_LIST * 4)
+        want = hashlib.sha256(json.dumps([req['manifest_sha256'], sorted(names)]).encode()).hexdigest()
+        os.makedirs(self.state, mode=0o700, exist_ok=True)
+        loaded_path = os.path.join(self.state, 'countries-loaded.json')
+        try:
+            loaded = json.loads(self._read_nofollow(loaded_path, 4096).decode()).get('want')
+        except (OSError, ValueError, AttributeError, Fail):
+            loaded = None
+        changed = {n for n in new if old.get(n) != new[n]} | {n for n in old if n not in new}
+        if not changed and loaded == want:
+            return {'result': 'ok', 'sets': sorted(names), 'want': req['want'], 'changed': False,
+                    'summary': 'unchanged (%d lists), already loaded by nginx' % len(names)}
+        self.check_binary()
+
+        def put_back():
+            for n in changed:
+                p = os.path.join(rd, n + '.data')
+                if n in old:
+                    write_atomic(p, old[n], 0o644)
+                elif os.path.exists(p):
+                    os.unlink(p)
+        try:
+            for n in changed:
+                p = os.path.join(rd, n + '.data')
+                if n in new:
+                    write_atomic(p, new[n], 0o644)
+                else:
+                    os.unlink(p)
+            self.test_config()
+            note = self.reload(0)
+        except Fail:
+            put_back()
+            raise
+        write_atomic(loaded_path, json.dumps({'want': want, 'at': time.time()}).encode(), 0o600)
+        return {'result': 'ok', 'sets': sorted(names), 'want': req['want'], 'changed': True,
+                'summary': '%d lists (%d written or removed), nginx reloaded (%s)' % (len(names), len(changed), note)}
+
     def crs_switch(self, req):
         from . import crsupdate
         crs, to = req['crs_path'].rstrip('/'), req['to']
@@ -745,6 +838,9 @@ class Applier:
                 elif req.get('action') == 'blocks':
                     res.update(action='blocks')
                     res.update(self.blocks_write(req))
+                elif req.get('action') == 'countries':
+                    res.update(action='countries')
+                    res.update(self.countries_write(req))
                 else:
                     res.update(version=req['version'], change_id=req['change_id'])
                     res.update(self.apply(req))
@@ -754,6 +850,8 @@ class Applier:
                 res.update(result='failed', step='request', summary='%s: %s' % (type(e).__name__, clean(str(e), 300)))
             if base.startswith('blocks-'):
                 res.update(action='blocks')
+            if base.startswith('countries-'):
+                res.update(action='countries')
             mc = re.match(r'crs-c(\d+)$', base)
             if mc:
                 res.update(action='crs_switch', change_id=int(mc.group(1)))

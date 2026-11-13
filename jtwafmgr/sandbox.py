@@ -147,7 +147,7 @@ http {
         if p in replace:
             dst = os.path.join(conf, 'cand-%s' % os.path.basename(p))
             with open(dst, 'w', encoding='utf-8') as fh:
-                fh.write(replace[p])
+                fh.write(self._country_lists(replace[p], root))
             return 'Include %s' % dst
         if not any(ch in p for ch in '*?[') and os.path.isfile(p) and self._needs_rewrite(p):
             dst = os.path.join(conf, 'rw-%d-%s' % (n, os.path.basename(p)))
@@ -157,6 +157,28 @@ http {
                 fh.write(AUDIT_REWRITE.sub(lambda x: self._audit_line(x, root), body))
             return 'Include %s' % dst
         return 'Include %s' % p
+
+    def _country_lists(self, text, root):
+        """Country rules read their list from the production rules_dir, which may not have a new rule's list yet:
+        in the sandbox each list is built from the staged registry data into <root>/countries."""
+        d = self.cfg['countries']['rules_dir'].rstrip('/') + '/'
+        if d not in text:
+            return text
+        from . import countries
+        out = os.path.join(root, 'countries')
+
+        def repl(m):
+            dst = os.path.join(out, m.group(1) + '.data')
+            if not os.path.exists(dst):
+                os.makedirs(out, mode=0o700, exist_ok=True)
+                try:
+                    body = countries.build_set(self.cfg['countries']['dir'], m.group(1).split('-'))
+                except (OSError, ValueError) as e:
+                    raise SandboxError('country list %s: %s' % (m.group(1), e))
+                with open(dst, 'w', encoding='ascii') as fh:
+                    fh.write(body)
+            return dst
+        return re.sub(re.escape(d) + r'([A-Z]{2}(?:-[A-Z]{2}){0,49})\.data', repl, text)
 
     @staticmethod
     def _needs_rewrite(path):
@@ -229,6 +251,8 @@ http {
 
     def _send(self, port, i, c):
         ip = EXTERNAL_IP if c.get('source', 'external') == 'external' else self.internal_ip
+        if c.get('src_ip') and c.get('source', 'external') == 'external':
+            ip = c['src_ip']          # a test from one country (country rules): a public address of that country
         headers = {'Host': c['host'], 'X-Forwarded-For': ip, 'X-JTWAF-Case': str(i),
                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) jt-waf-mgr-sandbox'}
         headers.update(c.get('headers') or {})
@@ -456,7 +480,8 @@ def evaluate(cases, res, cfg):
 
 def _case_view(c):
     return {'origin': c.get('origin', 'test'), 'source': c.get('source', 'external'), 'host': c['host'],
-            'method': c.get('method', 'GET'), 'path': util.clip(c['path'], 300)}
+            'method': c.get('method', 'GET'), 'path': util.clip(c['path'], 300),
+            **({'src_ip': c['src_ip']} if c.get('src_ip') else {})}
 
 
 def _clean(s):

@@ -12,14 +12,19 @@ Every generated rule has a fixed shape, the same as the hand-written site rules 
                     so never copied into the audit log)
   plugin toggle     setvar:'tx.<plugin>-plugin_enabled=1' for one Host
   raw               expert mode: SecRule text as written, checked against a forbidden list
+  country           Host -> REMOTE_ADDR "!@ipMatchFromFile <rules_dir>/<SET>.data" (allow: only these countries) or
+                    "@ipMatchFromFile ..." (deny) -> REMOTE_ADDR "!@ipMatch <never blocked>" -> jt_block, like a
+                    confident block; the list file is written by the root program (countries.py)
 """
+import ipaddress
+import os
 import re
 import subprocess
 import sys
 
 from .modsecconf import logical_lines, split_actions, split_args
 
-KINDS = ('exclusion', 'confident_block', 'redaction', 'plugin', 'raw')
+KINDS = ('exclusion', 'confident_block', 'redaction', 'plugin', 'raw', 'country')
 EXCLUSION_ACTIONS = ('remove_target_by_id', 'remove_target_by_tag', 'remove_rule', 'remove_tag', 'score_only',
                      'body_processor')
 BLOCK_TARGETS = {
@@ -72,6 +77,11 @@ def _data_file_ok(path, cfg=None):
     directory, no '..', no URL (@pmFromFile can fetch https:// lists — never from here)."""
     if re.fullmatch(r'[\w.-]+\.data', path) and not path.startswith('.'):
         return True          # a bare file name: next to the rule file, inside the configuration directory
+    if cfg is not None:      # a country list written by the root program (countries.rules_dir, from config.toml)
+        d = cfg['countries']['rules_dir'].rstrip('/') + '/'
+        rest = path[len(d):] if path.startswith(d) else ''
+        if re.fullmatch(r'[A-Z]{2}(?:-[A-Z]{2}){0,49}\.data', rest):
+            return True
     return (path.startswith('/') and path.endswith('.data') and '..' not in path.split('/')
             and re.fullmatch(r'[\w./-]+', path) is not None and any(path.startswith(d) for d in DATA_FILE_DIRS))
 
@@ -240,7 +250,55 @@ def build(kind, spec, rule_id, cfg):
         return _plugin(spec, rule_id)
     if kind == 'raw':
         return _raw(spec, rule_id, cfg)
+    if kind == 'country':
+        return _country(spec, rule_id, cfg)
     raise SpecError('kind', 'unknown_kind')
+
+
+def never_list(cfg):
+    """Addresses a country rule never refuses: the internal networks, the known scanners, the trusted proxies and
+    the protected list (a CDN in front of a site: its own addresses are in no country list of the site's users)."""
+    nets = list(cfg.internal_networks) + list(cfg.known_scanners) + list(cfg.trusted_proxies)
+    for x in cfg['blocks'].get('protected') or []:
+        try:
+            nets.append(ipaddress.ip_network(str(x), strict=False))
+        except ValueError:
+            continue
+    seen, out = set(), []
+    for n in nets:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def _country(spec, rid, cfg):
+    """One site's country limit: mode 'allow' (only these countries) or 'deny' (not these countries).
+    The list file is written by the root program from the registries' data (countries.py)."""
+    from .countries import DataError, set_name
+    host = spec.get('host') or {}
+    h = _host_cond(host)
+    if not h:
+        raise SpecError('host', 'scope_required')        # a country limit is per site
+    mode = spec.get('mode')
+    if mode not in ('allow', 'deny'):
+        raise SpecError('mode', 'invalid_mode')
+    try:
+        name = set_name(spec.get('countries') or [])
+    except DataError:
+        raise SpecError('countries', 'invalid_countries', limit=50)
+    note = _text_ok('note', spec.get('note'), 160)
+    path = os.path.join(cfg['countries']['rules_dir'], name + '.data')
+    conds = [h, ('REMOTE_ADDR', ('!' if mode == 'allow' else '') + '@ipMatchFromFile ' + path, 't:none')]
+    never = never_list(cfg)
+    if never:
+        conds.append(('REMOTE_ADDR', '!@ipMatch ' + _ip_list(never), 't:none'))
+    what = ('only ' if mode == 'allow' else 'from ') + ' '.join(name.split('-')[:12]) + (' ...' if name.count('-') >= 12 else '')
+    first = "id:%d,phase:1,pass,log,msg:'jt country block: %s',tag:'jt-country-block'" % (rid, what)
+    text = _chain(conds, first, 'setvar:tx.jt_block=1,ctl:ruleEngine=On')
+    norm = {'host': {'mode': host.get('mode'), 'value': (host.get('value') or '').strip().lower()}, 'mode': mode,
+            'countries': name.split('-'), 'note': note}
+    return norm, text, 'before'
 
 
 def _exclusion(spec, rid, cfg, internal):
@@ -444,7 +502,7 @@ def raw_direction(text):
 
 def direction(op, kind, text=''):
     """SPEC 6.1: tightening vs loosening. Anything unclear counts as loosening."""
-    tightening_kind = kind == 'confident_block' or (kind == 'raw' and raw_direction(text) == 'tighten')
+    tightening_kind = kind in ('confident_block', 'country') or (kind == 'raw' and raw_direction(text) == 'tighten')
     if op == 'add':
         return 'tighten' if tightening_kind else 'loosen'
     if op in ('disable', 'delete'):

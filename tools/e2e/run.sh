@@ -28,6 +28,10 @@ apply_state = "$W/apply-state"
 access_logs = ["$W/access.log"]
 [traffic]
 logs = ["$W/traffic/*access.log"]
+[countries]
+enabled = true
+dir = "$W/countries"
+rules_dir = "$W/country-lists"
 [blocks]
 enabled = true
 file = "$W/nginx-blocks/blocked-ips.conf"

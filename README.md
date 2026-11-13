@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.26
+# jt-waf-mgr v0.4.27
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -49,6 +49,9 @@ something you can read, and every change into a workflow you can trust:
   URL; event detail with every matched rule; one click to draft an exclusion or a block.
 - **Temporary IP blocks** (new in 0.4.24, optional): fail2ban on a mail server, a SOAR playbook or an approver blocks
   a single address for a while; one nginx deny list covers every site. See [Temporary IP blocks](#temporary-ip-blocks-optional).
+- **Country blocks** (new in 0.4.27, optional): limit a site to some countries, or block some countries, with lists
+  from the five regional Internet registries, refreshed daily. Each site's limit is a rule through the change workflow.
+  See [Country blocks](#country-blocks-optional).
 - **Request volume** (new in 0.4.23): every request in the nginx access logs, counted per site and hour (2xx, 3xx,
   4xx, 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF
   blocked, so the WAF numbers have a denominator. Switched on or off, and its alerts set, in the admin Settings
@@ -119,8 +122,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.26.tar.gz.sig jt-waf-mgr-0.4.26.tar.gz
-tar xzf jt-waf-mgr-0.4.26.tar.gz && cd jt-waf-mgr-0.4.26
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.27.tar.gz.sig jt-waf-mgr-0.4.27.tar.gz
+tar xzf jt-waf-mgr-0.4.27.tar.gz && cd jt-waf-mgr-0.4.27
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -232,6 +235,29 @@ networks, known scanners, trusted proxies and the protected list are never block
 `real_ip`, so sites behind a CDN need `set_real_ip_from` / `real_ip_header`. Servers and locations with `allow` /
 `deny` lines of their own do not inherit the list; the Blocked IPs page lists them. A block takes effect for new requests within about a minute; connections already open (WebSocket) last until they close. Details: the
 [API manual](docs/API.md), section 4.9.
+
+### Country blocks (optional)
+
+Limit one site by where requests come from: only the countries you list ("only Taiwan and Japan"), or every country
+except them. Each limit is a ModSecurity rule that goes through the change workflow like any other (checks, sandbox,
+approval, rollback); the address lists are data and are refreshed without it.
+
+1. Settings → Country blocks: switch on, then "Update now". A separate, sandboxed job downloads the five registries'
+   delegated files (APNIC, ARIN, RIPE NCC, LACNIC, AFRINIC; about 28 MB together), checks each against the registry's
+   MD5 file and against its own record counts, and only when all five pass replaces the lists. After that it runs
+   once a day. The web service itself never connects to the internet.
+2. Changes → New → Country block: the site, "only these countries" or "block these countries", the countries.
+   The checks count, from the access logs, how many requests and addresses the rule would have refused and how many
+   of those were answered 2xx/3xx (real users it would shut out); the sandbox tests a request from an allowed and from
+   a refused country and one from inside.
+3. After approval the root apply program writes the list the rule reads (`/etc/nginx/modsec/jt-waf-mgr/countries/`),
+   tests nginx and reloads.
+
+Never refused: the internal networks, the known scanners, the trusted proxies and the protected list (Settings →
+Temporary IP blocks), so a CDN in front of a site is not shut out. Behind a CDN the site needs `set_real_ip_from` /
+`real_ip_header`. The rules run in ModSecurity, so locations with `modsecurity off` are not covered. Registry data
+says where an address block was registered, not where its user is (a VPN, a cloud region or a roaming phone can be
+elsewhere).
 
 ### Accounts and recovery
 

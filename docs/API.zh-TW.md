@@ -255,7 +255,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 **`POST /changes`**：scope `changes:propose`。本文：
 
 - `op`：`add`（預設）、`modify`、`disable`、`enable`、`delete` 或 `bundle`。
-- `kind`：`add` 時是 `confident_block`、`exclusion`、`redaction`、`plugin` 或 `raw`。
+- `kind`：`add` 時是 `confident_block`、`exclusion`、`country`、`redaction`、`plugin` 或 `raw`。
 - `spec`：該種類的欄位（見下）。`modify` 要給完整的新 spec。
 - `item_id`：`modify`、`disable`、`enable`、`delete` 時，受管理項目的 id（`GET /managed` 的 `items[].id`）。
 - `reason`：必填，最多 2000 字，會顯示給核准者。
@@ -302,6 +302,19 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 ```json
 {"change_id": 3, "direction": "loosen", "state": "checking", "rule_id": 10120}
 ```
+
+**種類 `country`**（0.4.27 新增；依國家限制單一站台；需要在設定裡啟用國家封鎖並已下載清單，否則 409 `countries_off` /
+`countries_no_data`）：
+
+- `host`：必填，`{"mode": "exact", "value": "shop.example.com"}`（可用 `*.example.com`）。
+- `mode`：`allow`（只允許這些國家）或 `deny`（封鎖這些國家）。
+- `countries`：1 到 50 個有清單的 ISO 3166 兩碼國家代碼（否則 422 `unknown_country`）。
+- `note`：選填，最多 160 字。
+
+內部網路、已知掃描器、信任的代理與保護清單永遠不會被封鎖。系統會自動加入三個測試（允許國家、被封鎖國家、內部各一個請求）；
+`tests` 也可以帶 `src_ip`（只限 `external`）：請求的公開來源位址。證據檢查從存取記錄計算這條規則會封鎖的量（`requests`、
+`refused`、`refused_sources`、`refused_success`、`countries`），只供參考，不會讓變更失敗。國家封鎖永遠不會自動套用。
+`GET /countries`（已登入的使用者；權杖沒有對應的 scope）列出有清單的國家與使用中的清單。
 
 **種類 `redaction` 與 `plugin`**：`redaction` 用 `fields`（最多 30 個參數名稱，不檢查，因此永遠不會被複製進稽核記錄），
 可加 `host`、`path`；`plugin` 用 `plugin`（CRS 外掛名稱）與必填的 `host`，為單一站台啟用外掛。

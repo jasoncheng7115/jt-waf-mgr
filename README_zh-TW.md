@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.26
+# jt-waf-mgr v0.4.27
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -45,6 +45,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   排除或封鎖。
 - **暫時封鎖 IP**（0.4.24 新增，選用）：郵件主機的 fail2ban、SOAR 劇本或核准者可以暫時封鎖單一位址；一個 nginx deny
   清單涵蓋所有站台。見[暫時封鎖 IP](#暫時封鎖-ip選用)。
+- **國家封鎖**（0.4.27 新增，選用）：讓站台只允許某些國家，或封鎖某些國家；清單來自五大區域網際網路註冊機構，每天更新。
+  每個站台的限制都是一條規則，要經過變更流程。見[國家封鎖](#國家封鎖選用)。
 - **請求量**（0.4.23 新增）：計算 nginx 存取記錄裡的每一個請求，依站台與小時統計（2xx、3xx、4xx、5xx、403、444、429、
   外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量放在一起，讓 WAF 的數字有分母可以比較。
   在管理的「設定」→「請求量統計」啟用或關閉並設定警示；選用的警示（預設關閉）：流量暴增（該站台前 7 天同一時段平常量的
@@ -97,8 +99,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.26.tar.gz.sig jt-waf-mgr-0.4.26.tar.gz
-tar xzf jt-waf-mgr-0.4.26.tar.gz && cd jt-waf-mgr-0.4.26
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.27.tar.gz.sig jt-waf-mgr-0.4.27.tar.gz
+tar xzf jt-waf-mgr-0.4.27.tar.gz && cd jt-waf-mgr-0.4.27
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -198,6 +200,22 @@ ModSecurity 的也算。使用方式：
 封鎖。nginx 比對的是 `real_ip` 之後的位址，所以在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。自己有
 `allow` / `deny` 的 server 與 location 不會繼承這份清單，「封鎖中的 IP」頁會列出。封鎖約一分鐘內對新的請求生效；已經開著的連線（WebSocket）會持續到自己結束。詳細說明見 [API 手冊](docs/API.zh-TW.md)
 第 4.9 節。
+
+### 國家封鎖（選用）
+
+依請求來源國家限制個別站台：只允許列出的國家（例如「只限台灣與日本」），或封鎖列出的國家。每個限制都是一條 ModSecurity
+規則，和其他規則一樣經過變更流程（檢查、沙箱、核准、可還原）；位址清單屬於資料，更新時不經過變更流程。
+
+1. 設定 → 國家封鎖：啟用，再按「立即更新」。另一個受限的獨立程序會下載五大註冊機構的 delegated 檔（APNIC、ARIN、
+   RIPE NCC、LACNIC、AFRINIC，合計約 28 MB），逐一用官方的 MD5 檔與檔案本身的筆數驗證，五個都通過才替換清單；之後每天一次。
+   網頁服務本身不會連外。
+2. 變更 → 新增 → 國家封鎖：選站台、「只允許這些國家」或「封鎖這些國家」、國家。檢查會從存取記錄算出這條規則會封鎖多少請求與
+   位址，以及其中有多少原本是成功回應（2xx/3xx，代表會被封鎖的真實使用者）；沙箱會測試允許國家、被封鎖國家與內部各一個請求。
+3. 核准後，root 套用程式寫入規則讀取的清單檔（`/etc/nginx/modsec/jt-waf-mgr/countries/`），測試 nginx 後 reload。
+
+永遠不會被封鎖：內部網路、已知掃描器、信任的代理與保護清單（設定 → 暫時封鎖 IP），所以不會連站台前面的 CDN 一起封鎖。
+在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。規則在 ModSecurity 裡執行，設了 `modsecurity off` 的 location
+不在範圍內。註冊資料表示的是位址區塊在哪裡註冊，不是使用者實際所在（VPN、雲端區域或漫遊的手機可能在別處）。
 
 ### 帳號與救援
 

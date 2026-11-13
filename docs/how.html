@@ -455,6 +455,11 @@ body.zm-on { overflow: hidden; }
     <ul class="ticks"><li data-t="il_1"></li><li data-t="il_2"></li><li data-t="il_3"></li><li data-t="il_4"></li><li data-t="il_5"></li></ul>
   </div>
   <div class="reccard">
+    <h3 data-t="cb_h"></h3>
+    <ol class="steps blue"><li data-t="cb_1"></li><li data-t="cb_2"></li><li data-t="cb_3"></li><li data-t="cb_4"></li></ol>
+    <p class="disclaimer" data-t="cb_note"></p>
+  </div>
+  <div class="reccard">
     <h3 data-t="au_h"></h3>
     <ol class="steps blue"><li data-t="au_1"></li><li data-t="au_2"></li><li data-t="au_3"></li></ol>
   </div>
@@ -694,6 +699,12 @@ const T = {
   il_4: 'No change workflow and no approval: a block is temporary data, not configuration. Every add, extension, removal, refusal and expiry is in the audit trail.',
   il_5: 'Included once inside http { }, the file covers every site, also those without ModSecurity. Servers and locations with allow / deny lines of their own do not inherit it; the Blocked IPs page lists them. The file holds deny lines only, so allow / deny lines of your own in the same http { } keep working wherever the include sits.',
   rv_5: 'The site name comes from the access log file name (one log per site). Sites sharing one combined log are counted under (default); give each site its own access_log for per-site numbers.',
+  cb_h: 'Country blocks (per site)',
+  cb_1: 'jt-waf-mgr-countries.service (sandboxed, daily while country blocks are on) downloads the delegated files of APNIC, ARIN, RIPE NCC, LACNIC and AFRINIC, checks each against its MD5 file and its own record counts, and replaces the lists only when all five pass.',
+  cb_2: 'A country block is a rule (only these countries, or not these countries) for one site, proposed through the change workflow. The checks count from the access logs what it would have refused and how much was answered 2xx/3xx; the sandbox sends a request from an allowed country, from a refused one and from inside.',
+  cb_3: 'After approval the root apply program builds the list the rule reads from the staged data (every line checked), writes it under /etc/nginx/modsec/jt-waf-mgr/countries/, runs nginx -t and reloads; on failure everything goes back.',
+  cb_4: 'Daily refreshes of the lists rewrite only those files (data, not configuration): no new approval. A list a rule still uses is never removed.',
+  cb_note: 'Never refused: internal networks, known scanners, trusted proxies and the protected list (a CDN). Registry data says where an address block was registered, not where its user is. Locations with modsecurity off are not covered.',
   au_h: 'Three automations, three switches',
   au_1: 'Path rules from the program (no LLM needed): a secret or configuration file name asked for from outside only, never answered 2xx and not used internally becomes a confident block proposal. It goes through the change workflow (checks, sandbox, approval) and applies by itself only when an administrator turned on automatic tightening.',
   au_2: 'Loosening (exclusions, rules switched off) always waits for a person with a fresh one-time code and a note. Nothing automatic ever loosens.',
@@ -928,6 +939,12 @@ const T = {
   il_4: '不經過變更流程、不需要核准：封鎖是暫時的資料，不是設定。每一次新增、延長、移除、拒絕與到期都寫進稽核記錄。',
   il_5: '這個檔案在 http { } 裡 include 一次，就涵蓋所有站台，包括沒有 ModSecurity 的站台。自己有 allow、deny 行的 server 與 location 不會繼承它；「封鎖的 IP」頁面會列出這些地方。這個檔案只有 deny 行，所以同一個 http { } 裡你自己的 allow、deny 不論放在 include 前後都照常有效。',
   rv_5: '站台名稱取自存取記錄的檔名（一站一檔）。多個站台共用同一個 combined 記錄時，數字會算在 (default)；要分站統計，請讓每個站台有自己的 access_log。',
+  cb_h: '國家封鎖（依站台）',
+  cb_1: 'jt-waf-mgr-countries.service（受限的獨立程序，國家封鎖啟用時每天執行）下載 APNIC、ARIN、RIPE NCC、LACNIC、AFRINIC 的 delegated 檔，逐一用 MD5 檔與檔案本身的筆數驗證，五個都通過才替換清單。',
+  cb_2: '國家封鎖是針對單一站台的規則（只允許這些國家，或封鎖這些國家），經過變更流程提出。檢查會從存取記錄算出它會封鎖多少、其中多少原本是成功回應（2xx/3xx）；沙箱會送出允許國家、被封鎖國家與內部各一個請求。',
+  cb_3: '核准後，root 套用程式從暫存資料產生規則讀取的清單（逐行檢查），寫到 /etc/nginx/modsec/jt-waf-mgr/countries/，執行 nginx -t 後 reload；失敗時全部還原。',
+  cb_4: '清單每天更新時只重寫這些檔案（資料，不是設定），不需要重新核准。規則還在用的清單絕不移除。',
+  cb_note: '永遠不會被封鎖：內部網路、已知掃描器、信任的代理與保護清單（CDN）。註冊資料表示位址區塊在哪裡註冊，不是使用者實際所在。設了 modsecurity off 的 location 不在範圍內。',
   au_h: '三種自動化，各有自己的開關',
   au_1: '程式提出的路徑規則（不需要 LLM）：只有外部在要、從沒回過 2xx、內部也沒在用的機密或設定檔名，會變成確定封鎖的提案。它照樣走變更流程（檢查、沙箱、核准），只有管理者開啟自動套用收緊類變更時才會自動套用。',
   au_2: '放寬（排除、停用規則）一律等人核准，要輸入新的一次性驗證碼並寫說明。任何自動化都不會放寬。',
@@ -1162,6 +1179,12 @@ const T = {
   il_4: '変更フローも承認もありません。ブロックは設定ではなく一時的なデータです。追加、延長、削除、拒否、期限切れはすべて監査記録に残ります。',
   il_5: 'http { } 内で一度 include すれば、ModSecurity のないサイトも含めてすべてのサイトに効きます。独自の allow や deny 行を持つ server と location は引き継がないため、「ブロック中の IP」画面に一覧で示します。このファイルには deny 行しかないため、同じ http { } にある独自の allow や deny は include の前後どちらでもそのまま効きます。',
   rv_5: 'サイト名はアクセスログのファイル名から取ります（1 サイト 1 ファイル）。複数のサイトが 1 つの combined ログを共有すると (default) に集計されます。サイトごとの数値には、サイトごとの access_log を用意してください。',
+  cb_h: '国別ブロック（サイトごと）',
+  cb_1: 'jt-waf-mgr-countries.service（制限付きジョブ、国別ブロックがオンの間は毎日）が APNIC、ARIN、RIPE NCC、LACNIC、AFRINIC の delegated ファイルをダウンロードし、各ファイルを MD5 ファイルと自身の件数で検証して、5 つすべてが通ったときだけ一覧を置き換えます。',
+  cb_2: '国別ブロックは 1 つのサイトに対するルール（これらの国のみ許可、またはこれらの国をブロック）で、変更フローで提案します。チェックはアクセスログからブロックしたはずの量と、そのうち 2xx/3xx で応答されたものを数え、サンドボックスは許可される国、ブロックされる国、内部からのリクエストを送ります。',
+  cb_3: '承認後、root の適用プログラムが一時保存のデータからルールの読む一覧を作り（全行を検証）、/etc/nginx/modsec/jt-waf-mgr/countries/ に書き、nginx -t のあと reload します。失敗時はすべて元に戻します。',
+  cb_4: '一覧の毎日の更新はこれらのファイルだけを書き直します（設定ではなくデータ）。再承認は不要です。ルールが使っている一覧は削除しません。',
+  cb_note: '決してブロックしないもの：内部ネットワーク、既知のスキャナー、信頼するプロキシ、保護リスト（CDN）。レジストリのデータはアドレスブロックの登録国であり、利用者の所在地ではありません。modsecurity off の location は対象外です。',
   au_h: '3 つの自動化と、それぞれのスイッチ',
   au_1: 'プログラムによるパスのルール（LLM 不要）：外部からだけ要求され、2xx で応答したことがなく、内部でも使われていない機密・設定ファイル名は確定ブロックの提案になります。変更フロー（チェック、サンドボックス、承認）を通り、管理者が強化の自動適用をオンにした場合だけ自動で適用されます。',
   au_2: '緩和（除外、ルールの無効化）は必ず人の承認を待ち、新しいワンタイムコードとメモが必要です。自動で緩和されることはありません。',

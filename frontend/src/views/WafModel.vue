@@ -72,14 +72,14 @@
                   <span class="fl-num">{{ i + 1 }}</span>
                   <div class="fl-txt">
                     <div class="fl-name"><Icon :name="STAGE_ICON[s.key] || 'info'" />{{ stageName(s) }}</div>
-                    <div class="fl-sub">{{ stageSub(s) }}</div>
+                    <div class="fl-sub" :title="stageSub(s)">{{ stageSub(s) }}</div>
                   </div>
                 </div>
               </foreignObject>
               <foreignObject v-for="(ln, li) in lanes" :key="ln" :x="laneX(li)" :y="rowY(i)" :width="LANE_W" :height="ROW_H">
                 <div class="fl-box cell" :class="['eff-' + s.per_source[ln], { sel: sel === s.key }]" @click="sel = s.key">
                   <div class="fl-name"><Icon :name="EFFECT_ICON[s.per_source[ln]] || 'info'" />{{ cellText(s, ln) }}</div>
-                  <div class="fl-sub">{{ cellSub(s, ln) }}</div>
+                  <div class="fl-sub" :title="cellSub(s, ln)">{{ cellSub(s, ln) }}</div>
                 </div>
               </foreignObject>
             </g>
@@ -223,7 +223,7 @@ const lanes = computed(() => laneSel.value === 'both' ? ['external', 'internal']
 // one lane: narrower boxes so the diagram fits a phone without scrolling
 const STAGE_W = computed(() => lanes.value.length > 1 ? 300 : 210)
 const LANE_W = computed(() => lanes.value.length > 1 ? 220 : 170)
-const ROW_H = computed(() => lanes.value.length > 1 ? 62 : 72)
+const ROW_H = computed(() => 72)    // a title and two lines of detail (12px x 1.3) plus padding and border fit in 72
 const stages = computed(() => md.value ? md.value.stages : [])
 const FW = computed(() => STAGE_W.value + lanes.value.length * (LANE_W.value + GAP))
 const FH = computed(() => HEAD + stages.value.length * (ROW_H.value + ROW_GAP))

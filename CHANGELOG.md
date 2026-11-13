@@ -2,6 +2,22 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.27 (2026-11-13)
+
+- Country blocks (optional, off by default): limit a site to some countries ("only Taiwan and Japan") or block some
+  countries. Each limit is a rule (new kind `country`) through the change workflow: the checks count from the access
+  logs what it would have refused and how much of that was answered 2xx/3xx; the sandbox tests a request from an
+  allowed country, from a refused one and from inside; it is never applied automatically. The internal networks, the
+  known scanners, the trusted proxies and the protected list are never refused.
+- The country lists come from the five regional Internet registries (APNIC, ARIN, RIPE NCC, LACNIC, AFRINIC):
+  jt-waf-mgr-countries.service (new, sandboxed, daily while country blocks are on) checks every file against its MD5
+  file and its own record counts and replaces the lists only when all five pass. The root apply program writes the
+  lists ModSecurity reads (`/etc/nginx/modsec/jt-waf-mgr/countries/`), tests nginx and reloads, and puts everything
+  back on failure; a list a rule still uses is never removed. Settings → Country blocks shows the lists and
+  "Update now". API: `GET /countries`, `POST /countries/update`; sandbox tests may carry `src_ip`.
+- Decision flowchart: a box shows two full lines of detail (the second line was cut); hover shows the whole text.
+- After an upgrade the IP block list is written again once in the current format.
+
 ## 0.4.26 (2026-11-13)
 
 From an independent review:

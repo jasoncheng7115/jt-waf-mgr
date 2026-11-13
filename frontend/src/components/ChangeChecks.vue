@@ -33,6 +33,7 @@
             <span v-else-if="row.scanned !== undefined" class="small">{{ t('evidence.external_success') }} {{ fmtNum(row.external_success) }} · {{ t('evidence.internal_other') }} {{ fmtNum(row.internal_other) }}</span>
             <span v-else-if="row.hits !== undefined" class="small">{{ t('evidence.rule_hits') }} {{ fmtNum(row.hits) }}</span>
             <span v-else-if="row.affected_events !== undefined" class="small">{{ t('evidence.affected_events') }} {{ fmtNum(row.affected_events) }}</span>
+            <span v-else-if="row.refused !== undefined" class="small">{{ t('evidence.country_refused') }} {{ fmtNum(row.refused) }} · {{ t('evidence.country_success') }} {{ fmtNum(row.refused_success) }}</span>
             <span v-if="row.error" class="muted small">{{ safeText(row.error, 160) }}</span></template>
         </DataTable>
       </div>
@@ -68,6 +69,20 @@
             <span>{{ t('outcome.' + s.outcome) }} · <span class="mono">{{ (s.rules || []).join(', ') }}</span></span>
           </li>
         </ul>
+      </div>
+      <!-- a country block: what it would have refused in the access logs (informational) -->
+      <div v-if="ev && ev.refused !== undefined" class="checkbody">
+        <div class="minitiles">
+          <span>{{ t('evidence.country_requests', { host: safeText(ev.host, 80) }) }} <b>{{ fmtNum(ev.requests) }}</b></span>
+          <span>{{ t('evidence.country_refused') }} <b>{{ fmtNum(ev.refused) }}</b></span>
+          <span>{{ t('evidence.country_sources') }} <b>{{ fmtNum(ev.refused_sources) }}</b></span>
+          <span :class="{ warn: ev.refused_success }">{{ t('evidence.country_success') }} <b>{{ fmtNum(ev.refused_success) }}</b></span>
+        </div>
+        <div v-if="ev.complete === false" class="alert warn">{{ t('evidence.incomplete') }}</div>
+        <p class="muted small">{{ t('evidence.country_note') }}</p>
+        <div v-if="(ev.countries || []).length" class="sub">{{ t('evidence.country_from') }}:
+          <span v-for="c in ev.countries" :key="c.country" class="chip"><span class="mono">{{ safeText(c.country, 4) }}</span> {{ fmtNum(c.requests) }}</span></div>
+        <SampleTable v-if="(ev.success_samples || []).length" :title="t('evidence.country_success_samples')" :rows="ev.success_samples" :cols="['country', 'status', 'path', 'count']" />
       </div>
       <div v-if="ev && ev.hits !== undefined" class="checkbody minitiles">
         <span>{{ t('evidence.days', { n: ev.days }) }}</span>

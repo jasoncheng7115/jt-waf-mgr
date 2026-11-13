@@ -92,6 +92,7 @@ EDITABLE = {
     'syslog.protocol': ('choice', {'choices': ('udp', 'tcp', 'tls')}),
     'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
     'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
+    'countries.enabled': ('bool', {}),
     'blocks.enabled': ('bool', {}),
     'blocks.protected': ('list', {'cidr': True, 'max_items': 200}),
     'blocks.max_active': ('int', {'min': 1, 'max': 20000}),

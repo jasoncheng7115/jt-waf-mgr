@@ -71,7 +71,9 @@ async function audit(page, where) {
   const r = await page.evaluate(() => {
     const out = { selects: document.querySelectorAll('select').length,
       dates: document.querySelectorAll('input[type=date],input[type=datetime-local],input[type=time]').length,
-      noicon: [], overflow: document.documentElement.scrollWidth > window.innerWidth + 2 };
+      noicon: [], overflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+      // the decision flowchart: every box shows all of its text (a fixed-height box cut a second detail line)
+      clipped: [...document.querySelectorAll('.fl-box')].filter((b) => b.scrollHeight > b.clientHeight + 1).map((b) => b.innerText.slice(0, 40)) };
     for (const b of document.querySelectorAll('button, a.btn')) {
       if (b.classList.contains('dp-day')) continue;
       if (!b.querySelector('svg') && b.offsetParent !== null) out.noicon.push((b.innerText || b.getAttribute('aria-label') || '').trim().slice(0, 40));
@@ -79,6 +81,7 @@ async function audit(page, where) {
     return out;
   });
   if (r.selects) problems.push(where + ': native select x' + r.selects);
+  if (r.clipped.length) problems.push(where + ': flowchart text cut off: ' + r.clipped.slice(0, 3).join(' | '));
   if (r.dates) problems.push(where + ': native date input x' + r.dates);
   if (r.noicon.length) problems.push(where + ': buttons without icon: ' + r.noicon.slice(0, 5).join(' | '));
   if (r.overflow) notes.push('warn ' + where + ': horizontal page overflow');
@@ -230,6 +233,20 @@ async function audit(page, where) {
   await page.locator('section[role=dialog] button.primary').click();
   await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 3, null, { timeout: 5000 }).catch(() => {});
   ok((await page.locator('.datatable tbody tr').count()) === 3, 'blocks: ending one with a note');
+  // country blocks: the form lists the staged countries, the preview builds the rule, Settings shows the lists
+  await page.goto(base + '/changes/new?kind=country', { waitUntil: 'networkidle' });
+  await page.locator('.card.form .field.grow input.mono').first().fill('shop.example.com');
+  await page.locator('#co-add').click();
+  const nCountries = await page.locator('.sb-list [role=option], .sb-pop [role=option]').count();
+  await page.locator('[role=option]').filter({ hasText: 'TW' }).first().click();
+  await page.waitForFunction(() => document.querySelectorAll('.cochip').length === 1, null, { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => /ipMatchFromFile/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+  ok(nCountries === 6 && (await page.locator('.cochip').count()) === 1 && (await page.locator('body').innerText()).includes('ipMatchFromFile'),
+     'country block: staged countries, a chosen one, the rule preview (' + nCountries + ')');
+  await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
+  await page.waitForSelector('.coreg tbody tr', { timeout: 5000 }).catch(() => {});
+  ok((await page.locator('.coreg tbody tr').count()) === 5 && (await page.locator('.setbadge').count()) >= 1,
+     'country block: the registries and the lists in use in Settings');
   // several rules at once: tick, "switch off" opens the change form with its preview (or why it cannot)
   await page.goto(base + '/rules', { waitUntil: 'networkidle' });
   await page.locator('input.rowsel').first().check();

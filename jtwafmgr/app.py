@@ -35,6 +35,8 @@ class App:
         self.workflow.sandbox = Sandbox(cfg, self.site)
         from .blocks import Blocks
         self.blocks = Blocks(self)
+        from .countries import Countries
+        self.countries = Countries(self)
         from .compliance import Monitor
         self.monitor = Monitor(self)
         self._note_version()
@@ -77,6 +79,9 @@ class App:
         bt = threading.Thread(target=self.blocks.run, args=(self.tailer._stop,), name='blocks', daemon=True)
         bt.start()
         self._threads.append(bt)
+        ct = threading.Thread(target=self.countries.run, args=(self.tailer._stop,), name='countries', daemon=True)
+        ct.start()
+        self._threads.append(ct)
         from . import traffic
         tr = threading.Thread(target=traffic.run, args=(self, self.tailer._stop), name='traffic', daemon=True)
         tr.start()

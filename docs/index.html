@@ -185,7 +185,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.26</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.27</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -213,6 +213,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="card"><h3><span class="ic">✎</span><span data-t="f10_h"></span></h3><p data-t="f10"></p></div>
     <div class="card"><h3><span class="ic">↻</span><span data-t="f11_h"></span></h3><p data-t="f11"></p></div>
     <div class="card"><h3><span class="ic">⇆</span><span data-t="f12_h"></span></h3><p data-t="f12"></p></div>
+    <div class="card"><h3><span class="ic">⊕</span><span data-t="f13_h"></span></h3><p data-t="f13"></p></div>
+    <div class="card"><h3><span class="ic">⊘</span><span data-t="f14_h"></span></h3><p data-t="f14"></p></div>
   </div>
 </div></section>
 
@@ -493,6 +495,10 @@ const T = {
   f11_h: 'OWASP CRS kept current',
   f11: 'jt-waf-mgr downloads the newest CRS 4.x after a waiting period, verifies it against the pinned CRS signing key, compares it in the sandbox and installs it once a person approves; 3 versions are kept to roll back. A host without the CRS gets it the same way.',
   f12_h: 'API for integrations',
+  f13_h: 'Country blocks',
+  f13: 'Limit a site to some countries, or block some countries, with lists from the five regional Internet registries (checked, refreshed daily). Each limit is a rule through the change workflow: the checks show how many real users it would shut out; internal networks, scanners and the CDN are never refused.',
+  f14_h: 'Temporary IP blocks',
+  f14: 'fail2ban on a mail host, a SOAR playbook or an approver blocks one address for a while (24 hours by default, never for ever); one nginx deny list covers every site. Optionally, sources that guess secret files are blocked automatically.',
   f12: 'A SIEM, a SOAR playbook or a script uses API tokens with scopes and allowed source addresses: read events and alerts, propose changes. Tokens can never approve. See the API manual.',
   ai_rec_h: 'Which LLM',
   ai_rec1: 'Always self-hosted: an OpenAI-compatible server (llama.cpp server, vLLM, Ollama) with JSON-schema-constrained answers; without them plain JSON mode is used and answers are less reliable',
@@ -640,6 +646,10 @@ const T = {
   f11_h: 'OWASP CRS 保持最新',
   f11: 'jt-waf-mgr 在新版 CRS 4.x 發布滿一段時間後下載，用釘選的 CRS 簽章金鑰驗證、在沙箱比對，由人核准後安裝；保留 3 個版本可以退回。還沒有 CRS 的主機也用同樣的流程安裝。',
   f12_h: '介接 API',
+  f13_h: '國家封鎖',
+  f13: '讓站台只允許某些國家，或封鎖某些國家；清單來自五大區域網際網路註冊機構（經驗證、每天更新）。每個限制都是經過變更流程的規則：檢查會顯示它會封鎖多少真實使用者；內部網路、掃描器與 CDN 永遠不會被封鎖。',
+  f14_h: '暫時封鎖 IP',
+  f14: '郵件主機的 fail2ban、SOAR 劇本或核准者可以暫時封鎖單一位址（預設 24 小時，沒有永久封鎖）；一個 nginx deny 清單涵蓋所有站台。也可以選擇自動封鎖猜機密檔的來源。',
   f12: 'SIEM、SOAR 劇本或指令稿使用有範圍、限制來源位址的 API 權杖：讀取事件與警示、提出變更。權杖永遠不能核准。詳見 API 介接手冊。',
   ai_rec_h: '建議的 LLM',
   ai_rec1: '一律用地端伺服器：OpenAI 相容（llama.cpp server、vLLM、Ollama），並支援以 JSON schema 限制回答格式；不支援時改用一般 JSON 模式，回答比較不可靠',
@@ -787,6 +797,10 @@ const T = {
   f11_h: 'OWASP CRS を最新に',
   f11: 'jt-waf-mgr は CRS 4.x の新版を一定期間の後にダウンロードし、固定した CRS 署名鍵で検証し、サンドボックスで比較して、人の承認後にインストールします。ロールバック用に 3 バージョンを保持。CRS のないホストも同じ流れで導入できます。',
   f12_h: '連携用 API',
+  f13_h: '国別ブロック',
+  f13: 'サイトを一部の国だけに限定、または一部の国をブロック。一覧は 5 つの地域インターネットレジストリから取得（検証済み、毎日更新）。各制限は変更フローを通るルールで、チェックで締め出される実際の利用者の数がわかります。内部ネットワーク、スキャナー、CDN は決してブロックしません。',
+  f14_h: '一時的な IP ブロック',
+  f14: 'メールサーバーの fail2ban、SOAR プレイブック、承認者が単一アドレスを一時的にブロック（既定 24 時間、永久なし）。1 つの nginx deny リストですべてのサイトに効きます。機密ファイルを探す送信元の自動ブロックも選べます。',
   f12: 'SIEM、SOAR のプレイブック、スクリプトは、スコープと許可する送信元アドレス付きの API トークンで、イベントやアラートの取得、変更の提案ができます。トークンは承認できません。API 連携マニュアルを参照してください。',
   ai_rec_h: '推奨する LLM',
   ai_rec1: '常にオンプレミス：OpenAI 互換サーバー（llama.cpp server、vLLM、Ollama）で、JSON スキーマで形式を制約した回答に対応しているもの。非対応なら通常の JSON モードとなり、回答の信頼性が下がります',

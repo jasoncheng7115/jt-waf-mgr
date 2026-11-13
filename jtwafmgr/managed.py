@@ -195,6 +195,8 @@ class Managed:
         w = self.cfg['waf']
         if kind == 'confident_block':
             return w['confident_range']
+        if kind == 'country':
+            return w['country_range']
         if kind == 'plugin':
             return w['system_range']
         return w['exclusion_range']

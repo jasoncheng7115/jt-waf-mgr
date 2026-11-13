@@ -51,6 +51,7 @@ DEFAULTS = {
         'system_range': [10000, 10099],
         'exclusion_range': [10100, 10199],
         'confident_range': [10200, 10296],
+        'country_range': [10300, 10399],
         # Rule(s) adding a critical score for a confident match so that CRS's 949110 decides.
         'score_rule_ids': [10298],
         # Rules that turn the engine on for "external over the CRS threshold" (nolog).
@@ -155,6 +156,16 @@ DEFAULTS = {
         'dir': '/var/lib/jt-waf-mgr/backups',
         'hour': 3,
         'keep_days': 14,
+    },
+    'countries': {
+        # per-site country blocks (countries.py, rulegen kind "country"): lists from the five regional registries,
+        # downloaded by jt-waf-mgr-countries.service into dir, written for ModSecurity into rules_dir by the root apply
+        # program. Off until switched on in Settings.
+        'enabled': False,
+        'dir': '/var/lib/jt-waf-mgr/countries',
+        'rules_dir': '/etc/nginx/modsec/jt-waf-mgr/countries',
+        'update_hours': 24,
+        'max_age_days': 14,
     },
     'blocks': {
         # temporary IP blocks (blocks.py): an nginx deny list the apply program writes; the administrator includes it
@@ -303,7 +314,7 @@ class Config:
         self.internal_networks = _networks(data['network']['internal'], 'network.internal')
         self.known_scanners = _networks(data['network']['known_scanners'], 'network.known_scanners')
         self.trusted_proxies = _networks(data['server']['trusted_proxies'], 'server.trusted_proxies')
-        for key in ('local_range', 'system_range', 'exclusion_range', 'confident_range'):
+        for key in ('local_range', 'system_range', 'exclusion_range', 'confident_range', 'country_range'):
             r = data['waf'][key]
             if len(r) != 2 or not all(isinstance(x, int) for x in r) or r[0] > r[1]:
                 raise ConfigError('waf.%s must be [low, high]' % key)
@@ -327,6 +338,20 @@ class Config:
             raise ConfigError('syslog.more: up to 7 more destinations')
         if data['managed'].get('imported_author', 'site') not in ('site', 'jason_tools'):
             raise ConfigError('managed.imported_author: site or jason_tools')
+        co = data['countries']
+        if not (isinstance(co['rules_dir'], str) and re.fullmatch(r'/[\w./-]{1,200}', co['rules_dir'])
+                and '..' not in co['rules_dir'].split('/') and co['rules_dir'].rstrip('/') != ''):
+            raise ConfigError('countries.rules_dir: an absolute directory (normally below /etc/nginx/modsec/)')
+        if not (isinstance(co['dir'], str) and co['dir'].startswith('/') and '..' not in co['dir']):
+            raise ConfigError('countries.dir: an absolute path')
+        for k, lo, hi in (('update_hours', 6, 24 * 30), ('max_age_days', 1, 365)):
+            if not isinstance(co[k], int) or isinstance(co[k], bool) or not lo <= co[k] <= hi:
+                raise ConfigError('countries.%s: %d-%d' % (k, lo, hi))
+        lo, hi = data['waf']['local_range']
+        cr = data['waf']['country_range']
+        if not (lo <= cr[0] and cr[1] <= hi) or any(not (cr[1] < data['waf'][k][0] or cr[0] > data['waf'][k][1])
+                                                   for k in ('system_range', 'exclusion_range', 'confident_range')):
+            raise ConfigError('waf.country_range: inside local_range, apart from the other ranges')
         bl = data['blocks']
         for k, lo, hi in (('max_active', 1, 20000), ('max_per_token', 1, 20000), ('token_per_hour', 1, 100000),
                           ('min_ttl', 10, 86400), ('default_ttl', 10, 30 * 86400), ('api_max_ttl', 60, 30 * 86400),

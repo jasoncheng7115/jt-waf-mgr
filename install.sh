@@ -145,6 +145,7 @@ if [ -z "$ROOT" ]; then
     chown jtwaf:jtwaf "$VAR"
     install -d -m 750 -o jtwaf -g jtwaf "$VAR/geoip"
     install -d -m 750 -o jtwaf -g jtwaf "$VAR/crs"
+    install -d -m 750 -o jtwaf -g jtwaf "$VAR/countries"
     # GeoIP license key: alone in its own file, readable by root and the jtwaf group only
     KEY="$ETC/maxmind-license.key"
     [ -e "$KEY" ] || { : > "$KEY"; }
@@ -166,7 +167,8 @@ for u in jt-waf-mgr.service jt-waf-mgr-apply.service jt-waf-mgr-apply.path \
          jt-waf-mgr-geoip.service jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.path \
          jt-waf-mgr-analyst.service jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path \
          jt-waf-mgr-notify.service jt-waf-mgr-notify.timer jt-waf-mgr-notify.path \
-         jt-waf-mgr-crs.service jt-waf-mgr-crs.timer jt-waf-mgr-crs.path; do
+         jt-waf-mgr-crs.service jt-waf-mgr-crs.timer jt-waf-mgr-crs.path \
+         jt-waf-mgr-countries.service jt-waf-mgr-countries.timer jt-waf-mgr-countries.path; do
     cp "$SRC/deploy/$u" "$UNIT_DIR/$u"
     chmod 644 "$UNIT_DIR/$u"
 done
@@ -227,6 +229,9 @@ systemctl enable --now jt-waf-mgr-notify.timer jt-waf-mgr-notify.path >/dev/null
 # OWASP CRS: a daily check and "check now" from the CRS page; it does nothing until an admin switches
 # "jt-waf-mgr keeps the CRS current" on (Settings), and it never changes nginx (that is an approved change).
 systemctl enable --now jt-waf-mgr-crs.timer jt-waf-mgr-crs.path >/dev/null
+# Country lists for per-site country blocks: a sandboxed one-shot download job (daily timer + "update now");
+# it downloads nothing until country blocks are switched on in Settings.
+systemctl enable --now jt-waf-mgr-countries.timer jt-waf-mgr-countries.path >/dev/null
 # The apply program writes nginx configuration: it is armed only on request (--enable-apply),
 # normally right before the adoption step.
 if [ "$ENABLE_APPLY" = 1 ]; then

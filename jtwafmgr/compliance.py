@@ -221,9 +221,11 @@ class Monitor:
                     return 'jt-waf-mgr'
             except Exception:       # noqa: BLE001 -- unreadable files or rows: not proven ours
                 pass
-        # the temporary IP block list: written only by the apply program from the database
+        # the temporary IP block list and the country lists: written only by the apply program (from the database and
+        # from the staged registry data), never by hand
         bf = self.cfg['blocks']['file']
-        if touched and all(p == bf for p in touched):
+        cd = self.cfg['countries']['rules_dir'].rstrip('/') + '/'
+        if touched and all(p == bf or (p.startswith(cd) and p.endswith('.data')) for p in touched):
             return 'jt-waf-mgr'
         auto = self.cfg['integrity'].get('automation_paths') or []
         if touched and auto and all(any(fnmatch.fnmatch(p, a) or p.startswith(a.rstrip('*')) for a in auto) for p in touched):

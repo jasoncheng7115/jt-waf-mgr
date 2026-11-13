@@ -270,7 +270,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 **`POST /changes`**：スコープ `changes:propose`。本文：
 
 - `op`：`add`（デフォルト）、`modify`、`disable`、`enable`、`delete`、`bundle`。
-- `kind`：`add` のとき `confident_block`、`exclusion`、`redaction`、`plugin`、`raw`。
+- `kind`：`add` のとき `confident_block`、`exclusion`、`country`、`redaction`、`plugin`、`raw`。
 - `spec`：種類ごとの項目（下記）。`modify` では新しい spec をすべて渡します。
 - `item_id`：`modify`、`disable`、`enable`、`delete` のとき、管理対象項目の ID（`GET /managed` の `items[].id`）。
 - `reason`：必須、2000 文字まで。承認者に表示されます。
@@ -321,6 +321,20 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 ```json
 {"change_id": 3, "direction": "loosen", "state": "checking", "rule_id": 10120}
 ```
+
+**種類 `country`**（0.4.27 で追加。国で 1 つのサイトを制限。設定で国別ブロックをオンにし、一覧をダウンロード済みで
+あること。そうでなければ 409 `countries_off` / `countries_no_data`）：
+
+- `host`：必須、`{"mode": "exact", "value": "shop.example.com"}`（`*.example.com` も可）。
+- `mode`：`allow`（これらの国のみ許可）または `deny`（これらの国をブロック）。
+- `countries`：一覧のある ISO 3166 の 2 文字国コードを 1〜50 個（なければ 422 `unknown_country`）。
+- `note`：任意、160 文字まで。
+
+内部ネットワーク、既知のスキャナー、信頼するプロキシ、保護リストは決してブロックしません。テストが 3 つ自動で追加されます
+（許可される国、ブロックされる国、内部から各 1 つ）。`tests` には `src_ip`（`external` のみ）で公開の送信元アドレスも指定できます。
+証拠チェックはアクセスログからこのルールがブロックしたはずの量（`requests`、`refused`、`refused_sources`、`refused_success`、
+`countries`）を数えます。参考情報であり、変更を失敗させることはありません。国別ブロックは自動では適用されません。
+`GET /countries`（ログイン中の利用者。トークンのスコープはなし）で、一覧のある国と使用中の一覧を返します。
 
 **種類 `redaction` と `plugin`**：`redaction` は `fields`（検査しない引数名、最大 30 個。検査しないので監査記録にも
 コピーされません）と任意の `host`・`path`、`plugin` は `plugin`（CRS プラグイン名）と必須の `host` で、1 つのサイトで

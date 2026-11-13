@@ -273,12 +273,13 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 **`POST /changes`**: scope `changes:propose`. Body:
 
 - `op`: `add` (default), `modify`, `disable`, `enable`, `delete`, or `bundle`.
-- `kind`: for `add`: `confident_block`, `exclusion`, `redaction`, `plugin` or `raw`.
+- `kind`: for `add`: `confident_block`, `exclusion`, `country`, `redaction`, `plugin` or `raw`.
 - `spec`: the fields of the kind (below). `modify` takes the complete new spec.
 - `item_id`: for `modify`, `disable`, `enable`, `delete`: the managed item id (`items[].id` of `GET /managed`).
 - `reason`: required, at most 2000 characters. Shown to the approver.
 - `tests`: optional, at most 50 requests run in the sandbox: `{"host", "path", "expect": 200 | 403,
-  "source": "external" | "internal", "method"?, "headers"?, "body"?}`.
+  "source": "external" | "internal", "method"?, "headers"?, "body"?, "src_ip"?}`. `src_ip` (with `external` only):
+  a public address the request comes from, for example one of a country a country block refuses.
 
 The answer is 202 with the change id; the checks run in the background:
 
@@ -324,6 +325,20 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 ```json
 {"change_id": 3, "direction": "loosen", "state": "checking", "rule_id": 10120}
 ```
+
+**Kind `country`** (new in 0.4.27; limit one site by country; needs country blocks switched on in Settings and the
+lists downloaded, otherwise 409 `countries_off` / `countries_no_data`):
+
+- `host`: required, `{"mode": "exact", "value": "shop.example.com"}` (`*.example.com` allowed).
+- `mode`: `allow` (only these countries) or `deny` (these countries are refused).
+- `countries`: 1 to 50 ISO 3166 two-letter codes that have a list (422 `unknown_country` otherwise).
+- `note`: optional, at most 160 characters.
+
+The internal networks, the known scanners, the trusted proxies and the protected list are never refused. Three tests
+are added for you (a request from an allowed and from a refused country, one from inside). The evidence check counts
+from the access logs what the rule would have refused (`requests`, `refused`, `refused_sources`, `refused_success`,
+`countries`); it is informational and never fails the change. A country block is never applied automatically.
+`GET /countries` (any signed-in user; no token scope) lists the countries that have a list and the lists in use.
 
 **Kinds `redaction` and `plugin`**: `redaction` takes `fields` (up to 30 argument names that are not inspected, so
 never copied into the audit log) and optional `host` / `path`; `plugin` takes `plugin` (the CRS plugin name) and

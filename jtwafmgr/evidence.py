@@ -286,6 +286,8 @@ class Evidence:
             return self.block_evidence(spec)
         if r['kind'] in ('exclusion', 'redaction') and r['op'] in ('add', 'modify', 'enable'):
             return self.exclusion_impact(spec)
+        if r['kind'] == 'country' and r['op'] in ('add', 'modify', 'enable'):
+            return self.country_impact(spec)
         if r['op'] in ('disable', 'delete') and r['rule_id']:
             return self.rule_hits(r['rule_id'])
         return {'ok': True, 'skipped': 'no evidence check for this kind of change'}
@@ -381,6 +383,52 @@ class Evidence:
         return out
 
     # --- exclusions ----------------------------------------------------------------------------
+    def country_impact(self, spec):
+        """What a country rule would have refused in the access logs: requests and addresses of the site from
+        outside the allowed countries (or from the denied ones), the countries they came from, and how many of them
+        were answered 2xx / 3xx (real users, not scanners). Informational: it never fails the check -- the approver
+        weighs it."""
+        from .countries import Lookup
+        host = (spec.get('host') or {}).get('value', '').lower()
+        rx = re.compile('^' + re.escape(host).replace('\\*', '[^.]+') + '$') if host.startswith('*.') else None
+        listed = set(spec.get('countries') or [])
+        lk = Lookup(self.cfg['countries']['dir'])
+        never = rulegen.never_list(self.cfg)
+        deadline = time.time() + self.cfg['evidence']['max_scan_seconds']
+        total = refused = refused_ok = 0
+        ips, countries, ok_samples = set(), collections.Counter(), collections.Counter()
+        cache = {}
+        for d in self.logs.lines(deadline):
+            h = d['host'].split(':', 1)[0]
+            if not (h == host or (rx and rx.match(h))):
+                continue
+            total += 1
+            ip = d['ip']
+            if ip not in cache:
+                if util.ip_in(ip, never):
+                    cache[ip] = None
+                else:
+                    cc = lk.country(ip)
+                    hit = (cc not in listed) if spec.get('mode') == 'allow' else (cc in listed)
+                    cache[ip] = (cc or '??') if hit else None
+                if len(cache) > 200000:
+                    cache.clear()
+            cc = cache.get(ip)
+            if cc is None:
+                continue
+            refused += 1
+            ips.add(ip)
+            countries[cc] += 1
+            if d['status'][:1] in '23':
+                refused_ok += 1
+                ok_samples[(cc, d['status'], util.clip(d['uri'].split('?', 1)[0], 80))] += 1
+        complete = time.time() <= deadline
+        return {'ok': True, 'informational': True, 'complete': complete, 'host': host, 'mode': spec.get('mode'),
+                'requests': total, 'refused': refused, 'refused_sources': len(ips), 'refused_success': refused_ok,
+                'countries': [{'country': k, 'requests': n} for k, n in countries.most_common(15)],
+                'success_samples': [{'country': k[0], 'status': k[1], 'path': k[2], 'count': n}
+                                    for k, n in ok_samples.most_common(10)]}
+
     def exclusion_impact(self, spec, days=30):
         since = util.now() - days * 86400
         h, p = spec.get('host') or {}, spec.get('path') or {}

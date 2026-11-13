@@ -37,6 +37,7 @@ import time
 from . import util
 
 SOURCE_RE = re.compile(r'[\w.:@/+-]{1,64}')
+LIST_FORMAT = 2               # 2: deny lines only (0.4.26); a list written in an older format is written again once
 STATES = ('active', 'removed', 'expired')
 # never a block target: these are not addresses of someone on the internet (the documentation ranges are left
 # blockable on purpose: harmless, and what the tests use)
@@ -307,6 +308,8 @@ class Blocks:
             if now - pending.get('at', 0) < 600:
                 return None          # one in flight; its result decides what comes next
             pending = None           # lost (the apply program never answered): send again
+        if applied.get('ok') and applied.get('format') != LIST_FORMAT:
+            force = True             # written by an older version (0.4.25 ended the file in "allow all"): once again
         if not force and applied.get('sha') == sha and applied.get('ok'):
             return None
         if not force and now - (applied.get('at') or 0) < b['reload_seconds']:
@@ -322,8 +325,10 @@ class Blocks:
         if pending.get('request_id') and pending['request_id'] != res.get('request_id'):
             return
         ok = res.get('result') == 'ok'
+        prev = self._meta(META_APPLIED) or {}
         self.db.set_meta(META_APPLIED, json.dumps({
-            'sha': res.get('sha256') if ok else (self._meta(META_APPLIED) or {}).get('sha'), 'at': time.time(),
+            'format': LIST_FORMAT if ok else prev.get('format'),
+            'sha': res.get('sha256') if ok else prev.get('sha'), 'at': time.time(),
             'count': res.get('count'), 'ok': ok, 'changed': res.get('changed'),
             'summary': util.clip(str(res.get('summary') or ''), 500)}))
         self.db.set_meta(META_PENDING, 'null')

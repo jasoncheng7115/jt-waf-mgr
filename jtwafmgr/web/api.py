@@ -1020,6 +1020,7 @@ def settings(app, req):
         'integrity': {k: c['integrity'][k] for k in ('anchor_minutes', 'program_check_minutes', 'config_check_minutes',
                                                      'disk_min_free_mb')},
         'geoip': {k: c['geoip'][k] for k in ('enabled', 'editions', 'update_days')},
+        'countries': {k: c['countries'][k] for k in ('enabled', 'update_hours', 'max_age_days')},
         'compliance_level': c['compliance']['level'],
         'paths': _paths(app),
     })
@@ -1034,11 +1035,12 @@ def _paths(app):
         'program': program_dir(), 'command': '/usr/bin/jt-waf-mgr', 'config': c.path,
         'data_dir': data, 'database': c['paths']['db'], 'backups': c['backup']['dir'],
         'audit_anchors': c['integrity']['anchor_file'], 'geoip': c['geoip']['dir'],
+        'countries': c['countries']['dir'], 'country_lists': c['countries']['rules_dir'],
         'spool': c['managed']['spool'], 'apply_state': c['managed']['apply_state'],
         'managed_rules': c['managed']['dir'], 'sandbox': c['managed']['sandbox_dir'],
         'modsecurity_audit_log': c['paths']['audit_log'], 'nginx_conf': c['paths']['nginx_conf'],
         'syslog': ('%s (facility %s)' % (c['syslog']['address'], c['syslog']['facility'])) if c['syslog']['enabled'] else None,
-        'service_log': 'journalctl -u jt-waf-mgr -u jt-waf-mgr-apply -u jt-waf-mgr-geoip -u jt-waf-mgr-analyst -u jt-waf-mgr-notify',
+        'service_log': 'journalctl -u jt-waf-mgr -u jt-waf-mgr-apply -u jt-waf-mgr-geoip -u jt-waf-mgr-countries -u jt-waf-mgr-analyst -u jt-waf-mgr-notify',
     }
 
 
@@ -1628,6 +1630,21 @@ def geoip_update(app, req):
     return json_response(202, app.geoip.status())
 
 
+def countries_status(app, req):
+    """Country blocks: the staged registry lists (codes and sizes), when they were made, and the list files in use."""
+    return json_response(200, app.countries.status())
+
+
+def countries_update(app, req):
+    """Like GeoIP: the web service never downloads; it leaves a request file for the sandboxed updater unit."""
+    try:
+        app.countries.request_update()
+    except OSError as e:
+        raise ApiError(500, 'countries_request_failed', 'could not queue the update', error=e.strerror)
+    app.audit.log('countries.update_requested', req.user['username'], src_ip=req.client_ip)
+    return json_response(202, app.countries.status())
+
+
 def geoip_lookup(app, req):
     ip = req.params['ip']
     try:
@@ -1717,6 +1734,8 @@ def register_compliance(router):
     R('POST', V + '/llm/test', llm_test, admin)
     R('GET', V + '/llm/test', llm_test_result, admin)
     R('POST', V + '/geoip/update', geoip_update, admin)
+    R('GET', V + '/countries', countries_status, ('role', 'viewer', None))
+    R('POST', V + '/countries/update', countries_update, admin)
     R('GET', V + '/geoip/{ip}', geoip_lookup, ('role', 'viewer', 'lookups:read'))
     R('POST', V + '/backups', backup_now, admin)
     R('POST', V + '/backups/{name}/verify', backup_verify, admin)

@@ -1,0 +1,10 @@
+[Unit]
+Description=jt-waf-mgr: daily update of the country address lists (only while country blocks are on)
+
+[Timer]
+OnCalendar=*-*-* 05:10
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

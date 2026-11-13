@@ -14,6 +14,7 @@ side only writes a request into the spool directory and reads the result back.
 import collections
 import datetime
 import hashlib
+import ipaddress
 import json
 import re
 import os
@@ -172,6 +173,8 @@ class Workflow:
                 spec, text, _ = rulegen.build(kind, spec, rule_id, self.cfg)
             except rulegen.SpecError as e:
                 raise ChangeError('invalid_spec', 422, field=e.field, reason=e.code, **e.details)
+            if kind == 'country':
+                self._country_ready(spec)
             if op == 'add' and spec.get('before_rule_id'):
                 pl = spec.get('placement', 'before')
                 if not any(it['rule_id'] == spec['before_rule_id'] and it['placement'] == pl
@@ -193,11 +196,53 @@ class Workflow:
         _check_tests(tests)
         return reason, tests
 
+    def _country_ready(self, spec):
+        """A country rule needs the feature on and staged lists for each of its countries (the root program builds
+        its list file from them before the rule is applied)."""
+        if not self.cfg['countries']['enabled']:
+            raise ChangeError('countries_off', 409)
+        from .countries import read_manifest
+        man = read_manifest(self.cfg['countries']['dir'])
+        if not man:
+            raise ChangeError('countries_no_data', 409)
+        missing = [c for c in spec['countries'] if c not in man['countries']]
+        if missing:
+            raise ChangeError('invalid_spec', 422, field='countries', reason='unknown_country', countries=missing[:10])
+
+    def _country_tests(self, spec):
+        """Sandbox tests of a country rule: a request from an address of a country that passes (200) and from one
+        that is refused (403), plus the same site from inside (always passes)."""
+        from .countries import Lookup
+        if spec.get('host', {}).get('mode') != 'exact':
+            return []
+        host = spec['host']['value'].replace('*', 'www')
+        listed = spec['countries']
+        other = next((c for c in ('US', 'DE', 'BR', 'CN', 'RU', 'IN', 'FR', 'GB', 'JP', 'TW') if c not in listed), None)
+        lk = Lookup(self.cfg['countries']['dir'], listed[:1] + ([other] if other else []))
+        out = []
+        a, b = lk.sample(listed[0]), lk.sample(other) if other else None
+        inside, outside = (200, 403) if spec['mode'] == 'allow' else (403, 200)
+        if a:
+            out.append({'host': host, 'path': '/', 'method': 'GET', 'source': 'external', 'src_ip': a, 'expect': inside})
+        if b:
+            out.append({'host': host, 'path': '/', 'method': 'GET', 'source': 'external', 'src_ip': b, 'expect': outside})
+        out.append({'host': host, 'path': '/', 'method': 'GET', 'source': 'internal', 'expect': 200})
+        return out
+
+    def _with_country_tests(self, built, tests):
+        for b in built:
+            if b['kind'] == 'country' and b['op'] in ('add', 'modify', 'enable'):
+                tests = tests + self._country_tests(b['spec'])
+        if len(tests) > 50:
+            raise ChangeError('invalid_tests', reason='at most 50 tests (country rules add 3 each)')
+        return tests
+
     def propose(self, op, kind, spec, reason, actor, via='user', item_id=None, tests=None, role=None, owner=None):
         if op not in OPS:
             raise ChangeError('invalid_op')
         reason, tests = self._start(reason, tests)
         b = self._build_op(op, kind, spec, item_id, via, role)
+        tests = self._with_country_tests([b], tests)
         return self._insert(b['op'], b['kind'], b['item_id'], b['rule_id'], b['spec'], b['direction'], reason, actor, via,
                             b['text'], tests, owner)
 
@@ -250,6 +295,7 @@ class Workflow:
         if sum(1 for b in built if b['kind'] == 'confident_block' and b['op'] in ('add', 'modify', 'enable')) > self.BUNDLE_MAX_BLOCKS:
             raise ChangeError('invalid_bundle', 422, reason='too_many_blocks', limit=self.BUNDLE_MAX_BLOCKS)
         direction = 'tighten' if all(b['direction'] == 'tighten' for b in built) else 'loosen'
+        tests = self._with_country_tests(built, tests)
         text = '\n\n'.join('# %s %s %s\n%s' % (b['op'], b['kind'], b['rule_id'] or '', b['text'] or '')
                             for b in built)[:200000]
         spec = {'ops': [{k: b[k] for k in ('op', 'kind', 'item_id', 'rule_id', 'spec', 'direction')} for b in built]}
@@ -1036,6 +1082,10 @@ class Workflow:
             if getattr(self.app, 'blocks', None) is not None:
                 self.app.blocks.handle_result(res)
             return
+        if res.get('action') == 'countries':
+            if getattr(self.app, 'countries', None) is not None:
+                self.app.countries.handle_result(res)
+            return
         version, cid = res.get('version'), res.get('change_id')
         r = self.db.one('SELECT * FROM changes WHERE id=?', (cid,))
         if res.get('action') == 'crs_switch':
@@ -1194,6 +1244,13 @@ def _check_tests(tests):
         if not isinstance(hdr, dict) or len(hdr) > 10 or any(
                 not isinstance(k, str) or not isinstance(v, str) or '\n' in k + v or '\r' in k + v for k, v in hdr.items()):
             raise ChangeError('invalid_tests', reason='headers')
+        if t.get('src_ip') is not None:
+            try:
+                a = ipaddress.ip_address(t['src_ip'])
+            except (ValueError, TypeError):
+                raise ChangeError('invalid_tests', reason='src_ip')
+            if t.get('source') != 'external' or not a.is_global:
+                raise ChangeError('invalid_tests', reason='src_ip: a public address, with source external')
         if t.get('method', 'GET') not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'):
             raise ChangeError('invalid_tests', reason='method')
         if len(t.get('body') or '') > 65536:

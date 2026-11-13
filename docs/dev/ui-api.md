@@ -195,6 +195,18 @@ is also how `included` is detected.
 - `DELETE /api/v1/blocks/{ip}?source=` (token `blocks:write`: its own entries only) → `{"removed": n}`
 - `POST /api/v1/blocks/{id}/remove` (approver, `{"note"}` required) → `{"removed": 1}`
 
+Country blocks (0.4.27; countries.py, rulegen kind `country`):
+- `GET /api/v1/countries` (viewer) → `{"enabled", "rules_dir", "generated_at", "stale", "countries": {CC: {"v4", "v6",
+  "v4_addresses"}}, "registries": {name: {"ipv4", "ipv6", "countries", "size"}}, "last_run", "last_ok", "last_note",
+  "last_errors", "requested", "sets": [SET...], "applied": {"at", "ok", "summary"}, "pending"}`
+- `POST /api/v1/countries/update` (admin) → 202, the same object; leaves `update.request` for jt-waf-mgr-countries.path.
+- Changes: `kind: "country"`, spec `{"host": {"mode": "exact", "value"}, "mode": "allow"|"deny", "countries": [CC...],
+  "note"}`; 409 `countries_off` / `countries_no_data`, 422 `invalid_spec` (`unknown_country`, `invalid_countries`).
+  Evidence: `{"informational": true, "requests", "refused", "refused_sources", "refused_success", "countries",
+  "success_samples"}`. Tests may carry `src_ip` (public, `external` only).
+- Root apply request `{"action": "countries", "sets": {SET: [CC...]}, "manifest_sha256", "want"}`; result
+  `{"action": "countries", "sets", "want", "changed", "summary"}` (file `countries-<ms>.req`).
+
 `Block`: `{"id", "ip", "source", "reason", "state": "active|removed|expired", "created_at", "expires_at", "created_by",
 "via": "token|user", "extended", "ended_at", "ended_by"}`. Errors: 409 `blocks_off`, `too_many_blocks`,
 `too_many_for_token`; 422 `invalid_ip`, `not_public`, `protected`, `single_address_only`, `range_too_wide`,

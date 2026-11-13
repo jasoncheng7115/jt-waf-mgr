@@ -176,6 +176,15 @@ def cmd_geoip_update(args):
     return 1 if st.get('ok') is False else 0
 
 
+def cmd_countries_update(args):
+    """Run by jt-waf-mgr-countries.service (daily timer, or "update now" in Settings); also usable by hand."""
+    from . import countries
+    cfg = config_mod.load(args.config if os.path.exists(args.config) or args.config != config_mod.DEFAULT_PATH else None)
+    st = countries.update(cfg, force=args.force, log=lambda m: print(m, flush=True))
+    print(json.dumps({k: v for k, v in st.items()}, indent=1))
+    return 1 if st.get('ok') is False else 0
+
+
 def cmd_crs_update(args):
     """Run by jt-waf-mgr-crs.service (daily timer, or "check now" from the CRS page); also usable by hand."""
     from . import crsupdate
@@ -283,6 +292,8 @@ def main(argv=None):
     cu.add_argument('--force', action='store_true', help='check even when crs.manage is off (nothing is installed)')
     gu = sub.add_parser('geoip-update', help='download the GeoIP databases now (normally run by its own unit)')
     gu.add_argument('--force', action='store_true', help='even when the files are recent')
+    cu = sub.add_parser('countries-update', help='download the registries\' country lists now (normally run by its own unit)')
+    cu.add_argument('--force', action='store_true', help='even when the lists are recent or country blocks are off')
     ar = sub.add_parser('analyst-run', help='analyse recent events with the configured LLM server (normally run by its own unit)')
     ar.add_argument('--force', action='store_true', help='even when the last run is recent')
     sub.add_parser('notify-run', help='send queued notifications now (normally run by its own unit)')
@@ -295,7 +306,7 @@ def main(argv=None):
     try:
         return {'serve': cmd_serve, 'user': cmd_user, 'import': cmd_import, 'check': cmd_check,
                 'integrity': cmd_integrity, 'verify-release': cmd_verify_release, 'audit-verify': cmd_audit_verify,
-                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'crs-update': cmd_crs_update, 'geoip': cmd_geoip, 'analyst-run': cmd_analyst_run, 'notify-run': cmd_notify_run,
+                'backup': cmd_backup, 'geoip-update': cmd_geoip_update, 'countries-update': cmd_countries_update, 'crs-update': cmd_crs_update, 'geoip': cmd_geoip, 'analyst-run': cmd_analyst_run, 'notify-run': cmd_notify_run,
                 'config-check': cmd_config_check, 'migrate': cmd_migrate, 'doctor': cmd_doctor}[args.cmd](args)
     except config_mod.ConfigError as e:
         print('configuration error: %s' % e, file=sys.stderr)

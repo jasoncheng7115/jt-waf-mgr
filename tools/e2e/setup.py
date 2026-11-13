@@ -122,6 +122,15 @@ for i, (rx, label, ago, state) in enumerate([
 chg('add', 'confident_block', 10224, {'target': 'header', 'header': 'Upgrade', 'regex': '(?i)h2c', 'source': 'external',
     'msg': 'h2c upgrade request'}, 'tighten', 'applied', 'Block requests that ask to upgrade to h2c.', 'admin', 'user', 7200,
     'SecRule REQUEST_HEADERS:Upgrade "@rx (?i)h2c" "id:10224,phase:1,pass,log,msg:\'jt confident block: h2c upgrade request\'"')
+# country blocks: synthetic registry lists (documentation ranges stand in for countries) and one waiting rule
+if cfg['countries']['enabled']:
+    from tests.test_countries import stage
+    from jtwafmgr import rulegen
+    stage(cfg['countries']['dir'])
+    cspec, ctext, _ = rulegen.build('country', {'host': {'mode': 'exact', 'value': 'shop.example.com'}, 'mode': 'allow',
+                                                'countries': ['TW', 'JP']}, 10300, app.cfg)
+    chg('add', 'country', 10300, cspec, 'tighten', 'pending_approval', 'shop.example.com serves customers in Taiwan and Japan only.',
+        'approver', 'user', 1800, ctext)
 chg('add', 'confident_block', 10230, {'target': 'ua', 'regex': '(?i)sqlmap', 'source': 'external', 'msg': 'sqlmap'}, 'tighten',
     'pending_approval', 'SOAR playbook: sqlmap user agent seen on shop.example.com.', 'soar-playbook', 'api', 900,
     'SecRule REQUEST_HEADERS:User-Agent "@rx (?i)sqlmap" "id:10230,phase:1,pass,log,msg:\'jt confident block: sqlmap\'"', owner='admin')

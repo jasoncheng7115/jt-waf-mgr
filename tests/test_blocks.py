@@ -153,6 +153,14 @@ class LogicTest(unittest.TestCase):
         self.assertTrue(self.app.db.one("SELECT 1 FROM alerts WHERE dedup='blocks_apply_failed'"))
         self.assertFalse(self.b.status()['in_sync'])
 
+    def test_an_older_list_format_is_written_again_once(self):
+        self.app.db.set_meta(blocks.META_APPLIED, json.dumps({'sha': self.b.list_sha(self.b.desired()), 'ok': True, 'at': 0}))
+        rid = self.b.sync()
+        self.assertTrue(rid)                                       # same list, but written by 0.4.25
+        self.app.workflow._handle_result({'request_id': rid, 'action': 'blocks', 'result': 'ok', 'count': 0,
+                                          'sha256': self.b.list_sha(self.b.desired()), 'summary': 't'})
+        self.assertIsNone(self.b.sync(force=False))                # now in the current format: nothing to do
+
     def test_status_finds_the_include_and_uncovered_servers(self):
         site = os.path.join(self.env.dir, 'site')
         shutil.copytree(FIXTURE_SITE, site, symlinks=True)

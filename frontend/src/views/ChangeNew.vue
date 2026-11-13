@@ -97,6 +97,40 @@
         <p v-else class="muted small">{{ t('wizard.external_only') }}</p>
       </section>
 
+      <!-- country block -->
+      <section v-if="kind === 'country'" class="card form">
+        <h2><Icon name="globe" /> {{ t('kind.country') }}</h2>
+        <p class="muted small">{{ t('wizard.country_intro') }}</p>
+        <p v-if="ctry && !ctry.enabled" class="alert warn">{{ t('wizard.country_off') }}
+          <RouterLink v-if="hasRole('admin')" to="/admin/settings#uiset-countries">{{ t('wizard.country_to_settings') }}</RouterLink></p>
+        <p v-else-if="ctry && !countryCodes.length" class="alert warn">{{ t('wizard.country_no_data') }}</p>
+        <div class="filters inline">
+          <label class="field grow"><span>{{ t('wizard.country_site') }}</span>
+            <input v-model.trim="co.host" class="mono" maxlength="253" spellcheck="false" placeholder="app.example.com"></label>
+          <div v-if="siteOptions.length" class="field"><span><label for="co-pick">{{ t('wizard.country_pick_site') }}</label></span>
+            <SelectBox id="co-pick" :model-value="''" :options="siteOptions" searchable @update:model-value="(v) => { if (v) co.host = v }" /></div>
+        </div>
+        <FieldErr :err="err('host')" />
+        <div class="field"><span>{{ t('wizard.country_mode') }}</span>
+          <div class="seg" role="group" :aria-label="t('wizard.country_mode')">
+            <button v-for="m in ['allow', 'deny']" :key="m" type="button" :class="{ on: co.mode === m }" :aria-pressed="co.mode === m ? 'true' : 'false'"
+                    @click="co.mode = m"><Icon :name="m === 'allow' ? 'check' : 'block'" />{{ t('wizard.country_mode_opt.' + m) }}</button>
+          </div></div>
+        <div class="filters inline">
+          <div class="field grow"><span><label for="co-add">{{ t('wizard.country_add') }}</label></span>
+            <SelectBox id="co-add" :model-value="''" :options="countryOptions" searchable @update:model-value="addCountry" /></div>
+        </div>
+        <div v-if="co.countries.length" class="cochips">
+          <span v-for="c in co.countries" :key="c" class="cochip"><b class="mono">{{ c }}</b> {{ countryName(c) }}
+            <button type="button" class="linkbtn" :aria-label="t('common.remove') + ' ' + c" @click="co.countries = co.countries.filter((x) => x !== c)"><Icon name="close" /></button></span>
+        </div>
+        <p v-else class="muted small">{{ t('wizard.country_none') }}</p>
+        <FieldErr :err="err('countries') || err('mode')" />
+        <label class="field"><span>{{ t('wizard.country_note') }}</span><input v-model="co.note" maxlength="160"></label>
+        <p class="muted small"><Icon name="info" /> {{ t('wizard.country_never') }}</p>
+        <p class="muted small"><Icon name="info" /> {{ t('wizard.country_limits') }}</p>
+      </section>
+
       <!-- redaction -->
       <section v-if="kind === 'redaction'" class="card form">
         <h2><Icon name="hide" /> {{ t('kind.redaction') }}</h2>
@@ -154,7 +188,7 @@
       <!-- tests -->
       <section class="card">
         <h2><Icon name="test" /> {{ t('wizard.tests') }}</h2>
-        <p class="muted small">{{ t('wizard.tests_hint.' + (kind === 'confident_block' ? 'block' : 'other')) }}</p>
+        <p class="muted small">{{ t('wizard.tests_hint.' + (kind === 'confident_block' ? 'block' : kind === 'country' ? 'country' : 'other')) }}</p>
         <TestCases v-model="tests" :default-host="defaultHost" />
       </section>
 
@@ -176,7 +210,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { get, post } from '../api.js'
-import { t, tOr } from '../i18n.js'
+import { t, tOr, lang } from '../i18n.js'
 import { hasRole, refreshPending } from '../store.js'
 import { escapeRegex, targetsOf, SCORING_RULES } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
@@ -194,9 +228,9 @@ FieldErr.props = ['err']
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const ACTIONS = ['remove_target_by_id', 'remove_target_by_tag', 'remove_rule', 'remove_tag', 'score_only', 'body_processor']
-const ALL_KINDS = ['exclusion', 'confident_block', 'redaction', 'plugin', 'raw']
+const ALL_KINDS = ['exclusion', 'confident_block', 'country', 'redaction', 'plugin', 'raw']
 // rulegen.direction() for a new rule; an expert rule depends on its text
-const KIND_DIRECTION = { exclusion: 'loosen', confident_block: 'tighten', redaction: 'loosen', plugin: 'loosen' }
+const KIND_DIRECTION = { exclusion: 'loosen', confident_block: 'tighten', country: 'tighten', redaction: 'loosen', plugin: 'loosen' }
 const route = useRoute()
 const router = useRouter()
 
@@ -211,8 +245,8 @@ const actionOptions = computed(() => ACTIONS.map((a) => ({ value: a, label: t('w
 const targetOptions = computed(() => ['path', 'uri', 'ua', 'host', 'header'].map((x) => ({ value: x, label: t('wizard.target_opt.' + x) })))
 const placementOptions = computed(() => ['before', 'after'].map((x) => ({ value: x, label: t('placement.' + x) })))
 
-const kinds = computed(() => ['exclusion', 'confident_block', 'redaction', 'plugin'].concat(hasRole('admin') ? ['raw'] : []))
-const kind = ref(['exclusion', 'confident_block', 'redaction', 'plugin', 'raw'].includes(route.query.kind) ? route.query.kind : 'exclusion')
+const kinds = computed(() => ['exclusion', 'confident_block', 'country', 'redaction', 'plugin'].concat(hasRole('admin') ? ['raw'] : []))
+const kind = ref(['exclusion', 'confident_block', 'country', 'redaction', 'plugin', 'raw'].includes(route.query.kind) ? route.query.kind : 'exclusion')
 const ex = reactive({ host: { mode: 'exact', value: '' }, path: { mode: 'any', value: '' }, method: '', source: 'all',
   action: 'remove_target_by_id', rule_ids: '', targets: '', tag: 'OWASP_CRS', confirm_tag: false, body_processor: 'JSON' })
 const bl = reactive({ target: 'path', header: '', regex: '', exceptions: '', host: { mode: 'any', value: '' }, msg: '', reference: '', source: 'external' })
@@ -220,6 +254,32 @@ const blockSourceOptions = computed(() => ['external', 'all'].map((x) => ({ valu
 const rd = reactive({ fields: 'password', host: { mode: 'any', value: '' }, path: { mode: 'any', value: '' } })
 const pl = reactive({ plugin: '', host: { mode: 'exact', value: '' } })
 const rw = reactive({ text: '', placement: 'before', before_rule_id: '' })
+const co = reactive({ host: '', mode: 'allow', countries: [], note: '' })
+const ctry = ref(null)          // GET /countries: whether the feature is on and which countries have lists
+const sites = ref([])
+const countryCodes = computed(() => Object.keys((ctry.value && ctry.value.countries) || {}).sort())
+// country names in the interface language from the browser (no dictionary of 250 names to keep)
+const regionNames = computed(() => {
+  try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null }
+})
+function countryName(c) { try { return (regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
+const countryOptions = computed(() => countryCodes.value.filter((c) => !co.countries.includes(c))
+  .map((c) => ({ value: c, label: c + '  ' + countryName(c) })).sort((a, b) => a.label.slice(4).localeCompare(b.label.slice(4))))
+const siteOptions = computed(() => sites.value.map((h) => ({ value: h, label: h })))
+function addCountry(c) { if (c && !co.countries.includes(c) && co.countries.length < 50) co.countries = co.countries.concat([c]).sort() }
+async function loadCountries() {
+  try { ctry.value = await get('/countries') } catch { ctry.value = null }
+  try {
+    const r = await get('/vhosts')
+    const all = new Set()
+    for (const v of r.items || []) for (const n of v.server_names || []) {
+      const h = String(n).toLowerCase()
+      if (/^[a-z0-9.-]{1,253}$/.test(h) && h.includes('.') && !h.startsWith('.')) all.add(h)
+    }
+    sites.value = [...all].sort()
+  } catch { /* nginx not readable or not allowed: typing the site still works */ }
+}
+watch(kind, (k) => { if (k === 'country' && !ctry.value) loadCountries() }, { immediate: true })
 const tests = ref([])
 const reason = ref('')
 const item = ref(null)
@@ -243,11 +303,13 @@ const spec = computed(() => {
       host: bl.host, msg: bl.msg, reference: bl.reference, source: bl.source }
     case 'redaction': return { fields: list(rd.fields), host: rd.host, path: rd.path }
     case 'plugin': return { plugin: pl.plugin, host: pl.host }
+    case 'country': return { host: { mode: 'exact', value: co.host }, mode: co.mode, countries: co.countries, note: co.note }
     default: return Object.assign({ text: rw.text, placement: rw.placement },
       !item.value && Number.isInteger(rw.before_rule_id) && rw.before_rule_id > 0 ? { before_rule_id: rw.before_rule_id } : {})
   }
 })
-const defaultHost = computed(() => (ex.host.mode === 'exact' && kind.value === 'exclusion' ? ex.host.value : (bl.host.mode === 'exact' ? bl.host.value : '')))
+const defaultHost = computed(() => (kind.value === 'country' ? co.host
+  : ex.host.mode === 'exact' && kind.value === 'exclusion' ? ex.host.value : (bl.host.mode === 'exact' ? bl.host.value : '')))
 
 // guide: where the form stands
 const wizardSteps = computed(() => {
@@ -313,6 +375,8 @@ function fillFromSpec(k, s) {
     exceptions: (s.exceptions || []).join('\n'), host: scopeFrom(s.host), msg: s.msg || '', reference: s.reference || '', source: s.source || 'external' })
   else if (k === 'redaction') Object.assign(rd, { fields: (s.fields || []).join(', '), host: scopeFrom(s.host), path: scopeFrom(s.path) })
   else if (k === 'plugin') Object.assign(pl, { plugin: s.plugin || '', host: scopeFrom(s.host) })
+  else if (k === 'country') Object.assign(co, { host: (s.host && s.host.value) || '', mode: s.mode || 'allow',
+    countries: (s.countries || []).slice(), note: s.note || '' })
   else Object.assign(rw, { text: s.text || '', placement: s.placement || 'before', before_rule_id: s.before_rule_id || '' })
 }
 
@@ -380,6 +444,9 @@ async function submit() {
 </script>
 
 <style scoped>
+.cochips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cochip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--panel-2); font-size: 13.5px; }
 .guide { display: flex; flex-direction: column; gap: 10px; }
 .tpls { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }
 .tpls dt { white-space: nowrap; }
