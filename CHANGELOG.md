@@ -2,6 +2,21 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.24 (2026-11-13)
+
+- Temporary IP blocks (optional, off until switched on): other systems block a single address for a while through
+  the API (`POST /api/v1/blocks`, scope `blocks:write`; `DELETE /api/v1/blocks/{ip}` ends the token's own), approvers
+  block addresses or ranges up to /24 or /64 on the new Blocked IPs page. The root apply program writes one nginx file
+  of `deny` lines (at most once a minute, tested with nginx -t, the old file put back on failure) that the
+  administrator includes once inside http { }; it covers every site, also those without ModSecurity. The page shows
+  whether the file is really loaded and which servers or locations it does not reach. Defaults 24 hours, at most 7
+  days from a token and 30 days by hand, 500 active, 200 per token, 60 new per token and hour; internal networks,
+  known scanners, trusted proxies and a protected list (for example a CDN) are never blocked, checked again by the
+  root program. Every add, extension, removal, refusal and expiry is audited (`block.*`). The IP lookup shows whether
+  an address is blocked now.
+- The project site lists what is inside and who wrote it: the WAF engine and detection rules (not ours, with their
+  licences), jt-waf-mgr, the rules Jason Tools writes, bundled third-party code and optional outside data.
+
 ## 0.4.23 (2026-11-13)
 
 - Request volume (Events > Request volume): every request in the nginx access logs counted per site and hour (2xx,

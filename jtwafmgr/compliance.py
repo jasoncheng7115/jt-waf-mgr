@@ -210,6 +210,10 @@ class Monitor:
                 continue
         if applied and not drift and all(p.startswith(mdir) or p in main or p in adopted_src for p in touched):
             return 'jt-waf-mgr'
+        # the temporary IP block list: written only by the apply program from the database
+        bf = self.cfg['blocks']['file']
+        if touched and all(p == bf for p in touched):
+            return 'jt-waf-mgr'
         auto = self.cfg['integrity'].get('automation_paths') or []
         if touched and auto and all(any(fnmatch.fnmatch(p, a) or p.startswith(a.rstrip('*')) for a in auto) for p in touched):
             return 'automation'      # e.g. the CRS updater or the country lists: known, still recorded

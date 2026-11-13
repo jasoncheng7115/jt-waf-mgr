@@ -179,6 +179,29 @@ WAF events of the same sites and time. Hourly up to 7 days, per local day beyond
 `traffic.logs`, `traffic.keep_days`, `traffic.alert`, `traffic.spike_factor`, `traffic.min_requests`,
 `traffic.error_percent` (PATCH /settings/ui). Alerts: kinds `traffic_spike`, `traffic_errors` (source `traffic`).
 
+## Temporary IP blocks
+
+blocks.py, api_blocks.py; settings `blocks.*` (`blocks.file` only in config.toml). An nginx deny list the apply program
+writes (`action: blocks` requests in the spool, `blocks-<ms>.req`, at most once per `reload_seconds`, one in flight);
+the administrator includes the file once inside `http { }`. The file always ends in `allow all;` (nginx's default), which
+is also how `included` is detected.
+
+- `GET /api/v1/blocks?state=active|all|removed|expired` (viewer; token `blocks:read`) → `{"enabled", "file", "included",
+  "included_in": "http"|"server"|null, "uncovered": [{"server", "location", "file", "line"}], "applied": {"at", "ok",
+  "count", "summary"}, "pending", "in_sync", "limits": {...}, "items": [Block]}`
+- `POST /api/v1/blocks` (approver: ranges up to /24 or /64, up to `ui_max_ttl`; token `blocks:write`: single addresses,
+  up to `api_max_ttl`, `token_per_hour`) `{"ip", "ttl"?, "source"?, "reason"}` → 201 Block. Same (ip, source) active →
+  extended.
+- `DELETE /api/v1/blocks/{ip}?source=` (token `blocks:write`: its own entries only) → `{"removed": n}`
+- `POST /api/v1/blocks/{id}/remove` (approver, `{"note"}` required) → `{"removed": 1}`
+
+`Block`: `{"id", "ip", "source", "reason", "state": "active|removed|expired", "created_at", "expires_at", "created_by",
+"via": "token|user", "extended", "ended_at", "ended_by"}`. Errors: 409 `blocks_off`, `too_many_blocks`,
+`too_many_for_token`; 422 `invalid_ip`, `not_public`, `protected`, `single_address_only`, `range_too_wide`,
+`invalid_ttl`, `invalid_source`, `reason_required`, `note_required`; 429 `rate_limited`; 404 `not_found`.
+Audit: `block.add`, `block.extend`, `block.remove`, `block.refused`, `block.expired`, `block.applied`,
+`block.apply_failed` (crit, plus an alert). `GET /lookups/ip/{ip}` has `blocked_now` and `blocks`.
+
 ## Vhosts
 
 `GET /api/v1/vhosts` (viewer)

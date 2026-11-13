@@ -57,6 +57,8 @@ A token has one or more of these scopes. There are no others.
 - `lookups:read`: IP lookup and GeoIP lookup.
 - `changes:read`: changes, versions, alerts, event analysis runs, regression samples.
 - `changes:propose`: propose changes (`POST /changes`, `POST /changes/preview`, `POST /rules/toggle`). Never approve.
+- `blocks:read`: list the temporary IP blocks (`GET /blocks`).
+- `blocks:write`: add, extend and end the token's own temporary IP blocks (single addresses only).
 
 Give each token only what it needs. A SIEM that reads events needs `events:read`; a playbook that proposes blocks
 needs `changes:propose` and `changes:read`.
@@ -422,10 +424,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
  "first_seen": "2026-10-20T03:11:09+08:00", "last_seen": "2026-11-13T15:13:27+08:00",
  "hosts": [{"key": "app.example.com", "events": 40}],
  "rules": [{"key": "941100", "events": 12, "msg": "XSS Attack Detected via libinjection", "family": "xss"}],
- "blocked_now": false}
+ "blocked_now": false, "blocks": []}
 ```
 
-`blocked_now` is always `false` in this version: jt-waf-mgr has no temporary IP blocking endpoint yet.
+`blocked_now` is `true` while a temporary IP block (section 4.9) covers the address; `blocks` lists those entries.
 
 ### 4.7 Event analysis and regression samples
 
@@ -442,6 +444,58 @@ Scope `changes:read`.
 The audit log (`GET /audit`, `GET /audit/export`) is for admins in a session; tokens get 403. To feed the audit log
 into a SIEM, set up an outbound record destination (syslog and other formats) in the web interface settings and
 include audit records.
+
+### 4.9 Temporary IP blocks
+
+For systems that see an attacker and want it shut out within a minute, without a change and its approval: for
+example fail2ban on a mail server whose web mail sits behind the WAF. A block is temporary data, not configuration:
+it ends by itself.
+
+How it works: jt-waf-mgr keeps the list in its database, and its root apply program writes it to one nginx file
+(`deny <address>;` lines, at most once every `reload_seconds`, 60 by default), tests nginx and reloads it. The
+administrator includes that file once inside `http { }`; jt-waf-mgr never edits nginx's configuration itself. A
+`deny` at the http level covers every site, also the ones without ModSecurity, except servers and locations with
+`allow` / `deny` lines of their own (the Blocked IPs page lists them). Until the feature is switched on in Settings,
+every call answers 409 `blocks_off`.
+
+- **`POST /blocks`** (scope `blocks:write`): body `{"ip", "ttl", "source", "reason"}`.
+  - `ip`: one address (IPv4 or IPv6). Ranges are for people in the web interface only (up to /24 or /64).
+  - `ttl`: seconds, 60 to 7 days (settings `blocks.min_ttl`, `blocks.api_max_ttl`); default 24 hours.
+  - `source`: who asks, `[A-Za-z0-9_.:@/+-]{1,64}`, for example `mail2/zimbra-webmail`.
+  - `reason`: required, up to 300 characters.
+  - The same address from the same source again extends the block (`extended` counts up) and never adds a
+    second entry. Another source gets its own entry; the address stays blocked until the last entry ends.
+  - Answers 201 with the entry: `{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at",
+    "created_by", "via": "token", "extended", "ended_at", "ended_by"}`.
+- **`DELETE /blocks/{ip}?source=`** (scope `blocks:write`): ends the token's own entries for that address (only the
+  one source when `source` is given). Another token's entries are never touched: 404 `not_found`. Answers
+  `{"removed": n}`.
+- **`GET /blocks?state=active|all|removed|expired`** (scope `blocks:read`): the entries, and whether nginx really
+  loads the file: `included` (true when the file is loaded inside `http { }`), `uncovered` (servers and locations
+  it does not reach), `applied` (when the list was last written and whether that worked), `in_sync`, `limits`.
+
+Refused, and the refusal audited (`block.refused`):
+
+- 422 `not_public` (private, loopback, link-local, CGNAT, multicast), `protected` (the internal networks, the known
+  scanners, the trusted proxies, or the protected list: for example a CDN in front of the sites), `invalid_ip`,
+  `single_address_only`, `invalid_ttl`, `invalid_source`, `reason_required`;
+- 429 `rate_limited` (more than `blocks.token_per_hour` new blocks from one token in an hour, 60 by default);
+- 409 `too_many_blocks` (the list is full, `blocks.max_active`, 500 by default; an alert opens) or
+  `too_many_for_token` (`blocks.max_per_token`, 200).
+
+Every add, extension, removal, refusal and expiry is in the audit log and goes to the log servers:
+`block.add`, `block.extend`, `block.remove`, `block.refused`, `block.expired`, and `block.applied` /
+`block.apply_failed` for the file itself, with `ip`, `source`, `ttl`, `token_id`.
+
+```sh
+# fail2ban action: ban
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"ip": "203.0.113.7", "ttl": 86400, "source": "mail2/zimbra-webmail", "reason": "4 failed logins in 24 h"}' \
+  https://waf.example.com/api/v1/blocks
+# fail2ban action: unban
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  'https://waf.example.com/api/v1/blocks/203.0.113.7?source=mail2/zimbra-webmail'
+```
 
 ## 5. Session-only endpoints
 

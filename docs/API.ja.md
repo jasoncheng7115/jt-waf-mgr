@@ -55,6 +55,8 @@
 - `lookups:read`：IP 検索と GeoIP 検索。
 - `changes:read`：変更、バージョン、アラート、イベント分析の実行記録、回帰テストのサンプル。
 - `changes:propose`：変更の提案（`POST /changes`、`POST /changes/preview`、`POST /rules/toggle`）。承認は不可。
+- `blocks:read`：一時的な IP ブロックの一覧（`GET /blocks`）。
+- `blocks:write`：そのトークン自身の一時的な IP ブロックの追加・延長・解除（単一アドレスのみ）。
 
 トークンには必要なスコープだけを付けてください。イベントを読むだけの SIEM なら `events:read`、ブロックを提案する
 プレイブックなら `changes:propose` と `changes:read` です。
@@ -422,11 +424,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
  "first_seen": "2026-10-20T03:11:09+08:00", "last_seen": "2026-11-13T15:13:27+08:00",
  "hosts": [{"key": "app.example.com", "events": 40}],
  "rules": [{"key": "941100", "events": 12, "msg": "XSS Attack Detected via libinjection", "family": "xss"}],
- "blocked_now": false}
+ "blocked_now": false, "blocks": []}
 ```
 
-このバージョンでは `blocked_now` は常に `false` です。jt-waf-mgr にはまだ IP を一時ブロックするエンドポイントが
-ありません。
+一時的な IP ブロック（4.9 節）がそのアドレスを含むとき、`blocked_now` は `true` になり、`blocks` にその一覧が入ります。
 
 ### 4.7 イベント分析と回帰テストのサンプル
 
@@ -441,6 +442,55 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
 
 監査記録（`GET /audit`、`GET /audit/export`）はセッションでサインインした管理者専用で、トークンは 403 になります。監査
 記録を SIEM に送るには、Web 画面の設定で外部送信先（syslog などの形式）を追加し、監査記録を含めてください。
+
+### 4.9 一時的な IP ブロック
+
+攻撃者を見つけ、変更と承認を経ずに 1 分以内に締め出したいシステム向けです。たとえば Web メールが WAF の後ろにある
+メールサーバーの fail2ban から呼び出します。ブロックは設定ではなく一時的なデータで、期限が来ると自動で終わります。
+
+仕組み：jt-waf-mgr は一覧をデータベースに保存し、root の適用プログラムが 1 つの nginx ファイル（`deny <アドレス>;` の行。
+最短で `reload_seconds` 秒ごと、既定 60）に書き込み、nginx をテストして reload します。管理者は `http { }` の中で
+このファイルを一度だけ include します。jt-waf-mgr 自身は nginx の設定を変更しません。http レベルの `deny` は
+ModSecurity を使わないサイトも含めてすべてのサイトに効きますが、独自の `allow` / `deny` を持つ server と location は
+例外です（「ブロック中の IP」ページに表示）。設定でオンにするまで、すべての呼び出しは 409 `blocks_off` を返します。
+
+- **`POST /blocks`**（スコープ `blocks:write`）：本文 `{"ip", "ttl", "source", "reason"}`。
+  - `ip`：単一アドレス（IPv4 または IPv6）。範囲のブロックは Web 画面の人だけ（/24 または /64 まで）。
+  - `ttl`：秒数、60 秒から 7 日（設定 `blocks.min_ttl`、`blocks.api_max_ttl`）。既定は 24 時間。
+  - `source`：呼び出し元、`[A-Za-z0-9_.:@/+-]{1,64}`。例：`mail2/zimbra-webmail`。
+  - `reason`：必須、300 文字まで。
+  - 同じ送信元が同じアドレスを再送すると期限を延長し（`extended` が増える）、2 件目は作りません。送信元が違えば
+    それぞれ 1 件になり、最後の 1 件が終わるまでブロックは続きます。
+  - 201 とその内容を返します：`{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at",
+    "created_by", "via": "token", "extended", "ended_at", "ended_by"}`。
+- **`DELETE /blocks/{ip}?source=`**（スコープ `blocks:write`）：そのトークン自身のそのアドレスのブロックを解除します
+  （`source` を付けるとその送信元だけ）。他のトークンのブロックには触れません（404 `not_found`）。`{"removed": n}` を返します。
+- **`GET /blocks?state=active|all|removed|expired`**（スコープ `blocks:read`）：一覧と、nginx が本当にファイルを読み込んで
+  いるか：`included`（`http { }` の中で読み込まれていれば true）、`uncovered`（効かない server と location）、`applied`
+  （最後に書き込んだ時刻と結果）、`in_sync`、`limits`。
+
+拒否される場合（拒否は監査ログ `block.refused` に記録）：
+
+- 422 `not_public`（プライベート、ループバック、リンクローカル、CGNAT、マルチキャスト）、`protected`（内部ネットワーク、
+  既知のスキャナー、信頼するプロキシ、保護リスト：たとえばサイトの前の CDN）、`invalid_ip`、`single_address_only`、
+  `invalid_ttl`、`invalid_source`、`reason_required`。
+- 429 `rate_limited`（1 つのトークンが 1 時間に `blocks.token_per_hour` を超えて追加、既定 60）。
+- 409 `too_many_blocks`（一覧が満杯、`blocks.max_active`、既定 500。警告を作成）または `too_many_for_token`
+  （`blocks.max_per_token`、既定 200）。
+
+追加、延長、解除、拒否、期限切れはすべて監査ログに記録され、ログ転送先にも送られます：`block.add`、`block.extend`、
+`block.remove`、`block.refused`、`block.expired`。リストファイル自体は `block.applied` / `block.apply_failed`。
+`ip`、`source`、`ttl`、`token_id` が付きます。
+
+```sh
+# fail2ban のブロック
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"ip": "203.0.113.7", "ttl": 86400, "source": "mail2/zimbra-webmail", "reason": "4 failed logins in 24 h"}' \
+  https://waf.example.com/api/v1/blocks
+# fail2ban の解除
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  'https://waf.example.com/api/v1/blocks/203.0.113.7?source=mail2/zimbra-webmail'
+```
 
 ## 5. Web 画面専用のエンドポイント
 

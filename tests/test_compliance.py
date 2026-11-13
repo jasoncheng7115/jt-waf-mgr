@@ -628,7 +628,8 @@ class TestAuditCoverage(unittest.TestCase):
     # a route may also delegate to a Workflow method checked by test_workflow_actions_audited
     AUDITING_CALLS = ('audit.log', 'app.monitor.backup', '_wf(app).propose', '_wf(app).approve', '_wf(app).import_propose',
                       'uisettings.set_many', 'alerts.handle(',
-                      '_wf(app).reject', '_wf(app).cancel', '_wf(app).recheck', '_wf(app).rollback')
+                      '_wf(app).reject', '_wf(app).cancel', '_wf(app).recheck', '_wf(app).rollback',
+                      'app.blocks.add(', 'app.blocks.remove(')
 
     def test_write_routes_audited(self):
         from jtwafmgr.web import api
@@ -649,6 +650,9 @@ class TestAuditCoverage(unittest.TestCase):
         for name in ('_insert', 'propose_adoption', 'approve', 'reject', 'cancel', 'recheck', 'rollback'):
             src = inspect.getsource(getattr(Workflow, name))
             self.assertIn('audit.log', src, name)
+        from jtwafmgr.blocks import Blocks
+        for name in ('add', 'remove', 'expire', 'handle_result', '_refuse'):
+            self.assertIn('audit.log', inspect.getsource(getattr(Blocks, name)), name)
         # every way of proposing goes through the audited _insert
         for name in ('propose', 'propose_bundle'):
             self.assertIn('self._insert(', inspect.getsource(getattr(Workflow, name)), name)

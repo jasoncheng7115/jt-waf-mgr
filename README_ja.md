@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.23
+# jt-waf-mgr v0.4.24
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -44,6 +44,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   トークンなどの機密項目は**保存前に**マスクします。
 - **概要とイベント**：タイムラインをドラッグして拡大、または最長 31 日の期間を指定。絞り込み条件は URL に保持。イベント詳細で
   一致したすべてのルールを表示し、ワンクリックで除外やブロックを起案。
+- **一時的な IP ブロック**（0.4.24 で追加、任意）：メールサーバーの fail2ban、SOAR プレイブック、承認者が単一アドレスを
+  一時的にブロックします。1 つの nginx deny リストがすべてのサイトに効きます。[一時的な IP ブロック](#一時的な-ip-ブロック任意)を参照。
 - **リクエスト量**（0.4.23 で追加）：nginx のアクセスログにあるすべてのリクエストを、サイトと時間ごとに集計します（2xx、
   3xx、4xx、5xx、403、444、429、外部、バイト数。数値のみで、IP・URL・User-Agent は保存しません）。WAF がブロックした数と
   並べて表示し、WAF の数字に分母を与えます。管理の「設定」→「リクエスト量」で有効・無効とアラートを設定します。任意の
@@ -108,8 +110,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
-tar xzf jt-waf-mgr-0.4.23.tar.gz && cd jt-waf-mgr-0.4.23
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
+tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -156,7 +158,7 @@ sudo openssl req -x509 -newkey rsa:3072 -nodes -days 825 -keyout /etc/ssl/privat
 
 jt-waf-mgr が書き込むのは ModSecurity のファイルだけで、nginx の設定は決して書き込みません。nginx の設定を読み（サイトと
 ModSecurity のメイン設定ファイルを見つけるため）、`nginx -t` を実行し、nginx を reload します。管理用 vhost と nginx の
-`modsecurity on;` は、管理者自身が一度だけ行う編集です。
+`modsecurity on;` は、管理者自身が一度だけ行う編集です。唯一の例外は任意の一時 IP ブロックのリストで、`deny` 行だけのファイルをお客様が一度 include します。
 
 jt-waf-mgr にルールを変更させるには、適用プログラムを有効にし（`sudo ./install.sh --enable-apply`）、ヘルスチェック URL を
 設定し、「ルール → 管理対象ルール」で既存のルールファイルを取り込みます（通常の変更と同様に admin が承認）。それまでは何も
@@ -177,6 +179,26 @@ CRS は jt-waf-mgr が扱います。新しいホストに必要なのは、ngin
 
 以後の CRS 更新も同じ流れです：ダウンロード、検証、サンドボックスでの比較、人による承認、インストール。ロールバック用に
 3 バージョンを保持します。CRS を手動でインストールすることもできます（ガイドを参照）。
+
+### 一時的な IP ブロック（任意）
+
+他のシステム（たとえば Web メールがこのプロキシの後ろにあるメールサーバーの fail2ban）は、API（スコープ `blocks:write`）で
+単一アドレスを一時的にブロックできます。承認者は「ブロック中の IP」ページで操作できます。jt-waf-mgr は一覧を `deny` 行
+だけの nginx ファイル 1 つに書き込み、ModSecurity を使わないサイトも含めてすべてのサイトに効きます。使い方：
+
+1. ファイルを作成し、nginx.conf の `http { }` の中で一度だけ include してから、テストして reload します：
+   ```sh
+   sudo install -D -m 644 /dev/null /etc/nginx/jt-waf-mgr/blocked-ips.conf
+   # nginx.conf の http { } の中：   include /etc/nginx/jt-waf-mgr/blocked-ips.conf;
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+2. 設定 → 一時的な IP ブロック：オンにし、決してブロックしないネットワーク（たとえばサイトの前の CDN）を登録します。
+3. 管理 → API トークン：`blocks:write`（と `blocks:read`）を持ち、呼び出し元ホストのアドレスに限定したトークンを作ります。
+
+ブロックの既定は 24 時間、トークンからは最長 7 日、手動では最長 30 日で、永久ブロックはありません。内部ネットワーク、
+既知のスキャナー、信頼するプロキシ、保護リストは決してブロックされません。nginx は `real_ip` 後のアドレスで判定するため、
+CDN の後ろのサイトには `set_real_ip_from` / `real_ip_header` が必要です。独自の `allow` / `deny` を持つ server と location は
+このリストを継承しません（「ブロック中の IP」ページに表示）。詳しくは [API マニュアル](docs/API.ja.md) の 4.9 節を参照してください。
 
 ### アカウントと復旧
 

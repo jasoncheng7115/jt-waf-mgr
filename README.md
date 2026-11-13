@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.23
+# jt-waf-mgr v0.4.24
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -47,6 +47,8 @@ something you can read, and every change into a workflow you can trust:
   passwords, tokens and other sensitive fields are masked **before** anything is stored.
 - **Overview and events**: drag across the timeline to zoom in, or pick any range up to 31 days; filters stay in the
   URL; event detail with every matched rule; one click to draft an exclusion or a block.
+- **Temporary IP blocks** (new in 0.4.24, optional): fail2ban on a mail server, a SOAR playbook or an approver blocks
+  a single address for a while; one nginx deny list covers every site. See [Temporary IP blocks](#temporary-ip-blocks-optional).
 - **Request volume** (new in 0.4.23): every request in the nginx access logs, counted per site and hour (2xx, 3xx,
   4xx, 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF
   blocked, so the WAF numbers have a denominator. Switched on or off, and its alerts set, in the admin Settings
@@ -117,8 +119,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
-tar xzf jt-waf-mgr-0.4.23.tar.gz && cd jt-waf-mgr-0.4.23
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
+tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -166,7 +168,7 @@ settings (GeoIP, LLM, analysis, notifications, request volume, networks, policy)
 
 jt-waf-mgr writes only ModSecurity files and never writes nginx configuration. It reads nginx's configuration (to
 find the sites and ModSecurity's main file), runs `nginx -t` and reloads nginx. The management vhost and
-`modsecurity on;` in nginx are your own one-time edits.
+`modsecurity on;` in nginx are your own one-time edits. The one exception is optional: the temporary IP block list, a file of `deny` lines that you include once yourself.
 
 To let jt-waf-mgr change rules: arm the apply program (`sudo ./install.sh --enable-apply`), set the health check URLs,
 and adopt the existing rule files under Rules → Managed rules (an admin approves the adoption like any change).
@@ -188,6 +190,28 @@ jt-waf-mgr handles the CRS. A new host only needs nginx with the ModSecurity mod
 
 Later CRS updates work the same way: download, verify, compare in the sandbox, a person approves, install; 3 versions
 are kept to roll back. Installing the CRS by hand also works (see the guide).
+
+### Temporary IP blocks (optional)
+
+Other systems, for example fail2ban on a mail server whose web mail is behind this proxy, can block a single address
+for a while through the API (scope `blocks:write`); approvers can do it on the Blocked IPs page. jt-waf-mgr writes the
+list to one nginx file of `deny` lines, which covers every site, also those without ModSecurity. To use it:
+
+1. Create the file and include it once inside `http { }` in nginx.conf, then test and reload:
+   ```sh
+   sudo install -D -m 644 /dev/null /etc/nginx/jt-waf-mgr/blocked-ips.conf
+   # in nginx.conf, inside http { }:   include /etc/nginx/jt-waf-mgr/blocked-ips.conf;
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+2. Settings → Temporary IP blocks: switch it on, and list the networks that must never be blocked (for example a CDN
+   in front of your sites).
+3. Admin → API tokens: a token with `blocks:write` (and `blocks:read`), limited to the calling host's address.
+
+Blocks last 24 hours by default, at most 7 days from a token and 30 days by hand; nothing is permanent. Internal
+networks, known scanners, trusted proxies and the protected list are never blocked. nginx checks the address after
+`real_ip`, so sites behind a CDN need `set_real_ip_from` / `real_ip_header`. Servers and locations with `allow` /
+`deny` lines of their own do not inherit the list; the Blocked IPs page lists them. Details: the
+[API manual](docs/API.md), section 4.9.
 
 ### Accounts and recovery
 

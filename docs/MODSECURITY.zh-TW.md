@@ -9,7 +9,7 @@ ModSecurity 模組、`modsecurity.conf` 與主設定檔（第 1–5 節）；OWA
 
 jt-waf-mgr 只寫 ModSecurity 的檔案，永遠不寫 nginx 設定。它會讀 nginx 設定（找出站台與 ModSecurity 主設定檔）、執行
 `nginx -t` 並 reload nginx。nginx 裡的 `modsecurity on;`（第 3 節）與管理介面的 vhost（[README](../README_zh-TW.md#連到管理介面)）
-是管理者自己做一次的修改。
+是管理者自己做一次的修改。唯一的例外是選用的暫時封鎖 IP 清單：只有 `deny` 行的一個檔案，由你自己 include 一次。
 
 > 先以「只記錄」（`DetectionOnly`）上線，用 jt-waf-mgr 看一段時間的事件、處理誤判，再改成封鎖（`On`）。
 

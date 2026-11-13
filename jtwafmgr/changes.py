@@ -1032,6 +1032,10 @@ class Workflow:
                         pass
 
     def _handle_result(self, res):
+        if res.get('action') == 'blocks':
+            if getattr(self.app, 'blocks', None) is not None:
+                self.app.blocks.handle_result(res)
+            return
         version, cid = res.get('version'), res.get('change_id')
         r = self.db.one('SELECT * FROM changes WHERE id=?', (cid,))
         if res.get('action') == 'crs_switch':
@@ -1097,6 +1101,11 @@ class Workflow:
                 self.collect_results()
                 for row in self.db.q("SELECT id FROM changes WHERE state='checking' ORDER BY id"):
                     self.run_checks(row[0])
+                    # an evidence check can take minutes: take an apply result in between, or the version applied
+                    # meanwhile stays "pending" and the managed files look drifted until every check is done
+                    self.collect_results()
+                    if self._stop.is_set():
+                        break
                 if not self.db.one("SELECT 1 FROM changes WHERE state='applying'"):
                     nxt = self.db.one("SELECT id FROM changes WHERE state='approved' ORDER BY id LIMIT 1")
                     if nxt:

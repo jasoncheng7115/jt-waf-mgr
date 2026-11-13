@@ -94,5 +94,10 @@ for i in range(7 * 24, 0, -1):
                  'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (hr, host, tot, tot - s3 - s4 - s5, s3, s4, s5, s4 // 3, i % 4, i % 3,
                                                        int(tot * 0.8), tot * 18000))
 app.db.set_meta('traffic_polled_at', now - 30)
+# temporary IP blocks: two from a mail host's fail2ban (an API token), one by hand
+if cfg['blocks']['enabled']:
+    app.blocks.add('203.0.113.66', 86400, 'mail2/zimbra-webmail', '4 failed logins in 24 h', 'mail2', via='token', token_id='e2etoken')
+    app.blocks.add('203.0.113.67', 3600, 'mail2/zimbra-webmail', '5 failed logins in 24 h', 'mail2', via='token', token_id='e2etoken')
+    app.blocks.add('192.0.2.0/24', 7 * 86400, 'ui', 'scanner range', 'admin', role='admin')
 json.dump(sec, open(R + '/totp.json', 'w'))
 print('events', app.db.one('SELECT COUNT(*) n FROM events')['n'])

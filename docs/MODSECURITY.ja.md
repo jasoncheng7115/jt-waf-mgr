@@ -10,7 +10,7 @@ jt-waf-mgr に任せます。jt-waf-mgr が CRS 4 をダウンロード・検証
 
 jt-waf-mgr が書き込むのは ModSecurity のファイルだけで、nginx の設定は決して書き込みません。nginx の設定を読み（サイトと
 ModSecurity のメイン設定ファイルを見つけるため）、`nginx -t` を実行し、nginx を reload します。nginx の `modsecurity on;`
-（第 3 節）と管理用 vhost（[README](../README_ja.md#管理画面への接続)）は、管理者自身が一度だけ行う編集です。
+（第 3 節）と管理用 vhost（[README](../README_ja.md#管理画面への接続)）は、管理者自身が一度だけ行う編集です。唯一の例外は任意の一時 IP ブロックのリストで、`deny` 行だけのファイルをお客様が一度 include します。
 
 > まず検知のみ（`DetectionOnly`）で稼働させ、jt-waf-mgr でしばらくイベントを確認して誤検知に対処してから、
 > ブロック（`On`）に切り替えてください。

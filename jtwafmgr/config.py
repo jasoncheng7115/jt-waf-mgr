@@ -153,6 +153,21 @@ DEFAULTS = {
         'hour': 3,
         'keep_days': 14,
     },
+    'blocks': {
+        # temporary IP blocks (blocks.py): an nginx deny list the apply program writes; the administrator includes it
+        # once inside http { }. Off until then. protected: networks never blocked (e.g. a CDN in front of the sites).
+        'enabled': False,
+        'file': '/etc/nginx/jt-waf-mgr/blocked-ips.conf',
+        'protected': [],
+        'max_active': 500,
+        'max_per_token': 200,
+        'token_per_hour': 60,
+        'default_ttl': 86400,
+        'min_ttl': 60,
+        'api_max_ttl': 7 * 86400,
+        'ui_max_ttl': 30 * 86400,
+        'reload_seconds': 60,
+    },
     'traffic': {
         # request counts from the nginx access logs (traffic.py): per site and hour, counts only -- no address,
         # no URL is kept. logs: the live access logs (the rotated copies are finished through their inode).
@@ -295,6 +310,21 @@ class Config:
             raise ConfigError('syslog.content: a list of audit, event, alert')
         if not isinstance(sl.get('more', []), list) or len(sl.get('more', [])) > 7:
             raise ConfigError('syslog.more: up to 7 more destinations')
+        bl = data['blocks']
+        for k, lo, hi in (('max_active', 1, 20000), ('max_per_token', 1, 20000), ('token_per_hour', 1, 100000),
+                          ('min_ttl', 10, 86400), ('default_ttl', 10, 30 * 86400), ('api_max_ttl', 60, 30 * 86400),
+                          ('ui_max_ttl', 60, 30 * 86400), ('reload_seconds', 5, 3600)):
+            if not isinstance(bl[k], int) or isinstance(bl[k], bool) or not lo <= bl[k] <= hi:
+                raise ConfigError('blocks.%s: %d-%d' % (k, lo, hi))
+        if not bl['min_ttl'] <= bl['default_ttl'] <= bl['ui_max_ttl']:
+            raise ConfigError('blocks: min_ttl <= default_ttl <= ui_max_ttl')
+        if not (isinstance(bl['file'], str) and re.fullmatch(r'/[\w./-]{1,250}\.conf', bl['file']) and '..' not in bl['file']):
+            raise ConfigError('blocks.file: an absolute path to a .conf file')
+        for n in bl['protected'] or []:
+            try:
+                ipaddress.ip_network(str(n), strict=False)
+            except ValueError:
+                raise ConfigError('blocks.protected: %r is not a network' % str(n)[:60])
         tr = data['traffic']
         for k, lo, hi in (('keep_days', 1, 3650), ('spike_factor', 2, 100), ('min_requests', 10, 10 ** 9),
                           ('error_percent', 1, 100)):

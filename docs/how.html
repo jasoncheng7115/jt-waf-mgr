@@ -1,0 +1,1238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jt-waf-mgr — how it works</title>
+<meta name="description" content="How jt-waf-mgr works: architecture, processes and users, event collection, the change workflow, the event analysis, CRS updates, IP blocks, notifications, integrity and security boundaries.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+/* Same light page as index.html: the main colour is the logo's (shield blue #3a86e6 -> #1a4c9c, orange dot #ff8a5c). */
+:root { --blue: #2563c4; --blue-h: #3a86e6; --blue-d: #1a4c9c; --orange: #ff8a5c;
+  --ink: #0f172a; --text: #334155; --muted: #64748b; --bg: #eef2f8; --panel: #fff; --panel-2: #f6f8fc; --border: #e1e7f0;
+  --accent: var(--blue); --ok: #1d7a46; --radius: 14px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 16px rgba(15, 23, 42, .05); color-scheme: light; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased;
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Noto Sans JP", Roboto, Helvetica, Arial, sans-serif; }
+a { color: var(--blue-d); text-decoration: none; } a:hover { text-decoration: underline; }
+h1, h2, h3 { color: var(--ink); line-height: 1.25; letter-spacing: .2px; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+header.top { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .92); backdrop-filter: saturate(1.4) blur(8px); border-bottom: 1px solid var(--border); }
+header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 9px; font: 700 19px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); white-space: nowrap; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
+nav.links { display: flex; gap: 16px; flex: 1; overflow-x: auto; white-space: nowrap; }
+nav.links a { color: var(--text); font-size: 14.5px; font-weight: 500; } nav.links a:hover { color: var(--blue); text-decoration: none; }
+.langs { display: flex; gap: 4px; }
+.langs button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.langs button:hover { border-color: var(--blue); }
+.langs button.on { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 3px rgba(37, 99, 196, .10); }
+.hero { padding: 56px 0 44px; border-bottom: 1px solid var(--border);
+  background: radial-gradient(1000px 520px at 85% -10%, rgba(58, 134, 230, .16), transparent 60%),
+              radial-gradient(760px 480px at 0% 10%, rgba(99, 102, 241, .09), transparent 55%),
+              radial-gradient(640px 420px at 70% 110%, rgba(255, 138, 92, .10), transparent 55%), var(--bg); }
+.hero h1 { font-size: 40px; margin: 0 0 6px; letter-spacing: -.3px; }
+.hero p.lead { font-size: 18.5px; color: var(--muted); margin: 14px 0 24px; line-height: 1.8; max-width: 860px; }
+.btns { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-weight: 600; font-size: 15px; line-height: 1.3; transition: .15s; }
+.btn:hover { text-decoration: none; border-color: var(--blue); }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 196, .32); }
+.btn.primary:hover { background: var(--blue-h); border-color: var(--blue-h); }
+section { padding: 60px 0; } section.alt { background: #fff; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+h2 { font-size: 30px; margin: 0 0 10px; } h2 + p.sub { color: var(--muted); margin: 0 0 28px; font-size: 17px; max-width: 900px; }
+h3 { font-size: 19px; margin: 30px 0 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+.card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 20px 16px; box-shadow: var(--shadow); transition: .15s; min-width: 0; }
+.card:hover { border-color: rgba(37, 99, 196, .35); box-shadow: 0 6px 22px rgba(37, 99, 196, .10); }
+section.alt .card { background: var(--panel-2); }
+.card h3 { margin: 0 0 8px; font-size: 17px; display: flex; gap: 10px; align-items: center; }
+.card h3 .ic { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none; box-shadow: 0 2px 8px rgba(37, 99, 196, .30); }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card p.by { font-size: 13px; font-weight: 600; color: var(--blue-d); margin-bottom: 6px; overflow-wrap: anywhere; }
+.card ul.src { margin: 6px 0 0; padding-left: 18px; color: var(--ink); font-size: 14.5px; }
+.card ul.src li { margin: 4px 0; }
+ol.flow { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; counter-reset: s; }
+ol.flow li { counter-increment: s; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; position: relative; box-shadow: var(--shadow); min-width: 0; }
+section.alt ol.flow li { background: var(--panel-2); }
+ol.flow li::before { content: counter(s); display: inline-flex; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; font-weight: 700; font-size: 14px; align-items: center; justify-content: center; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(37, 99, 196, .30); }
+ol.flow li b { display: block; color: var(--ink); } ol.flow li span { color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 9px; margin: 22px 0 0; }
+.chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 5px 14px; font-size: 13px; font-weight: 600; color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+a.chip:hover { border-color: var(--blue); color: var(--blue); text-decoration: none; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--blue-h); flex: none; }
+.chip:nth-child(3n+2)::before { background: var(--orange); } .chip:nth-child(3n)::before { background: var(--blue-d); }
+ul.ticks { padding-left: 0; list-style: none; margin: 0; } ul.ticks li { padding-left: 32px; position: relative; margin: 9px 0; color: var(--ink); }
+ul.ticks li::before { content: "✓"; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(37, 99, 196, .30); }
+ul.ticks.no li::before { content: "✕"; background: linear-gradient(135deg, #fb7185, #e11d48); box-shadow: 0 2px 6px rgba(225, 29, 72, .28); }
+ul.ticks.warn li::before { content: "!"; background: linear-gradient(135deg, #fbbf24, #d97706); box-shadow: 0 2px 6px rgba(217, 119, 6, .28); }
+ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: n; }
+ol.steps li { counter-increment: n; padding-left: 38px; position: relative; margin: 10px 0; color: var(--ink); }
+ol.steps li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fb7185, #e11d48); color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(225, 29, 72, .28); }
+ol.steps.blue li::before { background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); box-shadow: 0 2px 6px rgba(37, 99, 196, .30); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: center; }
+.two.top { align-items: start; } .two > * { min-width: 0; } .two h3:first-child { margin-top: 0; }
+.reccard { margin-top: 30px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px 16px; box-shadow: var(--shadow); }
+section.alt .reccard { background: var(--panel-2); }
+.reccard h3 { margin: 0 0 4px; font-size: 18px; }
+footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); background: #fff; }
+@media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr); } .hero h1 { font-size: 32px; } nav.links { display: none; } }
+/* a palette around the logo blue: every card and step gets its own colour (--c, --c2), as on the project page */
+.grid > .card:nth-child(8n+1), ol.flow li:nth-child(6n+1) { --c: #2563c4; --c2: #3a86e6; }
+.grid > .card:nth-child(8n+2), ol.flow li:nth-child(6n+2) { --c: #4f46e5; --c2: #818cf8; }
+.grid > .card:nth-child(8n+3), ol.flow li:nth-child(6n+3) { --c: #0d9488; --c2: #2dd4bf; }
+.grid > .card:nth-child(8n+4), ol.flow li:nth-child(6n+4) { --c: #e8590c; --c2: #ff8a5c; }
+.grid > .card:nth-child(8n+5), ol.flow li:nth-child(6n+5) { --c: #db2777; --c2: #f472b6; }
+.grid > .card:nth-child(8n+6), ol.flow li:nth-child(6n+6) { --c: #0284c7; --c2: #38bdf8; }
+.grid > .card:nth-child(8n+7) { --c: #7c3aed; --c2: #a78bfa; }
+.grid > .card:nth-child(8n+8) { --c: #059669; --c2: #34d399; }
+.card, ol.flow li { border-top: 3px solid var(--c, var(--blue)); background: linear-gradient(180deg, color-mix(in srgb, var(--c, var(--blue)) 5%, #fff), #fff 70%); }
+section.alt .card, section.alt ol.flow li { background: linear-gradient(180deg, color-mix(in srgb, var(--c, var(--blue)) 6%, #fff), var(--panel-2) 70%); }
+.card h3 .ic, ol.flow li::before { background: linear-gradient(135deg, var(--c2, var(--blue-h)), var(--c, var(--blue-d))); box-shadow: 0 2px 8px color-mix(in srgb, var(--c, var(--blue)) 35%, transparent); }
+.card:hover { border-color: color-mix(in srgb, var(--c, var(--blue)) 40%, var(--border)); border-top-color: var(--c, var(--blue)); }
+section#arch { background: radial-gradient(900px 400px at 100% 0%, rgba(99, 102, 241, .07), transparent 60%), radial-gradient(800px 380px at 0% 100%, rgba(13, 148, 136, .06), transparent 60%), var(--bg); }
+section#bounds { background: radial-gradient(900px 420px at 0% 0%, rgba(232, 89, 12, .06), transparent 60%), radial-gradient(800px 380px at 100% 100%, rgba(37, 99, 196, .08), transparent 60%), var(--bg); }
+p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59e0b; background: #fffbeb; border-radius: 6px; color: #78350f; font-size: 14.5px; }
+p.note { margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, #ff8a5c 10%, #fff); border: 1px solid color-mix(in srgb, #ff8a5c 35%, #fff); font-size: 15px; }
+p.more a { font-weight: 600; }
+/* diagrams: inline SVG, scaled to the width; labels come from the dictionary like every other text */
+figure.fig { margin: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); min-width: 0; }
+figure.fig svg { display: block; width: 100%; height: auto; }
+.figbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 16px; height: 11px; border-radius: 3px; border: 2px solid; flex: none; }
+.legend i.l { height: 0; border-width: 2px 0 0; border-radius: 0; }
+.legend i.l.main { border-top: 3px solid #2563c4; } .legend i.l.data { border-color: #64748b; }
+.legend i.l.dash { border-top: 2px dashed #64748b; } .legend i.l.bad { border-color: #e8590c; }
+.k-ext { background: #fff4ee; border-color: #ff8a5c !important; } .k-core { background: #e6effc; border-color: #2563c4 !important; }
+.k-file { background: #ecfdf8; border-color: #0d9488 !important; } .k-root { background: #ffe9ec; border-color: #e11d48 !important; }
+.k-svc { background: #fff; border-color: #3a86e6 !important; } .k-unit { background: #eef0ff; border-color: #4f46e5 !important; }
+.k-bad { background: #fff7ed; border-color: #e8590c !important; }
+button.zoom { border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 10px; padding: 6px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: zoom-in; }
+button.zoom:hover { border-color: var(--blue); color: var(--blue); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Noto Sans JP", Roboto, Helvetica, Arial, sans-serif; }
+svg .n rect { stroke-width: 2; }
+svg .n.ext rect { fill: #fff4ee; stroke: #ff8a5c; } svg .n.core rect { fill: #e6effc; stroke: #2563c4; stroke-width: 2.5; }
+svg .n.file rect { fill: #ecfdf8; stroke: #0d9488; } svg .n.root rect { fill: #ffe9ec; stroke: #e11d48; stroke-width: 2.5; }
+svg .n.svc rect { fill: #fff; stroke: #3a86e6; } svg .n.unit rect { fill: #eef0ff; stroke: #4f46e5; }
+svg .n.bad rect { fill: #fff7ed; stroke: #e8590c; } svg .n.dash rect { stroke-dasharray: 6 4; }
+svg .nm { fill: #0f172a; font-size: 14px; font-weight: 700; } svg .sb { fill: #64748b; font-size: 11.5px; }
+svg .sb.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 11px; }
+svg.flowsvg .nm { font-size: 15px; } svg.flowsvg .sb { font-size: 12.5px; }
+svg .grp { fill: rgba(58, 134, 230, .06); stroke: #3a86e6; stroke-width: 1.5; stroke-dasharray: 6 4; }
+svg .grplabel { fill: #1a4c9c; font-size: 13px; font-weight: 700; } svg .side { fill: #64748b; font-size: 12.5px; font-weight: 700; }
+svg .e { fill: none; stroke: #64748b; stroke-width: 1.6; } svg .e.main { stroke: #2563c4; stroke-width: 3; }
+svg .e.dash { stroke-dasharray: 5 4; } svg .e.bad { stroke: #e8590c; }
+svg .el { fill: #334155; font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+svg .ah { fill: #64748b; } svg .ah.main { fill: #2563c4; } svg .ah.bad { fill: #e8590c; }
+/* the large view of a diagram */
+dialog#zoom { width: min(1400px, 96vw); height: 94vh; max-height: 94vh; padding: 0; border: 0; border-radius: 14px; background: #fff; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+dialog#zoom[open] { display: flex; flex-direction: column; }
+dialog#zoom::backdrop { background: rgba(15, 23, 42, .72); backdrop-filter: blur(3px); }
+.zm-bar { display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--border); flex: none; }
+#zm-title { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zm-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-size: 17px; cursor: pointer; flex: none; }
+.zm-x:hover { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.zm-body { flex: 1; overflow: auto; background: var(--bg); padding: 14px; overscroll-behavior: contain; }
+.zm-body svg { display: block; width: 1100px; max-width: none; height: auto; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: var(--shadow); }
+body.zm-on { overflow: hidden; }
+@media (max-width: 860px) { dialog#zoom { width: 100vw; height: 100vh; max-height: 100vh; max-width: 100vw; border-radius: 0; } }
+@media (max-width: 640px) { section { padding: 44px 0; } h2 { font-size: 26px; } .hero p.lead { font-size: 17px; } figure.fig { padding: 8px; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" id="home-brand" href="index.html"><img src="logo-mark.svg" alt="">jt-waf-mgr</a>
+  <nav class="links">
+    <a href="#arch" data-t="nav_arch"></a><a href="#events" data-t="nav_events"></a><a href="#changes" data-t="nav_changes"></a>
+    <a href="#analysis" data-t="nav_ai"></a><a href="#crs" data-t="nav_crs"></a><a href="#blocks" data-t="nav_blocks"></a>
+    <a href="#notify" data-t="nav_notify"></a><a href="#integrity" data-t="nav_integrity"></a><a href="#bounds" data-t="nav_bounds"></a>
+  </nav>
+  <div class="langs" role="group" aria-label="Language">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="zh-TW">繁中</button><button type="button" data-lang="ja">日本語</button>
+  </div>
+</div></header>
+
+<div class="hero"><div class="wrap">
+  <h1 data-t="h1"></h1>
+  <p class="lead" data-t="lead"></p>
+  <div class="btns">
+    <a class="btn primary" id="home-btn" href="index.html" data-t="back"></a>
+    <a class="btn" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
+  </div>
+  <div class="chips">
+    <a class="chip" href="#arch" data-t="nav_arch"></a><a class="chip" href="#events" data-t="nav_events"></a><a class="chip" href="#changes" data-t="nav_changes"></a>
+    <a class="chip" href="#analysis" data-t="nav_ai"></a><a class="chip" href="#crs" data-t="nav_crs"></a><a class="chip" href="#blocks" data-t="nav_blocks"></a>
+    <a class="chip" href="#notify" data-t="nav_notify"></a><a class="chip" href="#integrity" data-t="nav_integrity"></a><a class="chip" href="#bounds" data-t="nav_bounds"></a>
+  </div>
+</div></div>
+
+<!-- 1. Architecture -->
+<section id="arch"><div class="wrap">
+  <h2 data-t="arch_h"></h2><p class="sub" data-t="arch_sub"></p>
+  <figure class="fig" id="fig-arch">
+    <svg class="archsvg" viewBox="0 0 1100 750" role="img" aria-labelledby="arch-title">
+      <title id="arch-title" data-t="arch_h"></title>
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="ar-main" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="ah main" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <rect class="grp" x="10" y="280" width="860" height="230" rx="12"/>
+      <text class="grplabel" x="860" y="500" text-anchor="end" data-t="d_group" data-w="330"></text>
+      <text class="side" x="200" y="586" text-anchor="end" data-t="d_units" data-w="175"></text>
+      <text class="side" x="200" y="604" text-anchor="end">jtwaf</text>
+      <text class="side" x="200" y="712" text-anchor="end" data-t="d_outside" data-w="175"></text>
+      <!-- edges -->
+      <path class="e main" d="M170,64 L230,64" marker-end="url(#ar-main)"/>
+      <path class="e main" d="M820,52 L900,52" marker-end="url(#ar-main)"/>
+      <path class="e" d="M990,160 L990,88 L820,88" marker-end="url(#ar)"/>
+      <path class="e" d="M250,104 L250,132 L95,132 L95,160" marker-end="url(#ar)"/>
+      <path class="e" d="M275,104 L275,160" marker-end="url(#ar)"/>
+      <path class="e" d="M550,160 L550,104" marker-end="url(#ar)"/>
+      <path class="e" d="M725,160 L725,104" marker-end="url(#ar)"/>
+      <path class="e" d="M900,190 L800,190" marker-end="url(#ar)"/>
+      <path class="e" d="M990,220 L990,244 L550,244 L550,220" marker-end="url(#ar)"/>
+      <path class="e" d="M275,220 L275,300" marker-end="url(#ar)"/>
+      <path class="e" d="M95,220 L95,300" marker-end="url(#ar)"/>
+      <path class="e" d="M350,330 L380,330" marker-end="url(#ar)"/>
+      <path class="e" d="M560,330 L530,330" marker-end="url(#ar)"/>
+      <path class="e" d="M730,330 L710,330" marker-end="url(#ar)"/>
+      <path class="e" d="M635,360 L635,410" marker-end="url(#ar)"/>
+      <path class="e" d="M635,300 L635,262 L950,262 L950,300" marker-end="url(#ar)"/>
+      <path class="e" d="M1030,300 L1030,220" marker-end="url(#ar)"/>
+      <path class="e main" d="M900,440 L880,440 L880,330 L860,330" marker-end="url(#ar-main)"/>
+      <path class="e" d="M400,360 L400,440 L170,440" marker-end="url(#ar)"/>
+      <path class="e" d="M295,560 L295,500 L440,500 L440,360" marker-end="url(#ar)"/>
+      <path class="e" d="M495,360 L495,560" marker-end="url(#ar)"/>
+      <path class="e" d="M675,560 L675,510" marker-end="url(#ar)"/>
+      <path class="e" d="M855,560 L855,510" marker-end="url(#ar)"/>
+      <path class="e" d="M870,490 L1020,490 L1020,560" marker-end="url(#ar)"/>
+      <path class="e" d="M295,620 L295,680" marker-end="url(#ar)"/>
+      <path class="e" d="M495,620 L495,680" marker-end="url(#ar)"/>
+      <path class="e" d="M675,620 L675,680" marker-end="url(#ar)"/>
+      <path class="e" d="M855,620 L855,680" marker-end="url(#ar)"/>
+      <!-- edge labels -->
+      <text class="el" x="200" y="54" text-anchor="middle" data-t="e_requests" data-w="64"></text>
+      <text class="el" x="860" y="42" text-anchor="middle" data-t="e_allowed" data-w="76"></text>
+      <text class="el" x="996" y="128" data-t="e_reload" data-w="96"></text>
+      <text class="el" x="172" y="125" text-anchor="middle" data-t="e_every" data-w="140"></text>
+      <text class="el" x="281" y="142" data-t="e_matches" data-w="180"></text>
+      <text class="el" x="556" y="142" data-t="e_loaded" data-w="160"></text>
+      <text class="el" x="731" y="142" data-t="e_include" data-w="160"></text>
+      <text class="el" x="850" y="183" text-anchor="middle" data-t="e_writes" data-w="90"></text>
+      <text class="el" x="770" y="240" text-anchor="middle" data-t="e_writes" data-w="200"></text>
+      <text class="el" x="281" y="266" data-t="e_reads" data-w="170"></text>
+      <text class="el" x="101" y="266" data-t="e_counts" data-w="95"></text>
+      <text class="el" x="790" y="258" text-anchor="middle" data-t="e_approved" data-w="250"></text>
+      <text class="el" x="1024" y="286" text-anchor="end" data-t="e_starts" data-w="120"></text>
+      <text class="el" x="886" y="394" data-t="e_vhost" data-w="200"></text>
+      <text class="el" x="285" y="434" text-anchor="middle" data-t="e_verifies" data-w="200"></text>
+      <text class="el" x="434" y="476" text-anchor="end" data-t="e_proposes" data-w="120"></text>
+      <text class="el" x="501" y="542" data-t="e_queue" data-w="90"></text>
+      <text class="el" x="681" y="542" data-t="e_files" data-w="90"></text>
+      <text class="el" x="861" y="542" data-t="e_staged" data-w="85"></text>
+      <text class="el" x="1026" y="530" data-t="e_syslog" data-w="70"></text>
+      <text class="el" x="301" y="655" data-t="e_asks" data-w="110"></text>
+      <text class="el" x="501" y="655" data-t="e_sends" data-w="110"></text>
+      <text class="el" x="681" y="655" data-t="e_download" data-w="110"></text>
+      <text class="el" x="861" y="655" data-t="e_check" data-w="110"></text>
+      <!-- nodes -->
+      <g class="n ext"><rect x="20" y="24" width="150" height="80" rx="9"/><text class="nm" x="95" y="60" text-anchor="middle" data-t="d_clients" data-w="136"></text><text class="sb" x="95" y="80" text-anchor="middle" data-t="d_clients_s" data-w="136"></text></g>
+      <g class="n core"><rect x="230" y="24" width="590" height="80" rx="9"/><text class="nm" x="525" y="58" text-anchor="middle" style="font-size:16px">nginx</text><text class="sb" x="525" y="80" text-anchor="middle" data-t="d_nginx_s" data-w="560"></text></g>
+      <g class="n ext"><rect x="900" y="24" width="180" height="80" rx="9"/><text class="nm" x="990" y="60" text-anchor="middle" data-t="d_sites" data-w="166"></text><text class="sb" x="990" y="80" text-anchor="middle" data-t="d_sites_s" data-w="166"></text></g>
+      <g class="n file"><rect x="20" y="160" width="150" height="60" rx="8"/><text class="nm" x="95" y="186" text-anchor="middle" data-t="d_access" data-w="136"></text><text class="sb" x="95" y="205" text-anchor="middle" data-t="d_access_s" data-w="136"></text></g>
+      <g class="n file"><rect x="200" y="160" width="150" height="60" rx="8"/><text class="nm" x="275" y="186" text-anchor="middle" data-t="d_audit" data-w="136"></text><text class="sb" x="275" y="205" text-anchor="middle" data-t="d_audit_s" data-w="136"></text></g>
+      <g class="n file"><rect x="470" y="160" width="160" height="60" rx="8"/><text class="nm" x="550" y="186" text-anchor="middle" data-t="d_managed" data-w="146"></text><text class="sb mono" x="550" y="205" text-anchor="middle" data-w="146">before/after-crs.conf</text></g>
+      <g class="n file"><rect x="650" y="160" width="150" height="60" rx="8"/><text class="nm" x="725" y="186" text-anchor="middle" data-t="d_blocklist" data-w="136"></text><text class="sb" x="725" y="205" text-anchor="middle" data-t="d_blocklist_s" data-w="136"></text></g>
+      <g class="n root"><rect x="900" y="160" width="180" height="60" rx="8"/><text class="nm" x="990" y="186" text-anchor="middle" data-t="d_apply" data-w="166"></text><text class="sb" x="990" y="205" text-anchor="middle" data-t="d_apply_s" data-w="166"></text></g>
+      <g class="n svc"><rect x="20" y="300" width="150" height="60" rx="8"/><text class="nm" x="95" y="326" text-anchor="middle" data-t="d_traffic" data-w="136"></text><text class="sb" x="95" y="345" text-anchor="middle" data-t="d_traffic_s" data-w="136"></text></g>
+      <g class="n svc"><rect x="200" y="300" width="150" height="60" rx="8"/><text class="nm" x="275" y="326" text-anchor="middle" data-t="d_collector" data-w="136"></text><text class="sb" x="275" y="345" text-anchor="middle" data-t="d_collector_s" data-w="136"></text></g>
+      <g class="n svc"><rect x="380" y="300" width="150" height="60" rx="8"/><text class="nm" x="455" y="326" text-anchor="middle" data-t="d_db" data-w="136"></text><text class="sb" x="455" y="345" text-anchor="middle">SQLite</text></g>
+      <g class="n svc"><rect x="560" y="300" width="150" height="60" rx="8"/><text class="nm" x="635" y="326" text-anchor="middle" data-t="d_workflow" data-w="136"></text><text class="sb" x="635" y="345" text-anchor="middle" data-t="d_workflow_s" data-w="136"></text></g>
+      <g class="n svc"><rect x="730" y="300" width="130" height="60" rx="8"/><text class="nm" x="795" y="326" text-anchor="middle" data-t="d_webui" data-w="118"></text><text class="sb mono" x="795" y="345" text-anchor="middle" data-w="118">127.0.0.1:8095</text></g>
+      <g class="n svc"><rect x="20" y="410" width="150" height="60" rx="8"/><text class="nm" x="95" y="436" text-anchor="middle" data-t="d_monitor" data-w="136"></text><text class="sb" x="95" y="455" text-anchor="middle" data-t="d_monitor_s" data-w="136"></text></g>
+      <g class="n svc"><rect x="560" y="410" width="150" height="60" rx="8"/><text class="nm" x="635" y="436" text-anchor="middle" data-t="d_sandbox" data-w="136"></text><text class="sb" x="635" y="455" text-anchor="middle" data-t="d_sandbox_s" data-w="136"></text></g>
+      <g class="n file"><rect x="900" y="300" width="180" height="60" rx="8"/><text class="nm" x="990" y="326" text-anchor="middle" data-t="d_spool" data-w="166"></text><text class="sb mono" x="990" y="345" text-anchor="middle" data-w="166">/var/lib/jt-waf-mgr/spool</text></g>
+      <g class="n ext"><rect x="900" y="410" width="180" height="60" rx="8"/><text class="nm" x="990" y="436" text-anchor="middle" data-t="d_people" data-w="166"></text><text class="sb" x="990" y="455" text-anchor="middle" data-t="d_people_s" data-w="166"></text></g>
+      <g class="n unit"><rect x="220" y="560" width="150" height="60" rx="8"/><text class="nm" x="295" y="586" text-anchor="middle" data-t="d_analyst" data-w="136"></text><text class="sb mono" x="295" y="605" text-anchor="middle" data-w="136">analyst</text></g>
+      <g class="n unit"><rect x="420" y="560" width="150" height="60" rx="8"/><text class="nm" x="495" y="586" text-anchor="middle" data-t="d_notify" data-w="136"></text><text class="sb mono" x="495" y="605" text-anchor="middle" data-w="136">notify</text></g>
+      <g class="n unit"><rect x="600" y="560" width="150" height="60" rx="8"/><text class="nm" x="675" y="586" text-anchor="middle" data-t="d_geoip" data-w="136"></text><text class="sb mono" x="675" y="605" text-anchor="middle" data-w="136">geoip</text></g>
+      <g class="n unit"><rect x="780" y="560" width="150" height="60" rx="8"/><text class="nm" x="855" y="586" text-anchor="middle" data-t="d_crs" data-w="136"></text><text class="sb mono" x="855" y="605" text-anchor="middle" data-w="136">crs</text></g>
+      <g class="n ext"><rect x="950" y="560" width="140" height="60" rx="8"/><text class="nm" x="1020" y="586" text-anchor="middle" data-t="d_logsrv" data-w="128"></text><text class="sb" x="1020" y="605" text-anchor="middle" data-t="d_logsrv_s" data-w="128"></text></g>
+      <g class="n ext"><rect x="220" y="680" width="150" height="56" rx="8"/><text class="nm" x="295" y="704" text-anchor="middle" data-t="d_llm" data-w="136"></text><text class="sb" x="295" y="722" text-anchor="middle" data-t="d_llm_s" data-w="136"></text></g>
+      <g class="n ext"><rect x="420" y="680" width="150" height="56" rx="8"/><text class="nm" x="495" y="704" text-anchor="middle" data-t="d_channels" data-w="136"></text><text class="sb" x="495" y="722" text-anchor="middle" data-t="d_channels_s" data-w="136"></text></g>
+      <g class="n ext"><rect x="600" y="680" width="150" height="56" rx="8"/><text class="nm" x="675" y="704" text-anchor="middle">MaxMind</text><text class="sb" x="675" y="722" text-anchor="middle">GeoLite2</text></g>
+      <g class="n ext"><rect x="780" y="680" width="150" height="56" rx="8"/><text class="nm" x="855" y="704" text-anchor="middle">GitHub</text><text class="sb" x="855" y="722" text-anchor="middle" data-t="d_github_s" data-w="136"></text></g>
+    </svg>
+    <div class="figbar">
+      <div class="legend">
+        <span><i class="l main"></i><b data-t="lg_traffic"></b></span><span><i class="l data"></i><b data-t="lg_data"></b></span>
+        <span><i class="k-core"></i><b data-t="lg_core"></b></span><span><i class="k-svc"></i><b data-t="lg_svc"></b></span>
+        <span><i class="k-unit"></i><b data-t="lg_unit"></b></span><span><i class="k-file"></i><b data-t="lg_file"></b></span>
+        <span><i class="k-root"></i><b data-t="lg_root"></b></span><span><i class="k-ext"></i><b data-t="lg_ext"></b></span>
+      </div>
+      <button type="button" class="zoom" data-fig="fig-arch" data-t="zoom"></button>
+    </div>
+  </figure>
+
+  <h3 data-t="units_h"></h3>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">◉</span><span data-t="u1_h"></span></h3><p class="by mono">jt-waf-mgr.service</p><ul class="src"><li data-t="u1_1"></li><li data-t="u1_2"></li><li data-t="u1_3"></li><li data-t="u1_4"></li></ul></div>
+    <div class="card"><h3><span class="ic">⚿</span><span data-t="u2_h"></span></h3><p class="by mono">jt-waf-mgr-apply.service</p><ul class="src"><li data-t="u2_1"></li><li data-t="u2_2"></li><li data-t="u2_3"></li><li data-t="u2_4"></li></ul></div>
+    <div class="card"><h3><span class="ic">✦</span><span data-t="u3_h"></span></h3><p class="by mono">jt-waf-mgr-analyst.service</p><ul class="src"><li data-t="u3_1"></li><li data-t="u3_2"></li><li data-t="u3_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">✉</span><span data-t="u4_h"></span></h3><p class="by mono">jt-waf-mgr-notify.service</p><ul class="src"><li data-t="u4_1"></li><li data-t="u4_2"></li></ul></div>
+    <div class="card"><h3><span class="ic">◐</span><span data-t="u5_h"></span></h3><p class="by mono">jt-waf-mgr-geoip.service</p><ul class="src"><li data-t="u5_1"></li><li data-t="u5_2"></li></ul></div>
+    <div class="card"><h3><span class="ic">↻</span><span data-t="u6_h"></span></h3><p class="by mono">jt-waf-mgr-crs.service</p><ul class="src"><li data-t="u6_1"></li><li data-t="u6_2"></li></ul></div>
+  </div>
+  <p class="note" data-t="units_note"></p>
+  <div class="reccard">
+    <h3 data-t="out_h"></h3>
+    <ul class="ticks"><li data-t="out_1"></li><li data-t="out_2"></li><li data-t="out_3"></li><li data-t="out_4"></li></ul>
+  </div>
+</div></section>
+
+<!-- 2. Event collection -->
+<section id="events" class="alt"><div class="wrap">
+  <h2 data-t="ev_h"></h2><p class="sub" data-t="ev_sub"></p>
+  <ol class="flow">
+    <li><b data-t="ev_s1"></b><span data-t="ev_s1d"></span></li><li><b data-t="ev_s2"></b><span data-t="ev_s2d"></span></li>
+    <li><b data-t="ev_s3"></b><span data-t="ev_s3d"></span></li><li><b data-t="ev_s4"></b><span data-t="ev_s4d"></span></li>
+    <li><b data-t="ev_s5"></b><span data-t="ev_s5d"></span></li><li><b data-t="ev_s6"></b><span data-t="ev_s6d"></span></li>
+  </ol>
+  <div class="two top" style="margin-top: 34px">
+    <div>
+      <h3 data-t="cl_h"></h3>
+      <ul class="ticks"><li data-t="cl_1"></li><li data-t="cl_2"></li><li data-t="cl_3"></li><li data-t="cl_4"></li><li data-t="cl_5"></li></ul>
+      <h3 data-t="geo_h"></h3>
+      <ul class="ticks"><li data-t="geo_1"></li><li data-t="geo_2"></li><li data-t="geo_3"></li></ul>
+    </div>
+    <div>
+      <h3 data-t="st_h"></h3>
+      <ul class="ticks"><li data-t="st_1"></li><li data-t="st_2"></li><li data-t="st_3"></li><li data-t="st_4"></li></ul>
+      <h3 data-t="nst_h"></h3>
+      <ul class="ticks no"><li data-t="nst_1"></li><li data-t="nst_2"></li><li data-t="nst_3"></li><li data-t="nst_4"></li></ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- 3. Change workflow -->
+<section id="changes"><div class="wrap">
+  <h2 data-t="ch_h"></h2><p class="sub" data-t="ch_sub"></p>
+  <div class="two top">
+    <figure class="fig" id="fig-flow">
+      <svg class="flowsvg" viewBox="0 0 520 660" role="img" aria-labelledby="flow-title">
+        <title id="flow-title" data-t="ch_h"></title>
+        <defs>
+          <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="fa-main" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="ah main" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="fa-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah bad" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <path class="e main" d="M155,70 L155,96" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,152 L155,178" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,234 L155,260" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,316 L155,342" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,398 L155,424" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,480 L155,506" marker-end="url(#fa-main)"/>
+        <path class="e main" d="M155,562 L155,588" marker-end="url(#fa-main)"/>
+        <path class="e bad" d="M290,124 L417,124 L417,178" marker-end="url(#fa-bad)"/>
+        <path class="e bad" d="M290,206 L330,206" marker-end="url(#fa-bad)"/>
+        <path class="e bad" d="M290,288 L417,288 L417,234" marker-end="url(#fa-bad)"/>
+        <path class="e dash" d="M250,316 L250,328 L417,328 L417,342" marker-end="url(#fa)"/>
+        <path class="e dash" d="M417,398 L417,451 L290,451" marker-end="url(#fa)"/>
+        <path class="e bad" d="M290,533 L330,533" marker-end="url(#fa-bad)"/>
+        <path class="e dash" d="M330,616 L310,616 L310,552 L290,552" marker-end="url(#fa)"/>
+        <text class="el" x="355" y="118" text-anchor="middle" data-t="fe_fails" data-w="110"></text>
+        <text class="el" x="340" y="322" text-anchor="middle" data-t="fe_auto" data-w="150"></text>
+        <g class="n svc"><rect x="20" y="14" width="270" height="56" rx="9"/><text class="nm" x="155" y="38" text-anchor="middle" data-t="f_propose" data-w="254"></text><text class="sb" x="155" y="58" text-anchor="middle" data-t="f_propose_s" data-w="254"></text></g>
+        <g class="n svc"><rect x="20" y="96" width="270" height="56" rx="9"/><text class="nm" x="155" y="120" text-anchor="middle" data-t="f_static" data-w="254"></text><text class="sb" x="155" y="140" text-anchor="middle" data-t="f_static_s" data-w="254"></text></g>
+        <g class="n svc"><rect x="20" y="178" width="270" height="56" rx="9"/><text class="nm" x="155" y="202" text-anchor="middle" data-t="f_evidence" data-w="254"></text><text class="sb" x="155" y="222" text-anchor="middle" data-t="f_evidence_s" data-w="254"></text></g>
+        <g class="n svc"><rect x="20" y="260" width="270" height="56" rx="9"/><text class="nm" x="155" y="284" text-anchor="middle" data-t="f_sandbox" data-w="254"></text><text class="sb" x="155" y="304" text-anchor="middle" data-t="f_sandbox_s" data-w="254"></text></g>
+        <g class="n ext"><rect x="20" y="342" width="270" height="56" rx="9"/><text class="nm" x="155" y="366" text-anchor="middle" data-t="f_approve" data-w="254"></text><text class="sb" x="155" y="386" text-anchor="middle" data-t="f_approve_s" data-w="254"></text></g>
+        <g class="n svc"><rect x="20" y="424" width="270" height="56" rx="9"/><text class="nm" x="155" y="448" text-anchor="middle" data-t="f_queue" data-w="254"></text><text class="sb" x="155" y="468" text-anchor="middle" data-t="f_queue_s" data-w="254"></text></g>
+        <g class="n root"><rect x="20" y="506" width="270" height="56" rx="9"/><text class="nm" x="155" y="530" text-anchor="middle" data-t="f_apply" data-w="254"></text><text class="sb" x="155" y="550" text-anchor="middle" data-t="f_apply_s" data-w="254"></text></g>
+        <g class="n file"><rect x="20" y="588" width="270" height="56" rx="9"/><text class="nm" x="155" y="612" text-anchor="middle" data-t="f_applied" data-w="254"></text><text class="sb" x="155" y="632" text-anchor="middle" data-t="f_applied_s" data-w="254"></text></g>
+        <g class="n bad"><rect x="330" y="178" width="175" height="56" rx="9"/><text class="nm" x="417" y="202" text-anchor="middle" data-t="f_failed" data-w="161"></text><text class="sb" x="417" y="222" text-anchor="middle" data-t="f_failed_s" data-w="161"></text></g>
+        <g class="n unit dash"><rect x="330" y="342" width="175" height="56" rx="9"/><text class="nm" x="417" y="366" text-anchor="middle" data-t="f_auto" data-w="161"></text><text class="sb" x="417" y="386" text-anchor="middle" data-t="f_auto_s" data-w="161"></text></g>
+        <g class="n bad"><rect x="330" y="506" width="175" height="56" rx="9"/><text class="nm" x="417" y="530" text-anchor="middle" data-t="f_restored" data-w="161"></text><text class="sb" x="417" y="550" text-anchor="middle" data-t="f_restored_s" data-w="161"></text></g>
+        <g class="n svc dash"><rect x="330" y="588" width="175" height="56" rx="9"/><text class="nm" x="417" y="612" text-anchor="middle" data-t="f_rollback" data-w="161"></text><text class="sb" x="417" y="632" text-anchor="middle" data-t="f_rollback_s" data-w="161"></text></g>
+      </svg>
+      <div class="figbar"><div class="legend">
+        <span><i class="l main"></i><b data-t="lg_path"></b></span><span><i class="l dash"></i><b data-t="lg_dash"></b></span><span><i class="l bad"></i><b data-t="lg_bad"></b></span>
+      </div></div>
+    </figure>
+    <div>
+      <h3 data-t="from_h"></h3>
+      <ul class="ticks"><li data-t="from_1"></li><li data-t="from_2"></li><li data-t="from_3"></li><li data-t="from_4"></li></ul>
+      <h3 data-t="chk_h"></h3>
+      <ul class="ticks"><li data-t="chk_1"></li><li data-t="chk_2"></li><li data-t="chk_3"></li><li data-t="chk_4"></li><li data-t="chk_5"></li></ul>
+    </div>
+  </div>
+  <div class="two top" style="margin-top: 10px">
+    <div>
+      <h3 data-t="ap_h"></h3>
+      <ul class="ticks"><li data-t="ap_1"></li><li data-t="ap_2"></li><li data-t="ap_3"></li><li data-t="ap_4"></li></ul>
+    </div>
+    <div>
+      <h3 data-t="a_h"></h3>
+      <ol class="steps"><li data-t="a_1"></li><li data-t="a_2"></li><li data-t="a_3"></li><li data-t="a_4"></li><li data-t="a_5"></li><li data-t="a_6"></li><li data-t="a_7"></li><li data-t="a_8"></li></ol>
+    </div>
+  </div>
+  <div class="reccard">
+    <h3 data-t="v_h"></h3>
+    <ul class="ticks"><li data-t="v_1"></li><li data-t="v_2"></li><li data-t="v_3"></li><li data-t="v_4"></li></ul>
+  </div>
+</div></section>
+
+<!-- 4. Event analysis -->
+<section id="analysis" class="alt"><div class="wrap">
+  <h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
+  <ol class="flow">
+    <li><b data-t="ai_s1"></b><span data-t="ai_s1d"></span></li><li><b data-t="ai_s2"></b><span data-t="ai_s2d"></span></li>
+    <li><b data-t="ai_s3"></b><span data-t="ai_s3d"></span></li><li><b data-t="ai_s4"></b><span data-t="ai_s4d"></span></li>
+    <li><b data-t="ai_s5"></b><span data-t="ai_s5d"></span></li><li><b data-t="ai_s6"></b><span data-t="ai_s6d"></span></li>
+  </ol>
+  <div class="reccard">
+    <h3 data-t="ai_rules_h"></h3>
+    <ul class="ticks"><li data-t="ai_1"></li><li data-t="ai_2"></li><li data-t="ai_3"></li><li data-t="ai_4"></li><li data-t="ai_5"></li><li data-t="ai_6"></li><li data-t="ai_7"></li></ul>
+    <p class="disclaimer" data-t="ai_note"></p>
+  </div>
+</div></section>
+
+<!-- 5. CRS updates -->
+<section id="crs"><div class="wrap">
+  <h2 data-t="crs_h"></h2><p class="sub" data-t="crs_sub"></p>
+  <ol class="flow">
+    <li><b data-t="crs_s1"></b><span data-t="crs_s1d"></span></li><li><b data-t="crs_s2"></b><span data-t="crs_s2d"></span></li>
+    <li><b data-t="crs_s3"></b><span data-t="crs_s3d"></span></li><li><b data-t="crs_s4"></b><span data-t="crs_s4d"></span></li>
+    <li><b data-t="crs_s5"></b><span data-t="crs_s5d"></span></li><li><b data-t="crs_s6"></b><span data-t="crs_s6d"></span></li>
+    <li><b data-t="crs_s7"></b><span data-t="crs_s7d"></span></li><li><b data-t="crs_s8"></b><span data-t="crs_s8d"></span></li>
+  </ol>
+  <div class="reccard">
+    <h3 data-t="crs_more_h"></h3>
+    <ul class="ticks"><li data-t="crs_1"></li><li data-t="crs_2"></li><li data-t="crs_3"></li><li data-t="crs_4"></li></ul>
+  </div>
+</div></section>
+
+<!-- 6. Request volume and IP blocks -->
+<section id="blocks" class="alt"><div class="wrap">
+  <h2 data-t="bl_h"></h2><p class="sub" data-t="bl_sub"></p>
+  <div class="two top">
+    <div>
+      <h3 data-t="rv_h"></h3>
+      <ul class="ticks"><li data-t="rv_1"></li><li data-t="rv_2"></li><li data-t="rv_3"></li><li data-t="rv_4"></li></ul>
+    </div>
+    <div>
+      <h3 data-t="ib_h"></h3>
+      <ol class="steps blue"><li data-t="ib_1"></li><li data-t="ib_2"></li><li data-t="ib_3"></li><li data-t="ib_4"></li><li data-t="ib_5"></li></ol>
+    </div>
+  </div>
+  <div class="reccard">
+    <h3 data-t="il_h"></h3>
+    <ul class="ticks"><li data-t="il_1"></li><li data-t="il_2"></li><li data-t="il_3"></li><li data-t="il_4"></li><li data-t="il_5"></li></ul>
+  </div>
+</div></section>
+
+<!-- 7. Notifications, log shipping, alerts -->
+<section id="notify"><div class="wrap">
+  <h2 data-t="nt_h"></h2><p class="sub" data-t="nt_sub"></p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">✉</span><span data-t="nc_h"></span></h3><ul class="src"><li data-t="nc_1"></li><li data-t="nc_2"></li><li data-t="nc_3"></li><li data-t="nc_4"></li></ul></div>
+    <div class="card"><h3><span class="ic">⇲</span><span data-t="ls_h"></span></h3><ul class="src"><li data-t="ls_1"></li><li data-t="ls_2"></li><li data-t="ls_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">!</span><span data-t="al_h"></span></h3><ul class="src"><li data-t="al_1"></li><li data-t="al_2"></li><li data-t="al_3"></li><li data-t="al_4"></li></ul></div>
+  </div>
+</div></section>
+
+<!-- 8. Integrity and audit -->
+<section id="integrity" class="alt"><div class="wrap">
+  <h2 data-t="in_h"></h2><p class="sub" data-t="in_sub"></p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">✓</span><span data-t="i1_h"></span></h3><p data-t="i1"></p></div>
+    <div class="card"><h3><span class="ic">⚿</span><span data-t="i2_h"></span></h3><p data-t="i2"></p></div>
+    <div class="card"><h3><span class="ic">⛓</span><span data-t="i3_h"></span></h3><p data-t="i3"></p></div>
+    <div class="card"><h3><span class="ic">⚓</span><span data-t="i4_h"></span></h3><p data-t="i4"></p></div>
+    <div class="card"><h3><span class="ic">≡</span><span data-t="i5_h"></span></h3><p data-t="i5"></p></div>
+    <div class="card"><h3><span class="ic">▣</span><span data-t="i6_h"></span></h3><p data-t="i6"></p></div>
+    <div class="card"><h3><span class="ic">↻</span><span data-t="i7_h"></span></h3><p data-t="i7"></p></div>
+    <div class="card"><h3><span class="ic">!</span><span data-t="i8_h"></span></h3><p data-t="i8"></p></div>
+  </div>
+</div></section>
+
+<!-- 9. Security boundaries -->
+<section id="bounds"><div class="wrap">
+  <h2 data-t="b_h"></h2><p class="sub" data-t="b_sub"></p>
+  <div class="two top">
+    <div>
+      <h3 data-t="br_h"></h3>
+      <ul class="ticks"><li data-t="br_1"></li><li data-t="br_2"></li><li data-t="br_3"></li><li data-t="br_4"></li><li data-t="br_5"></li></ul>
+    </div>
+    <div>
+      <h3 data-t="nv_h"></h3>
+      <ul class="ticks no"><li data-t="nv_1"></li><li data-t="nv_2"></li><li data-t="nv_3"></li><li data-t="nv_4"></li><li data-t="nv_5"></li><li data-t="nv_6"></li></ul>
+    </div>
+  </div>
+  <div class="reccard">
+    <h3 data-t="lim_h"></h3>
+    <ul class="ticks warn"><li data-t="lim_1"></li><li data-t="lim_2"></li><li data-t="lim_3"></li></ul>
+    <p class="more"><span data-t="more"></span> <a id="sec-doc" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/SECURITY.md" data-t="sec_policy"></a> ·
+      <a id="comp-doc" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/COMPLIANCE.md" data-t="comp_doc"></a> ·
+      <a id="api-doc" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/API.md" data-t="api_doc"></a></p>
+  </div>
+</div></section>
+
+<dialog id="zoom" aria-labelledby="zm-title">
+  <div class="zm-bar"><span id="zm-title"></span><button type="button" class="zm-x" id="zm-x" aria-label="Close">✕</button></div>
+  <div class="zm-body" id="zm-body"></div>
+</dialog>
+
+<footer><div class="wrap">
+  jt-waf-mgr · AGPL-3.0 · <a href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a> ·
+  <a id="sec-foot" href="https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/SECURITY.md" data-t="sec_policy"></a> · Jason Tools Co., Ltd.
+</div></footer>
+
+<script>
+const T = {
+ en: {
+  nav_arch: 'Architecture', nav_events: 'Events', nav_changes: 'Changes', nav_ai: 'Analysis', nav_crs: 'CRS', nav_blocks: 'IP blocks',
+  nav_notify: 'Notifications', nav_integrity: 'Integrity', nav_bounds: 'Boundaries',
+  h1: 'How jt-waf-mgr works',
+  lead: 'The parts of jt-waf-mgr, the processes they run in, where the data goes, and the path a rule change takes from a proposal to production. Everything here describes what the code does.',
+  back: '← Project page', zoom: 'Enlarge', close: 'Close',
+  arch_h: 'Architecture',
+  arch_sub: 'nginx with ModSecurity and the OWASP CRS handles the traffic. jt-waf-mgr reads what it logs and prepares changes; only a separate root program writes the managed files. Each part runs in its own systemd unit with only what it needs.',
+  d_clients: 'Clients', d_clients_s: 'browsers, apps, bots', d_nginx_s: 'ModSecurity v3 + OWASP CRS · your sites · the management vhost',
+  d_sites: 'Backend sites', d_sites_s: 'what the WAF lets through', d_access: 'Access logs', d_access_s: 'every request',
+  d_audit: 'Audit log', d_audit_s: 'JSON, rule matches', d_managed: 'Managed rule files', d_blocklist: 'IP block list', d_blocklist_s: 'optional, deny lines',
+  d_apply: 'Apply program', d_apply_s: 'root, one-shot', d_traffic: 'Request volume', d_traffic_s: 'counts only',
+  d_collector: 'Collector', d_collector_s: 'parse, mask', d_db: 'Database', d_workflow: 'Change workflow', d_workflow_s: 'checks, approval',
+  d_webui: 'Web UI + API', d_monitor: 'Integrity monitor', d_monitor_s: 'chain, program, files', d_sandbox: 'Sandbox', d_sandbox_s: 'throwaway nginx',
+  d_spool: 'Spool', d_people: 'People + API tokens', d_people_s: 'internal networks',
+  d_group: 'jt-waf-mgr.service · user jtwaf · loopback only', d_units: 'Separate units', d_outside: 'Outside this host',
+  d_analyst: 'Event analysis', d_notify: 'Notifications', d_geoip: 'GeoIP update', d_crs: 'CRS update',
+  d_logsrv: 'Log servers', d_logsrv_s: 'syslog, SIEM', d_llm: 'LLM server', d_llm_s: 'self-hosted', d_channels: 'Channels', d_channels_s: 'e-mail, chat, webhook',
+  d_github_s: 'CRS releases',
+  e_requests: 'requests', e_allowed: 'allowed', e_reload: 'nginx -t, reload', e_every: 'every request', e_matches: 'rule matches',
+  e_loaded: 'loaded', e_include: 'include in http { }', e_writes: 'writes', e_reads: 'reads', e_counts: 'counts',
+  e_approved: 'approved change', e_starts: 'path unit', e_vhost: 'management vhost', e_verifies: 'verifies', e_proposes: 'proposes',
+  e_queue: 'queue', e_files: 'files', e_staged: 'staged', e_syslog: 'syslog', e_asks: 'asks', e_sends: 'sends', e_download: 'downloads', e_check: 'checks',
+  lg_traffic: 'Web traffic', lg_data: 'Data and control', lg_core: 'nginx + WAF', lg_svc: 'Inside the web service', lg_unit: 'Separate units',
+  lg_file: 'Files', lg_root: 'Runs as root', lg_ext: 'Outside jt-waf-mgr',
+  units_h: 'Processes, users and network access',
+  u1_h: 'Web service',
+  u1_1: 'Always running as the user jtwaf, plus the group that owns the ModSecurity audit log (install.sh adds it, typically adm).',
+  u1_2: 'Threads: the HTTP server on 127.0.0.1:8095, the collector, the change checks with the sandbox, the integrity monitor, request volume and the IP block list.',
+  u1_3: 'Writes only /var/lib/jt-waf-mgr; reads the nginx, ModSecurity and CRS files and the access logs.',
+  u1_4: 'Network: loopback only. Its log records go to the local /dev/log by default; a remote log server needs its address added to this unit (IPAddressAllow).',
+  u2_h: 'Apply program',
+  u2_1: 'Runs as root. Started by jt-waf-mgr-apply.path when a request file appears in the spool, never by the web service itself.',
+  u2_2: 'Armed only on request (install.sh --enable-apply); until then nothing is written.',
+  u2_3: 'May write /etc/nginx, its own state directory /var/lib/jt-waf-mgr-apply and the spool.',
+  u2_4: 'Network: loopback only, for the health checks.',
+  u3_h: 'Event analysis',
+  u3_1: 'A timer wakes it every 5 minutes and it runs when its interval has passed (default 180 minutes); "Run now" and the LLM connection test arrive as request files.',
+  u3_2: 'Network: loopback and the private address ranges, where your LLM server is. A server elsewhere needs its address added to the unit.',
+  u3_3: 'Does nothing until the analysis and the LLM server are set up in Settings.',
+  u4_h: 'Notifications',
+  u4_1: 'Started when a notification is queued, and every minute for retries and reminders.',
+  u4_2: 'Network: not limited, because chat services and mail servers are on the internet. It reads the settings and writes notification rows.',
+  u5_h: 'GeoIP update',
+  u5_1: 'Daily timer and "update now"; downloads the MaxMind databases only after you enter your MaxMind account and key.',
+  u5_2: 'Writes only /var/lib/jt-waf-mgr/geoip. Network: not limited (MaxMind).',
+  u6_h: 'CRS update',
+  u6_1: 'Daily timer and "check now"; does nothing unless jt-waf-mgr manages the CRS (off by default).',
+  u6_2: 'Writes only /var/lib/jt-waf-mgr. Network: not limited (GitHub). It never changes nginx: switching the CRS is an approved change.',
+  units_note: 'Every unit that runs as jtwaf has ProtectSystem=strict, no capabilities, a system call filter and no new privileges. Inside an LXC container systemd cannot enforce the address rules (IPAddressDeny / IPAddressAllow).',
+  out_h: 'What jt-waf-mgr writes outside its own directory',
+  out_1: 'After adoption, the managed ModSecurity files /etc/nginx/modsec/jt-waf-mgr/before-crs.conf and after-crs.conf. Adoption also points the Include lines of the main ModSecurity file at them, once.',
+  out_2: 'The optional IP block list /etc/nginx/jt-waf-mgr/blocked-ips.conf, which you include once inside http { } yourself.',
+  out_3: 'When it manages the CRS: crs-<version> directories and the crs link; at a first installation also crs-setup.conf and two Include lines.',
+  out_4: 'Nothing else in the nginx configuration. Copies of records go out to log servers and notification channels.',
+  ev_h: 'Event collection',
+  ev_sub: 'The collector runs inside the web service and follows the ModSecurity JSON audit log, which has one line for every request a rule matched.',
+  ev_s1: 'Read', ev_s1d: 'New complete lines every 2 seconds; copytruncate and rename rotation are both followed.',
+  ev_s2: 'Parse', ev_s2d: 'Time, site, method, path, query, source address and port, status, engine mode and every matched rule.',
+  ev_s3: 'Mask', ev_s3d: 'Values of sensitive fields (password, token, otp, session…) are replaced before anything is stored.',
+  ev_s4: 'Classify', ev_s4d: 'Origin internal or external, outcome blocked or logged, and which rule decided.',
+  ev_s5: 'Store', ev_s5d: 'One row per request in SQLite, plus per-rule and daily counts.',
+  ev_s6: 'Forward', ev_s6d: 'New events go to the log servers that take WAF events.',
+  cl_h: 'How an event is classified',
+  cl_1: 'Origin: internal when the source address is in the internal networks of the settings (by default the private, loopback, link-local and CGNAT ranges), otherwise external.',
+  cl_2: 'Outcome: blocked when the engine was on for that request and the answer was 403 (or 400 for a malformed body); everything else is logged.',
+  cl_3: 'Decided by: a confident-block rule, the CRS anomaly score, the fallback rule, or another rule.',
+  cl_4: 'Anomaly score: read from the message of the CRS scoring rule.',
+  cl_5: 'A record over the size limit (1 MiB) is not dropped: its essentials are stored as an event marked truncated, so a large request cannot hide an attack.',
+  geo_h: 'Country and network owner (GeoIP)',
+  geo_1: 'Looked up in local MaxMind database files when a page shows an address; the stored event has no location.',
+  geo_2: 'Internal addresses are never looked up.',
+  geo_3: 'The files come from the GeoIP unit: each download is checked against MaxMind\'s SHA-256, test-read, then moved into place. The web service only reads them.',
+  st_h: 'What is stored',
+  st_1: 'Time, site (Host), method, path, the masked query string, HTTP version, source address and port, server port.',
+  st_2: 'Status code, engine mode, outcome, decided by, anomaly score.',
+  st_3: 'Each matched rule: ID, message, severity, tags, file and line, and the data it matched, clipped to 512 characters and masked: the only part of a request body or header that is kept.',
+  st_4: 'Kept by default: events 30 days, daily statistics 365 days, the audit trail without limit.',
+  nst_h: 'What is not stored',
+  nst_1: 'Request and response bodies.',
+  nst_2: 'Request headers other than Host.',
+  nst_3: 'The original values of sensitive fields: they never reach the database, so no page or API can show them.',
+  nst_4: 'Fields covered by a redaction rule: the CRS does not inspect them, so ModSecurity never writes them to the audit log.',
+  ch_h: 'The change workflow',
+  ch_sub: 'Every rule change takes the same path, whoever proposes it. The web service prepares and checks; only the root apply program writes.',
+  f_propose: 'Propose', f_propose_s: 'person · API token · event analysis', f_static: 'Static check', f_static_s: 'directives, regex, ReDoS, rule IDs',
+  f_evidence: 'Evidence', f_evidence_s: 'access logs + event history', f_sandbox: 'Sandbox', f_sandbox_s: 'throwaway nginx, tests, samples',
+  f_approve: 'Approval by a person', f_approve_s: 'not the proposer · approve or reject', f_queue: 'Queue', f_queue_s: 'one apply at a time',
+  f_apply: 'Apply program', f_apply_s: 'root · re-check, write, reload', f_applied: 'Applied', f_applied_s: 'a new version',
+  f_failed: 'Checks failed', f_failed_s: 'recheck or correct', f_auto: 'Automatic', f_auto_s: 'if switched on, daily limit',
+  f_restored: 'Apply failed', f_restored_s: 'previous files restored', f_rollback: 'Restore a version', f_rollback_s: 'approver, with a note',
+  fe_fails: 'fails', fe_auto: 'tightening only',
+  lg_path: 'Usual path', lg_dash: 'Automatic, or a restore', lg_bad: 'Failure',
+  from_h: '1. Propose',
+  from_1: 'A person with the operator role or higher, from a template: exclusion, confident block, redaction, plugin toggle; expert rules (raw SecRule) for administrators only.',
+  from_2: 'From an event: "Create exclusion for this" and "Create similar block" fill in the draft.',
+  from_3: 'An uploaded rule file is compared rule by rule and becomes ordinary proposals; several operations can go as one bundle (one approval, one version, one reload).',
+  from_4: 'An API token with the changes:propose scope, or the event analysis (proposed as "analyst").',
+  chk_h: '2. Checks, in the background',
+  chk_1: 'Static: the rule is generated and every rule of the resulting managed files passes the expert-mode checks: allowed directives only (no engine switch-off, no file-reading operators, no audit-log changes), regex sanity, ReDoS shape and a run-time test, rule ID ranges, no duplicate IDs.',
+  chk_2: 'Evidence from the nginx access logs (rotated and compressed copies too) and the event history. A confident block fails when it would match an external request that got a 2xx/3xx answer, or any internal source other than the known scanners. An exclusion shows which recorded alerts of the last 30 days it would silence and flags external ones that look like attacks.',
+  chk_3: 'Sandbox: a throwaway nginx on 127.0.0.1, run as the service user, with the production configuration plus the change. It runs nginx -t, replays the change\'s test cases (for blocks also with encoding, case and slash variants) and, for tightening, every regression sample: none may get a 403. Its audit log stays in a temporary directory, and nothing is left behind.',
+  chk_4: 'Regression samples are paths that at least 3 different addresses opened successfully, collected from the access logs once a day.',
+  chk_5: 'A failed evidence check can be overridden only by a person with a written reason; such a change still needs approval and is never applied automatically.',
+  ap_h: '3. Approval',
+  ap_1: 'An approver or administrator approves or rejects (adoption: administrators only). By default the proposer cannot approve their own change; a change proposed through an API token belongs to the person who created the token.',
+  ap_2: 'API tokens can never approve: the approval endpoints accept only a signed-in person.',
+  ap_3: 'Single-admin mode (an administrator turns it on) lets a proposer approve their own change; approving their own loosening then needs a fresh one-time code and a note of at least 10 characters. Loosening proposed by the event analysis always needs the code and the note, and switching off a whole CRS category needs an administrator.',
+  ap_4: 'Automatic application is off by default. When an administrator turns it on, only a new confident block for external sources on the path, URL, User-Agent, Host or a header, with clean evidence (no successful external request, no internal request) and every check passed, is applied without a person, up to 10 a day (adjustable). The event analysis\' blocks have their own switch.',
+  a_h: '4. Apply, as root',
+  a_1: 'Refuse every request when the installed program does not match its signed manifest.',
+  a_2: 'Read the request without following links. Check the checksums, the jt-waf-mgr header, every rule again (allowed directives, IDs in the local range) and the health-check URLs. Paths come from its own configuration, never from the request.',
+  a_3: 'Check that the running nginx was not replaced by a package upgrade, and that the managed files on disk are still the ones the change was prepared against; otherwise refuse (drift).',
+  a_4: 'Request every health-check URL through this nginx and note the status codes.',
+  a_5: 'Snapshot the current files: kept in memory for the restore, plus a copy in the root-only state directory.',
+  a_6: 'Write the new managed files atomically, run nginx -t, reload, and confirm that new worker processes started.',
+  a_7: 'Request the health-check URLs again: every status code must be unchanged.',
+  a_8: 'Any failure from the write on puts the snapshot back, runs nginx -t and reloads again; the change shows "apply failed (restored)".',
+  v_h: 'Versions, rollback and drift',
+  v_1: 'Every apply (change, adoption or restore) gets the next version number and keeps the complete files with their checksums.',
+  v_2: 'An approver can restore an earlier version with a note. It goes straight to the apply program (snapshot, nginx -t, reload, health checks, restore on failure), without a sandbox run or a second approval, and is written as a new version.',
+  v_3: 'One apply at a time. If another version was applied after a change\'s checks, the checks run again before it is applied.',
+  v_4: 'Drift: when a managed file on disk no longer matches the last applied version, someone edited it outside jt-waf-mgr. Changes and restores are refused (recorded at priority crit) until it is resolved, so the edit is never overwritten silently; an approver can explicitly put the current version back.',
+  ai_h: 'Event analysis with a self-hosted LLM',
+  ai_sub: 'A scheduled job sends grouped events to your own OpenAI-compatible LLM server. Request data is attacker-controlled, so the model only gives verdicts; the program decides what is proposed.',
+  ai_s1: 'Events', ai_s1d: 'The last 24 hours by default: external requests no confident rule blocked yet, and requests the anomaly score blocked.',
+  ai_s2: 'Candidates', ai_s2d: 'Grouped by the path a rule sees (decoded, normalised, lowercase, no query) and kept with enough events and sources; skipped when a rule or an open change covers the path, or a proposal for it was declined in the last 30 days.',
+  ai_s3: 'Program rules', ai_s3d: 'Decided without the model: outside sources asking for secret, backup or configuration file names are probes; one outside address blocked on 5 or more paths is a scanner.',
+  ai_s4: 'LLM', ai_s4d: 'Batches of at most 15 candidates; the answer constrained by a JSON schema (plain JSON mode when the server cannot); the data marked untrusted.',
+  ai_s5: 'Validation', ai_s5d: 'Only verdicts with a confidence of 0.8 or more. A block regex must start with ^, match the path and not match common paths, paths judged legitimate or regression samples.',
+  ai_s6: 'Proposals and alerts', ai_s6d: 'A few ordinary changes per run (5 by default), proposed as "analyst", and alerts to follow up.',
+  ai_rules_h: 'What it may do, and what it may not',
+  ai_1: 'Propose confident blocks for external sources and, for false positives, the narrowest exclusion: one exact path on one site, specific rules and request parts.',
+  ai_2: 'Paths the organisation\'s own addresses use are never proposed for blocking; no exclusion and no false-positive alert when fewer than 3 external sources and no internal ones are involved.',
+  ai_3: 'A path called an attack in one of the last 6 runs (within 14 days) is not loosened on one "false positive" verdict.',
+  ai_4: 'Alerts: an attack that may have been answered, users hit by a false positive, and an attack in progress (the only kind the model may raise itself); at most 5 of each kind per run.',
+  ai_5: 'It never approves and never writes rules. Loosening waits for a person, who enters a fresh one-time code and a note. Its confident blocks apply by themselves only when an administrator turned on their switch and every automatic-application condition holds.',
+  ai_6: 'Any LLM error fails closed: the run is recorded with the error and proposes nothing. The API key never appears in what is recorded.',
+  ai_7: 'Every run leaves a summary: events analysed, time taken, verdicts, proposals and alerts.',
+  ai_note: 'The model can be wrong in both directions. Check the evidence of a proposal before you approve it.',
+  crs_h: 'OWASP CRS updates',
+  crs_sub: 'Optional and off by default. When jt-waf-mgr manages the CRS, a new release reaches nginx only through the change workflow.',
+  crs_s1: 'Check', crs_s1d: 'Daily, or on "check now": the CRS releases on GitHub, the newest of the major version in use. A new major version is only reported.',
+  crs_s2: 'Wait', crs_s2d: 'A release is taken once it has been out 7 days (wait_days), so upstream can fix a bad one first.',
+  crs_s3: 'Verify', crs_s3d: 'The signature must be valid and made by the pinned CRS release key, which ships with jt-waf-mgr; otherwise the download is not kept.',
+  crs_s4: 'Stage', crs_s4d: 'Unpacked (plain files and directories only, size-limited) with a manifest; an alert says an update is ready.',
+  crs_s5: 'Compare', crs_s5d: 'An approver proposes the switch. The same recent requests run through the version in use and the new one in the sandbox, and the differences are shown.',
+  crs_s6: 'Approve', crs_s6d: 'A person approves. A CRS switch is never applied automatically.',
+  crs_s7: 'Install', crs_s7d: 'The root program checks the tarball\'s checksum and signature again, unpacks it itself, accepts it only when it matches the compared files, and points the crs link at crs-<version>.',
+  crs_s8: 'Verify or switch back', crs_s8d: 'nginx -t, reload, health checks; on any failure the link is switched back. 3 versions are kept.',
+  crs_more_h: 'Going back, and a first installation',
+  crs_1: 'Going back to a kept version is a change of its own: compared, approved and switched the same way.',
+  crs_2: 'A host without the CRS: the sandbox compares without and with it; the root program installs crs-<version>, the crs link and crs-setup.conf (from its example, unless one exists) and inserts two Include lines right after modsecurity.conf. Any failure takes it all out again.',
+  crs_3: 'On a host whose CRS is a plain directory, the first switch renames it to crs-<its version> and makes crs a link to it, so what nginx loads does not change.',
+  crs_4: 'If another updater keeps the CRS current on the host (for example a cron job), stop it before you switch this on: two updaters must not work on the same files.',
+  bl_h: 'Request volume and temporary IP blocks',
+  bl_sub: 'Two features next to the WAF: counts of all traffic, and a short-term deny list for addresses other systems report.',
+  rv_h: 'Request volume',
+  rv_1: 'Reads the nginx access logs from where the last pass stopped (inode and offset), following rotation.',
+  rv_2: 'Keeps only numbers per site and hour: total, 2xx, 3xx, 4xx, 5xx, 403, 444, 429, external requests and bytes. No address, URL or User-Agent.',
+  rv_3: 'Puts the WAF numbers in proportion: blocked requests next to all requests.',
+  rv_4: 'Optional alerts, off by default: an hour with 5 times a site\'s usual requests over the previous 7 days, or 20 % or more answered with 5xx.',
+  ib_h: 'Temporary IP blocks',
+  ib_1: 'fail2ban, a SOAR playbook or a script calls POST /api/v1/blocks with a token that has the blocks:write scope; an approver can also block on the Blocked IPs page.',
+  ib_2: 'Checked by the web service and again by the root program: private, loopback, link-local, multicast and reserved addresses, the internal networks, the known scanners, the trusted proxies and the protected list are never blocked.',
+  ib_3: 'The database holds the list. The web service queues the whole list for the apply program at most once a minute.',
+  ib_4: 'The apply program writes the deny file, runs nginx -t and reloads; when nginx -t fails, the previous file is put back.',
+  ib_5: 'Blocks end by themselves, and the list is written again.',
+  il_h: 'Limits',
+  il_1: 'A token blocks single addresses only; an approver may block a range up to /24 (IPv4) or /64 (IPv6).',
+  il_2: '24 hours by default, at most 7 days from a token and 30 days by hand; nothing is permanent.',
+  il_3: 'At most 500 active blocks, 200 per token, and 60 new blocks per token and hour.',
+  il_4: 'No change workflow and no approval: a block is temporary data, not configuration. Every add, extension, removal, refusal and expiry is in the audit trail.',
+  il_5: 'Included once inside http { }, the file covers every site, also those without ModSecurity. Servers and locations with allow / deny lines of their own do not inherit it; the Blocked IPs page lists them.',
+  nt_h: 'Notifications, log shipping and alerts',
+  nt_sub: 'The web service only writes rows; sending happens elsewhere, so a slow chat service or log server never holds it up.',
+  nc_h: 'Notifications',
+  nc_1: 'E-mail (text and HTML), Telegram, Microsoft Teams, Slack, Discord, Zulip, Nextcloud Talk, and a generic webhook signed with HMAC-SHA256 over the timestamp and the body.',
+  nc_2: 'A matrix of events and channels; messages in English, Traditional Chinese or Japanese with a link back; a test send per channel.',
+  nc_3: 'Sent by the notify unit: retried after 1, 5 and 15 minutes, at most 60 messages per channel and hour, and a daily summary at 8:00 by default.',
+  nc_4: 'Values from requests are shown as code or escaped: never markup, links or mentions. Bot tokens, webhook URLs and passwords are write-only settings.',
+  ls_h: 'Log servers (syslog / SIEM)',
+  ls_1: 'Up to 8 destinations, each with its own protocol (local socket, UDP, TCP, TLS), syslog header (RFC 3164 or 5424), record format (JSON, CEF, LEEF 2.0, GELF 1.1, key=value) and content (audit records, WAF events, alerts).',
+  ls_2: 'Each destination has its own queue and retries; a test send shows exactly what went out.',
+  ls_3: 'Recommended: the local /dev/log, forwarded by the host\'s rsyslog. Sending from the web service straight to a remote host needs that address allowed in its unit.',
+  al_h: 'Alerts',
+  al_1: 'An attack in progress or one that may have passed, a false positive hitting users, an integrity problem, an outside configuration change, a failed apply or backup, sign-in attacks, a CRS update ready, a traffic spike or many errors.',
+  al_2: 'One open alert per thing: seeing it again only counts it.',
+  al_3: 'Open until an approver marks it handled with a note, and reminded every 24 hours until then. A false-positive alert closes by itself once its exclusion is applied.',
+  al_4: 'Opening and handling an alert are both in the audit trail.',
+  in_h: 'Integrity and audit',
+  in_sub: 'What protects the program, the record of what happened, and the configuration jt-waf-mgr manages.',
+  i1_h: 'Signed releases',
+  i1: 'Every release lists the SHA-256 of each file (MANIFEST.sha256), signed with the project\'s RSA-3072 release key; the tarball has its own signature. install.sh checks both before installing and pins the key at the first install; a release signed with another key needs --accept-new-key.',
+  i2_h: 'Program check',
+  i2: 'Every hour the service compares the installed files with the signed list: nothing changed, missing or extra, no bytecode cache, no symbolic link, the systemd units included. The root apply program does the same before every run and refuses on a mismatch.',
+  i3_h: 'Audit hash chain',
+  i3: 'Sign-ins, changes, approvals, settings and system tasks each write one record: time, who, from where, what, result. Each stores sha256(previous hash + this record), and database triggers refuse changes and deletions. New records are checked every few minutes, the whole chain once a day.',
+  i4_h: 'Anchors',
+  i4: 'Every 5 minutes the newest record number and hash are appended to an append-only file (chattr +a) and sent to syslog; every record also goes to syslog with its hash. A rewritten chain no longer matches them. Exports can be checked offline with jt-waf-mgr audit-verify.',
+  i5_h: 'Configuration snapshots',
+  i5: 'Every 5 minutes, the SHA-256 of every nginx, ModSecurity, CRS and managed file and of the nginx program. A difference is recorded (config.changed) and attributed to jt-waf-mgr (an applied version), registered automation, or outside; an outside change opens an alert and a 7-day warning on the system check page.',
+  i6_h: 'Backups',
+  i6: 'A daily SQLite online backup (3:00 by default), integrity-checked, with a SHA-256 file and kept 14 days; downloading one needs a one-time code. A failing backup never removes good ones.',
+  i7_h: 'Upgrade with rollback',
+  i7: 'upgrade.sh checks first (--check changes nothing): the new release verified by the installed program with the pinned key, the configuration accepted by the new code, no apply in progress. It backs up program, units, configuration and database to /var/backups/jt-waf-mgr/, migrates, starts, checks version, manifest and audit chain, and rolls back by itself on any failure. nginx is never touched.',
+  i8_h: 'When something is wrong',
+  i8: 'Problems become integrity.* audit records at syslog priority crit, repeated every 12 hours while they last. A manual upgrade.sh --rollback rewinds the database, so it is written to a rewind record only root can write and to syslog at priority crit.',
+  b_h: 'Security boundaries',
+  b_sub: 'A summary of what can reach what, and what the code never does.',
+  br_h: 'What can reach what',
+  br_1: 'Visitors reach only nginx. The management interface is a separate nginx vhost; the example allows internal networks only and has ModSecurity off, because the interface shows attack strings.',
+  br_2: 'The web service listens on 127.0.0.1:8095 and trusts X-Real-IP only from the local nginx.',
+  br_3: 'The web service reaches the apply program only through request files in the spool. The apply program trusts nothing but "which version", opens them without following links and takes every path from its own configuration.',
+  br_4: 'Only the notify, GeoIP and CRS units reach the internet; the analysis reaches the private network; the web service and the apply program only the loopback.',
+  br_5: 'API tokens: one scope per endpoint, optional source networks and expiry, only their SHA-256 stored. No approvals, accounts, tokens or settings.',
+  nv_h: 'What never happens',
+  nv_1: 'No shell=True: no command line is built from request data.',
+  nv_2: 'No innerHTML or v-html: URLs, user agents, matched data, rule texts and the model\'s words are shown as text. The CSP has no unsafe-inline and no third-party origins.',
+  nv_3: 'No original values of sensitive fields in the database, and no API to see them.',
+  nv_4: 'No secret read back: the LLM key, the MaxMind key, the SMTP password and bot tokens are write-only in the settings.',
+  nv_5: 'No loosening without a person, and no approval through an API token.',
+  nv_6: 'No writes to the nginx configuration beyond the files listed under Architecture.',
+  lim_h: 'Limits',
+  lim_1: 'Root on the host can change anything: the anchors and the syslog copy make tampering detectable, not impossible. Keep a copy in a separate SIEM.',
+  lim_2: 'In an LXC container the append-only flag must be set from the host, and systemd\'s address rules are not enforced.',
+  lim_3: 'The database is not encrypted at rest (the Python standard library has no AES); it is protected by file permissions (0600 in a 0700 directory).',
+  more: 'More detail:', sec_policy: 'Security policy', comp_doc: 'Compliance mapping', api_doc: 'API manual',
+ },
+ 'zh-TW': {
+  nav_arch: '架構', nav_events: '事件', nav_changes: '變更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP 封鎖',
+  nav_notify: '通知', nav_integrity: '完整性', nav_bounds: '安全邊界',
+  h1: 'jt-waf-mgr 運作架構',
+  lead: 'jt-waf-mgr 由哪些部分組成、各在哪個程序裡執行、資料往哪裡去，以及一筆規則變更從提出到上線的完整路徑。這裡寫的都是程式實際的行為。',
+  back: '← 專案首頁', zoom: '放大檢視', close: '關閉',
+  arch_h: '系統架構',
+  arch_sub: 'nginx 加上 ModSecurity 與 OWASP CRS 負責處理流量。jt-waf-mgr 讀取它寫下的記錄並準備變更；只有獨立的 root 程式會寫入受管理檔案。每個部分都在自己的 systemd unit 裡執行，只拿到必要的權限。',
+  d_clients: '訪客', d_clients_s: '瀏覽器、App、機器人', d_nginx_s: 'ModSecurity v3 + OWASP CRS · 你的站台 · 管理介面 vhost',
+  d_sites: '後端站台', d_sites_s: 'WAF 放行的請求', d_access: '存取記錄', d_access_s: '每一個請求',
+  d_audit: '稽核記錄檔', d_audit_s: 'JSON，命中的規則', d_managed: '受管理規則檔', d_blocklist: 'IP 封鎖清單', d_blocklist_s: '選用，deny 行',
+  d_apply: '套用程式', d_apply_s: 'root，一次性執行', d_traffic: '請求量', d_traffic_s: '只有數字',
+  d_collector: '收集器', d_collector_s: '解析、遮蔽', d_db: '資料庫', d_workflow: '變更流程', d_workflow_s: '檢查、核准',
+  d_webui: '網頁介面 + API', d_monitor: '完整性監控', d_monitor_s: '雜湊鏈、程式、設定檔', d_sandbox: '沙箱', d_sandbox_s: '拋棄式 nginx',
+  d_spool: '佇列目錄', d_people: '使用者與 API 權杖', d_people_s: '內部網路',
+  d_group: 'jt-waf-mgr.service · jtwaf 帳號 · 只連 loopback', d_units: '獨立的 unit', d_outside: '本機以外',
+  d_analyst: '事件分析', d_notify: '通知', d_geoip: 'GeoIP 更新', d_crs: 'CRS 更新',
+  d_logsrv: '記錄伺服器', d_logsrv_s: 'syslog、SIEM', d_llm: 'LLM 伺服器', d_llm_s: '地端', d_channels: '通知管道', d_channels_s: 'Email、聊天、webhook',
+  d_github_s: 'CRS 發行版',
+  e_requests: '請求', e_allowed: '放行', e_reload: 'nginx -t、reload', e_every: '每一個請求', e_matches: '命中規則',
+  e_loaded: '載入', e_include: '在 http { } 裡 include', e_writes: '寫入', e_reads: '讀取', e_counts: '計數',
+  e_approved: '核准的變更', e_starts: 'path unit 啟動', e_vhost: '經由管理介面 vhost', e_verifies: '驗證', e_proposes: '提出',
+  e_queue: '佇列', e_files: '資料檔', e_staged: '待用版本', e_syslog: 'syslog', e_asks: '詢問', e_sends: '發送', e_download: '下載', e_check: '檢查',
+  lg_traffic: '網站流量', lg_data: '資料與控制', lg_core: 'nginx + WAF', lg_svc: '網頁服務內部', lg_unit: '獨立的 unit',
+  lg_file: '檔案', lg_root: '以 root 執行', lg_ext: 'jt-waf-mgr 以外',
+  units_h: '程序、執行帳號與網路存取',
+  u1_h: '網頁服務',
+  u1_1: '常駐執行，帳號是 jtwaf，另加擁有 ModSecurity 稽核記錄檔的群組（由 install.sh 加上，通常是 adm）。',
+  u1_2: '執行緒：127.0.0.1:8095 的 HTTP 伺服器、收集器、含沙箱的變更檢查、完整性監控、請求量統計與 IP 封鎖清單。',
+  u1_3: '只寫入 /var/lib/jt-waf-mgr；讀取 nginx、ModSecurity、CRS 設定檔與存取記錄。',
+  u1_4: '網路：只能連 loopback。稽核記錄預設送到本機的 /dev/log；要直接送到遠端記錄伺服器，必須先在這個 unit 加上該位址（IPAddressAllow）。',
+  u2_h: '套用程式',
+  u2_1: '以 root 執行。佇列目錄出現請求檔時由 jt-waf-mgr-apply.path 啟動，網頁服務本身不會啟動它。',
+  u2_2: '只有明確要求時才啟用（install.sh --enable-apply）；在那之前什麼都不寫。',
+  u2_3: '只能寫入 /etc/nginx、自己的狀態目錄 /var/lib/jt-waf-mgr-apply 與佇列目錄。',
+  u2_4: '網路：只能連 loopback，用來做健康檢查。',
+  u3_h: '事件分析',
+  u3_1: '計時器每 5 分鐘喚醒一次，超過設定的間隔（預設 180 分鐘）才真的執行；「立即執行」與 LLM 連線測試以請求檔傳入。',
+  u3_2: '網路：loopback 與私有位址範圍（LLM 伺服器所在處）。LLM 伺服器在其他位置時，要在 unit 加上它的位址。',
+  u3_3: '在設定頁設好事件分析與 LLM 伺服器之前不做任何事。',
+  u4_h: '通知',
+  u4_1: '有通知排入佇列時啟動，另外每分鐘執行一次，負責重試與提醒。',
+  u4_2: '網路：不限制，因為聊天服務與郵件伺服器在網際網路上。它只讀取設定、寫入通知記錄。',
+  u5_h: 'GeoIP 更新',
+  u5_1: '每日計時器與「立即更新」；要先輸入你的 MaxMind 帳號與金鑰，才會下載 MaxMind 資料庫。',
+  u5_2: '只寫入 /var/lib/jt-waf-mgr/geoip。網路：不限制（MaxMind）。',
+  u6_h: 'CRS 更新',
+  u6_1: '每日計時器與「立即檢查」；除非由 jt-waf-mgr 管理 CRS（預設關閉），否則不做任何事。',
+  u6_2: '只寫入 /var/lib/jt-waf-mgr。網路：不限制（GitHub）。它不會改動 nginx：切換 CRS 是一筆要核准的變更。',
+  units_note: '所有以 jtwaf 執行的 unit 都設了 ProtectSystem=strict、沒有任何 capability、系統呼叫過濾與 NoNewPrivileges。在 LXC 容器裡，systemd 無法強制執行位址限制（IPAddressDeny、IPAddressAllow）。',
+  out_h: 'jt-waf-mgr 在自己目錄以外會寫入的檔案',
+  out_1: '納管之後的 ModSecurity 受管理檔案 /etc/nginx/modsec/jt-waf-mgr/before-crs.conf 與 after-crs.conf。納管時也會把 ModSecurity 主設定的 Include 行改成指向它們，只改這一次。',
+  out_2: '選用的 IP 封鎖清單 /etc/nginx/jt-waf-mgr/blocked-ips.conf，由你自己在 http { } 裡 include 一次。',
+  out_3: '由它管理 CRS 時：crs-<版本> 目錄與 crs 連結；第一次安裝時另有 crs-setup.conf 與兩行 Include。',
+  out_4: 'nginx 設定的其他部分一律不寫。記錄的副本會送到記錄伺服器與通知管道。',
+  ev_h: '事件收集',
+  ev_sub: '收集器在網頁服務裡執行，持續讀取 ModSecurity 的 JSON 稽核記錄檔；每個命中規則的請求在檔案裡是一行。',
+  ev_s1: '讀取', ev_s1d: '每 2 秒讀取新的完整行；copytruncate 與改名兩種輪替方式都能接續。',
+  ev_s2: '解析', ev_s2d: '時間、站台、方法、路徑、查詢字串、來源位址與連接埠、狀態碼、引擎模式，以及每條命中的規則。',
+  ev_s3: '遮蔽', ev_s3d: '敏感欄位（password、token、otp、session 等）的值在寫入前就被取代。',
+  ev_s4: '分類', ev_s4d: '來源是內部或外部、結果是封鎖或只記錄，以及由哪條規則決定。',
+  ev_s5: '儲存', ev_s5d: '每個請求一列寫入 SQLite，另累計每條規則與每天的數量。',
+  ev_s6: '外送', ev_s6d: '新事件送到有勾選 WAF 事件的記錄伺服器。',
+  cl_h: '事件如何分類',
+  cl_1: '來源：來源位址在設定的內部網路清單裡（預設是私有、loopback、link-local 與 CGNAT 範圍）就是內部，其餘是外部。',
+  cl_2: '結果：這個請求的規則引擎是開啟的、回應是 403（本體格式錯誤時是 400）才算封鎖；其他都是只記錄。',
+  cl_3: '決定者：確定阻擋規則、CRS 異常分數、保底規則或其他規則。',
+  cl_4: '異常分數：從 CRS 計分規則的訊息讀出。',
+  cl_5: '超過大小上限（1 MiB）的記錄不會被丟掉：只保留重點存成標示為截斷的事件，攻擊者無法用很大的請求藏住攻擊。',
+  geo_h: '國家與網路擁有者（GeoIP）',
+  geo_1: '頁面顯示位址時，才從本機的 MaxMind 資料庫檔查詢；存下的事件本身沒有位置資料。',
+  geo_2: '內部位址一律不查詢。',
+  geo_3: '資料檔由 GeoIP unit 下載：每次下載都比對 MaxMind 提供的 SHA-256、試讀一次，才換上新檔。網頁服務只讀取這些檔案。',
+  st_h: '會儲存的內容',
+  st_1: '時間、站台（Host）、方法、路徑、遮蔽過的查詢字串、HTTP 版本、來源位址與連接埠、伺服器連接埠。',
+  st_2: '狀態碼、引擎模式、結果、決定者、異常分數。',
+  st_3: '每條命中的規則：ID、訊息、嚴重度、標籤、檔案與行號，以及命中的資料（截到 512 字元並遮蔽）；請求本體與標頭只會留下這一部分。',
+  st_4: '預設保留：事件 30 天、每日統計 365 天、稽核記錄不限期。',
+  nst_h: '不會儲存的內容',
+  nst_1: '請求與回應的本體。',
+  nst_2: 'Host 以外的請求標頭。',
+  nst_3: '敏感欄位的原始值：它們從來不會進到資料庫，所以沒有任何頁面或 API 能顯示。',
+  nst_4: '遮蔽規則涵蓋的欄位：CRS 不檢查它們，所以 ModSecurity 也不會把它們寫進稽核記錄檔。',
+  ch_h: '變更流程',
+  ch_sub: '不論是誰提出，每一筆規則變更都走同一條路。網頁服務負責準備與檢查，只有以 root 執行的套用程式會寫入。',
+  f_propose: '提出', f_propose_s: '使用者 · API 權杖 · 事件分析', f_static: '靜態檢查', f_static_s: '指令、正規表示式、ReDoS、規則 ID',
+  f_evidence: '證據檢查', f_evidence_s: '存取記錄與事件歷史', f_sandbox: '沙箱', f_sandbox_s: '拋棄式 nginx、測試案例、回歸樣本',
+  f_approve: '由人核准', f_approve_s: '不是提出者 · 核准或駁回', f_queue: '排隊', f_queue_s: '一次只套用一筆',
+  f_apply: '套用程式', f_apply_s: 'root · 重新檢查、寫入、reload', f_applied: '已套用', f_applied_s: '產生新版本',
+  f_failed: '檢查未通過', f_failed_s: '重新檢查或修正', f_auto: '自動套用', f_auto_s: '有開啟時，每天有上限',
+  f_restored: '套用失敗', f_restored_s: '已還原原本的檔案', f_rollback: '還原某個版本', f_rollback_s: '核准者，附說明',
+  fe_fails: '未通過', fe_auto: '只限收緊',
+  lg_path: '一般路徑', lg_dash: '自動，或還原', lg_bad: '失敗',
+  from_h: '1. 提出',
+  from_1: '操作者以上角色的使用者用範本提出：排除、確定阻擋、遮蔽、外掛開關；專家規則（原始 SecRule）只限管理者。',
+  from_2: '從事件提出：「為此建立排除」與「建立類似的封鎖」會自動填好草稿。',
+  from_3: '上傳的規則檔會逐條比對，變成一般的提案；多個操作可以合成一筆（一次核准、一個版本、一次 reload）。',
+  from_4: '有 changes:propose 範圍的 API 權杖，或事件分析（以「analyst」名義提出）。',
+  chk_h: '2. 背景檢查',
+  chk_1: '靜態檢查：產生規則後，整份受管理檔案的每一條規則都要通過專家模式檢查：只允許可用的指令（不可關閉引擎、不可用讀檔運算子、不可改稽核記錄設定）、正規表示式合理、ReDoS 形狀與實測、規則 ID 範圍、ID 不可重複。',
+  chk_2: '證據來自 nginx 存取記錄（含輪替與壓縮的舊檔）與事件歷史。確定阻擋只要會命中任何回應 2xx/3xx 的外部請求，或已知掃描器以外的任何內部來源，就不通過。排除則列出最近 30 天哪些已記錄的告警會消失，並標出看起來像攻擊的外部請求。',
+  chk_3: '沙箱：在 127.0.0.1 以服務帳號啟動一個拋棄式 nginx，用正式設定加上這次變更。先跑 nginx -t，再重放變更的測試案例（封鎖類另含編碼、大小寫與斜線的變形）；收緊類變更還會重放所有回歸樣本，任何一個都不可以變成 403。它的稽核記錄只留在臨時目錄，結束後不留下任何東西。',
+  chk_4: '回歸樣本是至少有 3 個不同位址成功開啟過的路徑，每天從存取記錄收集一次。',
+  chk_5: '證據檢查沒通過時，只有人可以附上書面理由強制送出；這種變更仍要核准，而且永遠不會自動套用。',
+  ap_h: '3. 核准',
+  ap_1: '由核准者或管理者核准或駁回（納管只限管理者）。預設提出者不能核准自己的變更；經由 API 權杖提出的變更，算是建立該權杖的人提出的。',
+  ap_2: 'API 權杖永遠不能核准：核准的端點只接受已登入的使用者。',
+  ap_3: '單人模式（由管理者開啟）允許提出者核准自己的變更；核准自己的放寬類變更時，要輸入新的一次性驗證碼並寫至少 10 個字的說明。事件分析提出的放寬一律要驗證碼與說明，停用整類 CRS 規則則限管理者。',
+  ap_4: '自動套用預設關閉。管理者開啟後，也只有新的、只對外部來源、比對路徑、網址、User-Agent、Host 或標頭的確定阻擋，證據乾淨（沒有成功的外部請求、沒有內部請求）且所有檢查都通過，才會不經人核准就套用，每天最多 10 筆（可調整）。事件分析提出的封鎖另有獨立的開關。',
+  a_h: '4. 套用（root）',
+  a_1: '已安裝的程式和簽章清單不一致時，拒絕所有請求。',
+  a_2: '不跟隨連結讀取請求。重新檢查雜湊值、jt-waf-mgr 檔頭、每一條規則（允許的指令、ID 在站台範圍內）與健康檢查網址。路徑一律取自它自己的設定，不取自請求。',
+  a_3: '確認執行中的 nginx 沒有被套件升級換掉執行檔，並確認磁碟上的受管理檔案仍是準備這筆變更時的內容，否則拒絕（手動修改）。',
+  a_4: '透過這台 nginx 請求每個健康檢查網址，記下狀態碼。',
+  a_5: '對目前的檔案做快照：保留在記憶體中供還原使用，另在只有 root 能讀的狀態目錄存一份。',
+  a_6: '以原子方式寫入新的受管理檔案，執行 nginx -t、reload，並確認有新的 worker 程序啟動。',
+  a_7: '再請求一次健康檢查網址：每個狀態碼都必須和之前相同。',
+  a_8: '從寫入開始任何一步失敗，都會放回快照、再跑 nginx -t 並 reload；變更顯示「套用失敗（已還原）」。',
+  v_h: '版本、還原與手動修改',
+  v_1: '每次套用（變更、納管或還原）都取得下一個版本號，並保存完整檔案與雜湊值。',
+  v_2: '核准者可以附上說明還原較早的版本。還原直接交給套用程式（快照、nginx -t、reload、健康檢查、失敗自動還原），不經過沙箱，也不需要第二次核准，並以新版本寫入。',
+  v_3: '一次只套用一筆。如果一筆變更檢查完之後有其他版本已套用，套用前會先重新檢查。',
+  v_4: '手動修改：磁碟上的受管理檔案和最後套用的版本不一致，表示有人在 jt-waf-mgr 以外改過。處理完之前，所有變更與還原都會被拒絕（以 crit 等級記錄），不會悄悄蓋掉那份修改；核准者可以明確地放回目前版本。',
+  ai_h: '用地端 LLM 做事件分析',
+  ai_sub: '排程工作把分組後的事件送到你自己的 OpenAI 相容 LLM 伺服器。請求內容是攻擊者可控的，所以模型只給判斷，要提出什麼由程式決定。',
+  ai_s1: '事件', ai_s1d: '預設是最近 24 小時：尚未被確定阻擋規則封鎖的外部請求，以及因異常分數被封鎖的請求。',
+  ai_s2: '候選', ai_s2d: '依規則看到的路徑分組（解碼、正規化、小寫、去掉查詢字串），事件數與來源數足夠才保留；已有規則或進行中的變更涵蓋，或最近 30 天提案被駁回的路徑會略過。',
+  ai_s3: '程式端規則', ai_s3d: '不經模型直接判斷：外部來源要找機密、備份或設定檔名稱的請求是探測；同一個外部位址在 5 個以上路徑被封鎖就是掃描器。',
+  ai_s4: 'LLM', ai_s4d: '每批最多 15 個候選；回答格式以 JSON schema 限制（伺服器不支援時改用一般 JSON 模式）；資料一律標示為不可信。',
+  ai_s5: '驗證', ai_s5d: '只採用信心 0.8 以上的判斷。封鎖用的正規表示式必須以 ^ 開頭、符合該路徑，且不可符合常見路徑、被判為正常的路徑或回歸樣本。',
+  ai_s6: '提案與警示', ai_s6d: '每次只提出少數幾筆一般變更（預設 5 筆），以「analyst」名義提出，並開出需要處理的警示。',
+  ai_rules_h: '它可以做什麼、不能做什麼',
+  ai_1: '可以提出只對外部來源的確定阻擋；遇到誤判時，提出範圍最小的排除：單一站台的單一精確路徑、特定規則與欄位。',
+  ai_2: '組織自己的位址也在用的路徑，一律不提出封鎖；只牽涉不到 3 個外部來源、沒有內部來源時，不提出排除，也不發誤判警示。',
+  ai_3: '最近 6 次分析（14 天內）曾判為攻擊的路徑，不會因為一次「誤判」的判斷就被放寬。',
+  ai_4: '警示：攻擊可能沒被封鎖、使用者被誤判封鎖，以及攻擊進行中（唯一能由模型自己提出的種類）；每種每次最多 5 筆。',
+  ai_5: '它不會核准，也不會直接寫規則。放寬一律等人核准，核准時要輸入新的一次性驗證碼並寫說明。它提出的確定阻擋，只有在管理者開啟對應開關、且所有自動套用條件都成立時才會自動套用。',
+  ai_6: 'LLM 出錯一律保守處理：記下錯誤，不提出任何東西。API 金鑰不會出現在任何記錄裡。',
+  ai_7: '每次執行都留下摘要：分析的事件數、耗時、判斷、提案與警示。',
+  ai_note: '模型可能出錯，兩個方向都會。核准提案前請先看它的證據。',
+  crs_h: 'OWASP CRS 更新',
+  crs_sub: '選用，預設關閉。由 jt-waf-mgr 管理 CRS 時，新版本只能經由變更流程進到 nginx。',
+  crs_s1: '檢查', crs_s1d: '每天一次或按「立即檢查」：查 GitHub 上的 CRS 發行版，取目前使用的主版本中最新的一版。新的主版本只會提示。',
+  crs_s2: '等待', crs_s2d: '發布滿 7 天（wait_days）才採用，讓上游有時間修正有問題的版本。',
+  crs_s3: '驗證', crs_s3d: '簽章必須有效，而且由釘選的 CRS 發行金鑰簽署（金鑰隨 jt-waf-mgr 發行）；否則下載的檔案不保留。',
+  crs_s4: '暫存', crs_s4d: '解開（只接受一般檔案與目錄，有大小限制）並產生清單；同時開一筆警示通知有更新可用。',
+  crs_s5: '比對', crs_s5d: '由核准者提出切換。同一批近期請求分別在沙箱跑目前版本與新版本，顯示兩者的差異。',
+  crs_s6: '核准', crs_s6d: '由人核准。切換 CRS 永遠不會自動套用。',
+  crs_s7: '安裝', crs_s7d: 'root 程式重新檢查壓縮檔的雜湊值與簽章、自己解開，內容和比對過的檔案一致才接受，再把 crs 連結指向 crs-<版本>。',
+  crs_s8: '確認或切回', crs_s8d: 'nginx -t、reload、健康檢查；任何一步失敗就把連結切回去。保留 3 個版本。',
+  crs_more_h: '退回舊版與第一次安裝',
+  crs_1: '退回保留的舊版本也是一筆獨立的變更：同樣經過比對、核准，用同樣的方式切換。',
+  crs_2: '還沒有 CRS 的主機：沙箱比對有無 CRS 的差異；root 程式安裝 crs-<版本>、crs 連結與 crs-setup.conf（以範例檔建立，已有的不覆蓋），並在 modsecurity.conf 後面插入兩行 Include。任何一步失敗就全部拿掉。',
+  crs_3: '原本的 CRS 是一般目錄時，第一次切換會把它改名為 crs-<它的版本>，再讓 crs 成為指向它的連結，nginx 載入的內容不變。',
+  crs_4: '如果主機上已有其他程式在更新 CRS（例如 cron 工作），開啟這項功能前要先停掉它：不能有兩個更新程式同時處理同一批檔案。',
+  bl_h: '請求量與暫時封鎖 IP',
+  bl_sub: 'WAF 旁邊的兩項功能：所有流量的計數，以及給其他系統回報位址用的短期 deny 清單。',
+  rv_h: '請求量',
+  rv_1: '從上次讀到的位置（inode 與位移）接續讀取 nginx 存取記錄，輪替後也能接上。',
+  rv_2: '每個站台每小時只保留數字：總數、2xx、3xx、4xx、5xx、403、444、429、外部請求數與位元組數。不存位址、網址或 User-Agent。',
+  rv_3: '讓 WAF 的數字有比例可看：封鎖數和總請求數並列。',
+  rv_4: '選用的警示，預設關閉：某小時的請求數達到該站台前 7 天同時段平常的 5 倍，或 20% 以上的回應是 5xx。',
+  ib_h: '暫時封鎖 IP',
+  ib_1: 'fail2ban、SOAR 劇本或指令稿以具有 blocks:write 範圍的權杖呼叫 POST /api/v1/blocks；核准者也可以在「封鎖的 IP」頁面封鎖。',
+  ib_2: '網頁服務檢查一次，root 程式再檢查一次：私有、loopback、link-local、多播與保留位址、內部網路、已知掃描器、可信任的代理與保護清單，永遠不會被封鎖。',
+  ib_3: '清單存在資料庫裡。網頁服務最多每分鐘一次，把整份清單排給套用程式。',
+  ib_4: '套用程式寫入 deny 檔、執行 nginx -t 並 reload；nginx -t 失敗時放回原本的檔案。',
+  ib_5: '封鎖到期自動結束，清單會重新寫入。',
+  il_h: '限制',
+  il_1: '權杖只能封鎖單一位址；核准者可以封鎖最大到 /24（IPv4）或 /64（IPv6）的網段。',
+  il_2: '預設 24 小時，權杖最長 7 天，在介面上最長 30 天；沒有永久封鎖。',
+  il_3: '最多 500 筆生效中的封鎖，每個權杖 200 筆，每個權杖每小時最多 60 筆新封鎖。',
+  il_4: '不經過變更流程、不需要核准：封鎖是暫時的資料，不是設定。每一次新增、延長、移除、拒絕與到期都寫進稽核記錄。',
+  il_5: '這個檔案在 http { } 裡 include 一次，就涵蓋所有站台，包括沒有 ModSecurity 的站台。自己有 allow、deny 行的 server 與 location 不會繼承它；「封鎖的 IP」頁面會列出這些地方。',
+  nt_h: '通知、外送記錄與警示',
+  nt_sub: '網頁服務只寫入資料列，實際發送在別處進行，所以聊天服務或記錄伺服器變慢也不會拖住它。',
+  nc_h: '通知',
+  nc_1: 'Email（純文字與 HTML）、Telegram、Microsoft Teams、Slack、Discord、Zulip、Nextcloud Talk，以及以 HMAC-SHA256 對時間戳與內容簽章的通用 webhook。',
+  nc_2: '事件與管道的對照矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結；每個管道都能測試發送。',
+  nc_3: '由 notify unit 發送：失敗後 1、5、15 分鐘重試，每個管道每小時最多 60 則，預設每天 8:00 發送每日摘要。',
+  nc_4: '來自請求的內容一律以程式碼格式顯示或跳脫：永遠不會變成格式、連結或提及。Bot 權杖、webhook 網址與密碼都是只能寫入的設定。',
+  ls_h: '記錄伺服器（syslog / SIEM）',
+  ls_1: '最多 8 個目的地，各自選擇協定（本機 socket、UDP、TCP、TLS）、syslog 標頭（RFC 3164 或 5424）、記錄格式（JSON、CEF、LEEF 2.0、GELF 1.1、key=value）與內容（稽核記錄、WAF 事件、警示）。',
+  ls_2: '每個目的地有自己的佇列與重試；測試發送會顯示實際送出的內容。',
+  ls_3: '建議送到本機的 /dev/log，由主機的 rsyslog 轉送。網頁服務要直接送到遠端主機時，必須在它的 unit 允許那個位址。',
+  al_h: '警示',
+  al_1: '攻擊進行中或可能沒被封鎖、影響使用者的誤判、完整性問題、設定被外部修改、套用或備份失敗、登入攻擊、CRS 有更新可用、流量暴增或大量錯誤。',
+  al_2: '同一件事只開一筆警示：再次發生只會累加次數。',
+  al_3: '在核准者附上說明標記為已處理之前一直開著，並每 24 小時提醒一次。誤判警示在它的排除套用之後會自動結案。',
+  al_4: '開啟與處理警示都會寫進稽核記錄。',
+  in_h: '完整性與稽核',
+  in_sub: '保護程式本身、保護「發生了什麼」的記錄，以及保護 jt-waf-mgr 管理的設定。',
+  i1_h: '簽章的發行檔',
+  i1: '每個發行檔列出所有檔案的 SHA-256（MANIFEST.sha256），以專案的 RSA-3072 發行金鑰簽章；壓縮檔本身另有簽章。install.sh 安裝前先驗證兩者，第一次安裝時釘選金鑰；以其他金鑰簽署的發行檔要加 --accept-new-key 才會接受。',
+  i2_h: '程式檢查',
+  i2: '服務每小時比對已安裝的檔案與簽章清單：沒有被修改、缺少或多出的檔案，沒有位元組碼快取、沒有符號連結，systemd unit 也在內。以 root 執行的套用程式每次執行前也做同樣的檢查，不一致就拒絕。',
+  i3_h: '稽核雜湊鏈',
+  i3: '登入、變更、核准、設定與系統工作都各寫一筆記錄：時間、誰、從哪裡、做什麼、結果。每筆保存 sha256(前一筆的雜湊＋本筆內容)，資料庫觸發器拒絕修改與刪除。新記錄每幾分鐘檢查一次，整條鏈每天完整檢查一次。',
+  i4_h: '錨點',
+  i4: '每 5 分鐘把最新的記錄編號與雜湊附加到只能附加的檔案（chattr +a），並送到 syslog；每筆記錄本身也連同雜湊送到 syslog。被改寫的雜湊鏈就對不上了。匯出的檔案可以用 jt-waf-mgr audit-verify 離線驗證。',
+  i5_h: '設定快照',
+  i5: '每 5 分鐘計算所有 nginx、ModSecurity、CRS、受管理檔案與 nginx 程式的 SHA-256。有差異就記錄（config.changed）並判斷來源：jt-waf-mgr（套用的版本）、登記過的自動化程式，或外部；外部變更會開出警示，系統檢查頁顯示警告 7 天。',
+  i6_h: '備份',
+  i6: '每天以 SQLite 線上備份（預設 3:00），檢查完整性並附 SHA-256 檔，保留 14 天；下載備份需要一次性驗證碼。備份失敗時不會刪掉既有的正常備份。',
+  i7_h: '可自動還原的升級',
+  i7: 'upgrade.sh 先做檢查（--check 不改任何東西）：用已安裝的程式與釘選的金鑰驗證新版本、新程式能接受現有設定、沒有套用正在進行。接著把程式、unit、設定與資料庫備份到 /var/backups/jt-waf-mgr/，執行資料庫遷移、啟動，再檢查版本、程式清單與稽核雜湊鏈；任何一步失敗都自動還原。不會動到 nginx。',
+  i8_h: '出問題的時候',
+  i8: '問題會寫成 integrity.* 稽核記錄，syslog 等級為 crit，問題未解除時每 12 小時再提醒一次。手動執行 upgrade.sh --rollback 會讓資料庫回到升級前，所以會寫進只有 root 能改的回捲記錄，並以 crit 等級送到 syslog。',
+  b_h: '安全邊界',
+  b_sub: '整理什麼可以連到什麼，以及程式永遠不做的事。',
+  br_h: '什麼可以連到什麼',
+  br_1: '訪客只會連到 nginx。管理介面是另一個 nginx vhost；範例只允許內部網路，並刻意設成 modsecurity off，因為介面會顯示攻擊字串。',
+  br_2: '網頁服務只聽 127.0.0.1:8095，X-Real-IP 只信任來自本機 nginx 的。',
+  br_3: '網頁服務只能透過佇列目錄裡的請求檔交給套用程式。套用程式只相信「要寫哪個版本」，不跟隨連結開啟請求檔，所有路徑都取自它自己的設定。',
+  br_4: '只有 notify、GeoIP 與 CRS 的 unit 會連到網際網路；事件分析只連私有網路；網頁服務與套用程式只連 loopback。',
+  br_5: 'API 權杖：每個端點需要一個範圍，可限制來源網段與到期日，只保存 SHA-256。不能核准、不能管理帳號與權杖、不能改設定。',
+  nv_h: '永遠不會發生的事',
+  nv_1: '沒有 shell=True：不會用請求資料組出指令。',
+  nv_2: '沒有 innerHTML 或 v-html：網址、User-Agent、命中的資料、規則內容與模型的文字一律以純文字顯示。CSP 不允許 unsafe-inline，也沒有第三方來源。',
+  nv_3: '資料庫裡沒有敏感欄位的原始值，也沒有能看原始值的 API。',
+  nv_4: '金鑰不會被讀回：LLM 金鑰、MaxMind 金鑰、SMTP 密碼與 bot 權杖在設定中都只能寫入。',
+  nv_5: '沒有人核准就不會放寬，API 權杖也不能核准。',
+  nv_6: '除了「系統架構」列出的檔案之外，不會寫入 nginx 設定。',
+  lim_h: '限制',
+  lim_1: '主機上的 root 可以改任何東西：錨點與 syslog 副本讓竄改可以被發現，但無法讓竄改不可能發生。請在獨立的 SIEM 保留一份副本。',
+  lim_2: '在 LXC 容器裡，只能附加的旗標要從主機端設定，systemd 的位址限制也不會生效。',
+  lim_3: '資料庫沒有靜態加密（Python 標準函式庫沒有 AES），以檔案權限保護（0600，目錄 0700）。',
+  more: '更多細節：', sec_policy: '安全政策', comp_doc: '合規對照', api_doc: 'API 介接手冊',
+ },
+ ja: {
+  nav_arch: '構成', nav_events: 'イベント', nav_changes: '変更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP ブロック',
+  nav_notify: '通知', nav_integrity: '完全性', nav_bounds: '境界',
+  h1: 'jt-waf-mgr の仕組み',
+  lead: 'jt-waf-mgr を構成する部品、それぞれが動くプロセス、データの流れ、そしてルール変更が提案から本番反映まで通る道筋。ここに書いてあるのはすべてプログラムが実際に行うことです。',
+  back: '← プロジェクトページ', zoom: '拡大表示', close: '閉じる',
+  arch_h: 'アーキテクチャ',
+  arch_sub: 'トラフィックを処理するのは ModSecurity と OWASP CRS を組み込んだ nginx です。jt-waf-mgr はその記録を読み、変更を準備します。管理ファイルを書き込むのは別の root プログラムだけです。各部品は必要な権限だけを持つ専用の systemd ユニットで動きます。',
+  d_clients: 'クライアント', d_clients_s: 'ブラウザ、アプリ、ボット', d_nginx_s: 'ModSecurity v3 + OWASP CRS · 各サイト · 管理用 vhost',
+  d_sites: 'バックエンド', d_sites_s: 'WAF が通したもの', d_access: 'アクセスログ', d_access_s: 'すべてのリクエスト',
+  d_audit: '監査ログ', d_audit_s: 'JSON、ルール一致', d_managed: '管理ルールファイル', d_blocklist: 'IP ブロックリスト', d_blocklist_s: '任意、deny 行',
+  d_apply: '適用プログラム', d_apply_s: 'root、ワンショット', d_traffic: 'リクエスト量', d_traffic_s: '数値のみ',
+  d_collector: 'コレクター', d_collector_s: '解析、マスク', d_db: 'データベース', d_workflow: '変更フロー', d_workflow_s: 'チェック、承認',
+  d_webui: 'Web UI + API', d_monitor: '完全性モニター', d_monitor_s: '監査、プログラム、設定', d_sandbox: 'サンドボックス', d_sandbox_s: '使い捨ての nginx',
+  d_spool: 'スプール', d_people: '利用者と API トークン', d_people_s: '内部ネットワーク',
+  d_group: 'jt-waf-mgr.service · jtwaf ユーザー · ループバックのみ', d_units: '別のユニット', d_outside: 'このホストの外',
+  d_analyst: 'イベント分析', d_notify: '通知', d_geoip: 'GeoIP 更新', d_crs: 'CRS 更新',
+  d_logsrv: 'ログサーバー', d_logsrv_s: 'syslog、SIEM', d_llm: 'LLM サーバー', d_llm_s: 'オンプレミス', d_channels: '通知チャネル', d_channels_s: 'メール、チャット等',
+  d_github_s: 'CRS リリース',
+  e_requests: 'リクエスト', e_allowed: '許可', e_reload: 'nginx -t、reload', e_every: 'すべてのリクエスト', e_matches: 'ルール一致',
+  e_loaded: '読み込み', e_include: 'http { } で include', e_writes: '書き込み', e_reads: '読み取り', e_counts: '集計',
+  e_approved: '承認済みの変更', e_starts: 'path ユニット', e_vhost: '管理用 vhost 経由', e_verifies: '検証', e_proposes: '提案',
+  e_queue: 'キュー', e_files: 'ファイル', e_staged: '待機版', e_syslog: 'syslog', e_asks: '問い合わせ', e_sends: '送信', e_download: 'ダウンロード', e_check: '確認',
+  lg_traffic: 'Web トラフィック', lg_data: 'データと制御', lg_core: 'nginx + WAF', lg_svc: 'Web サービス内部', lg_unit: '別のユニット',
+  lg_file: 'ファイル', lg_root: 'root で実行', lg_ext: 'jt-waf-mgr の外',
+  units_h: 'プロセス、実行ユーザー、ネットワーク',
+  u1_h: 'Web サービス',
+  u1_1: '常駐し、jtwaf ユーザーと、ModSecurity 監査ログを所有するグループ（install.sh が追加、通常は adm）で動きます。',
+  u1_2: 'スレッド：127.0.0.1:8095 の HTTP サーバー、コレクター、サンドボックスを含む変更チェック、完全性モニター、リクエスト量、IP ブロックリスト。',
+  u1_3: '書き込むのは /var/lib/jt-waf-mgr だけで、nginx・ModSecurity・CRS の設定とアクセスログを読みます。',
+  u1_4: 'ネットワーク：ループバックのみ。監査記録は既定でローカルの /dev/log に送ります。リモートのログサーバーへ直接送るには、このユニットにそのアドレスを追加する必要があります（IPAddressAllow）。',
+  u2_h: '適用プログラム',
+  u2_1: 'root で動きます。スプールに要求ファイルが現れると jt-waf-mgr-apply.path が起動し、Web サービス自身は起動しません。',
+  u2_2: '明示的に有効にしたときだけ動きます（install.sh --enable-apply）。それまでは何も書き込みません。',
+  u2_3: '書き込めるのは /etc/nginx、自身の状態ディレクトリ /var/lib/jt-waf-mgr-apply、スプールだけです。',
+  u2_4: 'ネットワーク：ヘルスチェック用のループバックのみ。',
+  u3_h: 'イベント分析',
+  u3_1: 'タイマーが 5 分ごとに起こし、間隔（既定 180 分）が過ぎていれば実行します。「今すぐ実行」と LLM 接続テストは要求ファイルで届きます。',
+  u3_2: 'ネットワーク：ループバックと、LLM サーバーがあるプライベートアドレス範囲。別の場所のサーバーはユニットにアドレスの追加が必要です。',
+  u3_3: '設定画面でイベント分析と LLM サーバーを設定するまでは何もしません。',
+  u4_h: '通知',
+  u4_1: '通知がキューに入ると起動し、再送と再通知のために毎分も動きます。',
+  u4_2: 'ネットワーク：チャットサービスとメールサーバーはインターネット上にあるため制限なし。設定を読み、通知の行を書くだけです。',
+  u5_h: 'GeoIP 更新',
+  u5_1: '毎日のタイマーと「今すぐ更新」。MaxMind のアカウントとキーを入力した後にだけ、MaxMind のデータベースをダウンロードします。',
+  u5_2: '書き込むのは /var/lib/jt-waf-mgr/geoip だけ。ネットワーク：制限なし（MaxMind）。',
+  u6_h: 'CRS 更新',
+  u6_1: '毎日のタイマーと「今すぐ確認」。jt-waf-mgr が CRS を管理する設定（既定はオフ）でなければ何もしません。',
+  u6_2: '書き込むのは /var/lib/jt-waf-mgr だけ。ネットワーク：制限なし（GitHub）。nginx は変更しません。CRS の切り替えは承認が必要な変更です。',
+  units_note: 'jtwaf で動くユニットはすべて ProtectSystem=strict、ケーパビリティなし、システムコールフィルター、NoNewPrivileges です。LXC コンテナ内では、systemd はアドレス制限（IPAddressDeny、IPAddressAllow）を強制できません。',
+  out_h: 'jt-waf-mgr が自分のディレクトリの外に書き込むもの',
+  out_1: '取り込み後の ModSecurity 管理ファイル /etc/nginx/modsec/jt-waf-mgr/before-crs.conf と after-crs.conf。取り込み時に一度だけ、ModSecurity メインファイルの Include 行をこれらに向けます。',
+  out_2: '任意の IP ブロックリスト /etc/nginx/jt-waf-mgr/blocked-ips.conf。http { } 内での include はお客様が一度だけ行います。',
+  out_3: 'CRS を管理するとき：crs-<バージョン> ディレクトリと crs リンク。初回インストールでは crs-setup.conf と 2 行の Include も。',
+  out_4: 'それ以外の nginx 設定には書き込みません。記録のコピーはログサーバーと通知チャネルに送られます。',
+  ev_h: 'イベントの収集',
+  ev_sub: 'コレクターは Web サービスの中で動き、ModSecurity の JSON 監査ログを追跡します。ルールに一致したリクエストごとに 1 行です。',
+  ev_s1: '読み取り', ev_s1d: '2 秒ごとに新しい完全な行を読み、copytruncate と名前変更のどちらのローテーションにも追従します。',
+  ev_s2: '解析', ev_s2d: '時刻、サイト、メソッド、パス、クエリ、送信元アドレスとポート、ステータス、エンジンモード、一致したすべてのルール。',
+  ev_s3: 'マスク', ev_s3d: '機密項目（password、token、otp、session など）の値は、保存する前に置き換えます。',
+  ev_s4: '分類', ev_s4d: '送信元が内部か外部か、結果がブロックか記録のみか、どのルールが決めたか。',
+  ev_s5: '保存', ev_s5d: 'リクエストごとに SQLite へ 1 行、さらにルール別と日別の件数。',
+  ev_s6: '転送', ev_s6d: '新しいイベントは、WAF イベントを受け取るログサーバーへ送ります。',
+  cl_h: 'イベントの分類',
+  cl_1: '送信元：設定の内部ネットワーク（既定はプライベート、ループバック、リンクローカル、CGNAT の範囲）に入るアドレスは内部、それ以外は外部。',
+  cl_2: '結果：そのリクエストでエンジンがオンで、応答が 403（本文の形式が不正なら 400）のときブロック。それ以外は記録のみ。',
+  cl_3: '決定元：確定ブロックのルール、CRS の異常スコア、フォールバックルール、その他のルール。',
+  cl_4: '異常スコア：CRS のスコアルールのメッセージから読み取ります。',
+  cl_5: 'サイズ上限（1 MiB）を超える記録も捨てません。要点だけを切り詰めたイベントとして保存するので、大きなリクエストで攻撃を隠すことはできません。',
+  geo_h: '国とネットワーク所有者（GeoIP）',
+  geo_1: '画面にアドレスを表示するときにローカルの MaxMind データベースファイルで照会します。保存したイベント自体に位置情報はありません。',
+  geo_2: '内部アドレスは照会しません。',
+  geo_3: 'ファイルは GeoIP ユニットが取得します。ダウンロードごとに MaxMind の SHA-256 と照合し、試しに読み込んでから置き換えます。Web サービスは読むだけです。',
+  st_h: '保存するもの',
+  st_1: '時刻、サイト（Host）、メソッド、パス、マスク済みのクエリ文字列、HTTP バージョン、送信元アドレスとポート、サーバーポート。',
+  st_2: 'ステータスコード、エンジンモード、結果、決定元、異常スコア。',
+  st_3: '一致した各ルール：ID、メッセージ、重大度、タグ、ファイルと行、一致したデータ（512 文字で切り詰め、マスク済み）。リクエストの本文とヘッダーで残るのはこの部分だけです。',
+  st_4: '既定の保存期間：イベント 30 日、日別統計 365 日、監査記録は無期限。',
+  nst_h: '保存しないもの',
+  nst_1: 'リクエストとレスポンスの本文。',
+  nst_2: 'Host 以外のリクエストヘッダー。',
+  nst_3: '機密項目の元の値。データベースに入らないので、どの画面や API でも表示できません。',
+  nst_4: 'マスクルールの対象項目。CRS が検査しないため、ModSecurity が監査ログに書くこともありません。',
+  ch_h: '変更フロー',
+  ch_sub: '誰が提案しても、ルール変更はすべて同じ道を通ります。準備とチェックは Web サービス、書き込みは root の適用プログラムだけです。',
+  f_propose: '提案', f_propose_s: '利用者 · API トークン · イベント分析', f_static: '静的チェック', f_static_s: 'ディレクティブ、正規表現、ReDoS、ID',
+  f_evidence: '証拠チェック', f_evidence_s: 'アクセスログとイベント履歴', f_sandbox: 'サンドボックス', f_sandbox_s: '使い捨て nginx、テスト、回帰サンプル',
+  f_approve: '人による承認', f_approve_s: '提案者以外 · 承認または却下', f_queue: '順番待ち', f_queue_s: '適用は一度に 1 件',
+  f_apply: '適用プログラム', f_apply_s: 'root · 再検証、書き込み、reload', f_applied: '適用済み', f_applied_s: '新しいバージョン',
+  f_failed: 'チェック失敗', f_failed_s: '再チェックか修正', f_auto: '自動適用', f_auto_s: '有効時のみ、1 日の上限',
+  f_restored: '適用失敗', f_restored_s: '元のファイルに復元', f_rollback: 'バージョンの復元', f_rollback_s: '承認者がメモ付きで',
+  fe_fails: '失敗', fe_auto: '強化のみ',
+  lg_path: '通常の流れ', lg_dash: '自動、または復元', lg_bad: '失敗',
+  from_h: '1. 提案',
+  from_1: 'operator 以上のロールの利用者がテンプレートから：除外、確定ブロック、マスク、プラグイン切替。エキスパートルール（生の SecRule）は管理者のみ。',
+  from_2: 'イベントから：「これの除外を作成」と「同様のブロックを作成」が下書きを埋めます。',
+  from_3: 'アップロードしたルールファイルはルールごとに比較され、通常の提案になります。複数の操作を 1 件にまとめることもできます（承認 1 回、バージョン 1 つ、reload 1 回）。',
+  from_4: 'changes:propose スコープを持つ API トークン、またはイベント分析（「analyst」として提案）。',
+  chk_h: '2. バックグラウンドのチェック',
+  chk_1: '静的：ルールを生成し、できあがる管理ファイルのすべてのルールがエキスパートモードのチェックに合格すること。許可されたディレクティブのみ（エンジン停止、ファイルを読む演算子、監査ログ設定の変更は不可）、正規表現の妥当性、ReDoS の形と実測、ルール ID の範囲、ID の重複なし。',
+  chk_2: '証拠は nginx のアクセスログ（ローテーション済み・圧縮済みも含む）とイベント履歴から。確定ブロックは、2xx/3xx を返した外部リクエストや、既知のスキャナー以外の内部の送信元に一致すると不合格。除外は、直近 30 日に記録されたどのアラートが消えるかを示し、攻撃らしい外部リクエストに印を付けます。',
+  chk_3: 'サンドボックス：127.0.0.1 でサービスユーザーとして使い捨ての nginx を起動し、本番設定に変更を加えます。nginx -t を実行し、変更のテストケースを再生し（ブロックではエンコード・大文字小文字・スラッシュの変形も）、強化ならすべての回帰サンプルも再生します。どれも 403 になってはいけません。監査ログは一時ディレクトリにとどまり、終了後は何も残りません。',
+  chk_4: '回帰サンプルは、3 つ以上の異なるアドレスが正常に開いたパスで、毎日一度アクセスログから集めます。',
+  chk_5: '証拠チェックの不合格を上書きできるのは、書面の理由を付けた人だけです。その変更も承認が必要で、自動適用はされません。',
+  ap_h: '3. 承認',
+  ap_1: '承認者か管理者が承認または却下します（取り込みは管理者のみ）。既定では提案者は自分の変更を承認できません。API トークンで提案した変更は、そのトークンを作った人の提案として扱います。',
+  ap_2: 'API トークンは決して承認できません。承認のエンドポイントはサインインした人だけを受け付けます。',
+  ap_3: 'シングル管理者モード（管理者がオン）では提案者が自分の変更を承認できますが、自分の緩和を承認するには新しいワンタイムコードと 10 文字以上のメモが必要です。イベント分析が提案した緩和は常にコードとメモが必要で、CRS のカテゴリ全体を停止するには管理者が必要です。',
+  ap_4: '自動適用は既定でオフです。管理者がオンにしても、承認なしで適用されるのは、外部の送信元だけを対象にパス、URL、User-Agent、Host、ヘッダーを見る新しい確定ブロックで、証拠に問題がなく（成功した外部リクエストも内部リクエストもない）すべてのチェックに合格したものだけ、1 日 10 件まで（変更可）。イベント分析のブロックには別のスイッチがあります。',
+  a_h: '4. 適用（root）',
+  a_1: 'インストール済みのプログラムが署名付きマニフェストと一致しなければ、すべての要求を拒否します。',
+  a_2: 'リンクをたどらずに要求を読み、チェックサム、jt-waf-mgr のヘッダー、すべてのルール（許可されたディレクティブ、ID がサイトの範囲内）、ヘルスチェック URL を再確認します。パスは要求からではなく、自身の設定から取ります。',
+  a_3: '動いている nginx のバイナリがパッケージ更新で置き換わっていないこと、ディスク上の管理ファイルが変更準備時のままであることを確認します。違えば拒否します（手動編集）。',
+  a_4: 'この nginx を通してすべてのヘルスチェック URL にリクエストし、ステータスコードを控えます。',
+  a_5: '現在のファイルのスナップショット：復元用にメモリに保持し、root 専用の状態ディレクトリにもコピーを残します。',
+  a_6: '新しい管理ファイルをアトミックに書き込み、nginx -t、reload を行い、新しいワーカープロセスが起動したことを確認します。',
+  a_7: 'もう一度ヘルスチェック URL にリクエストし、すべてのステータスコードが変わっていないことを確認します。',
+  a_8: '書き込み以降のどこかで失敗すると、スナップショットを戻して nginx -t と reload をやり直し、変更は「適用失敗（復元済み）」になります。',
+  v_h: 'バージョン、ロールバック、手動編集',
+  v_1: '適用（変更、取り込み、復元）のたびに次のバージョン番号が付き、ファイル全体とチェックサムを保存します。',
+  v_2: '承認者はメモを付けて以前のバージョンを復元できます。復元は適用プログラムに直接渡され（スナップショット、nginx -t、reload、ヘルスチェック、失敗時の復元）、サンドボックスも 2 回目の承認もなく、新しいバージョンとして書き込まれます。',
+  v_3: '適用は一度に 1 件。ある変更のチェック後に別のバージョンが適用されていれば、適用の前にチェックをやり直します。',
+  v_4: '手動編集：ディスク上の管理ファイルが最後に適用したバージョンと一致しないのは、jt-waf-mgr の外で誰かが編集したということです。解決するまで変更と復元はすべて拒否され（優先度 crit で記録）、その編集が黙って上書きされることはありません。承認者は現在のバージョンを明示的に戻せます。',
+  ai_h: 'オンプレミス LLM によるイベント分析',
+  ai_sub: '定期ジョブが、まとめたイベントを自前の OpenAI 互換 LLM サーバーに送ります。リクエストデータは攻撃者が制御できるので、モデルは判定するだけで、何を提案するかはプログラムが決めます。',
+  ai_s1: 'イベント', ai_s1d: '既定は直近 24 時間：確定ルールがまだブロックしていない外部リクエストと、異常スコアでブロックされたリクエスト。',
+  ai_s2: '候補', ai_s2d: 'ルールが見るパス（デコード、正規化、小文字、クエリなし）でまとめ、イベント数と送信元数が十分なものを残します。既存のルールや進行中の変更が対象とするパス、直近 30 日に提案が却下されたパスは除きます。',
+  ai_s3: 'プログラム側の規則', ai_s3d: 'モデルを使わずに判定：外部から秘密・バックアップ・設定ファイルの名前を探すリクエストは探査、1 つの外部アドレスが 5 つ以上のパスでブロックされていればスキャナー。',
+  ai_s4: 'LLM', ai_s4d: '1 バッチ最大 15 候補。回答は JSON スキーマで形式を制約（サーバーが非対応なら通常の JSON モード）。データは信頼できないものとして示します。',
+  ai_s5: '検証', ai_s5d: '信頼度 0.8 以上の判定だけを使います。ブロックの正規表現は ^ で始まり、そのパスに一致し、一般的なパス・正常と判定されたパス・回帰サンプルには一致しないこと。',
+  ai_s6: '提案とアラート', ai_s6d: '1 回の実行で少数の通常の変更（既定 5 件）を「analyst」として提案し、対応が必要なアラートを開きます。',
+  ai_rules_h: 'できること、できないこと',
+  ai_1: '外部の送信元に対する確定ブロックを提案できます。誤検知には最小の除外を提案します：1 サイトの 1 つの完全一致パス、特定のルールと項目。',
+  ai_2: '組織自身のアドレスも使っているパスはブロックを提案しません。外部の送信元が 3 未満で内部の送信元がない場合は、除外も誤検知アラートも出しません。',
+  ai_3: '直近 6 回（14 日以内）の分析で攻撃と判定されたパスは、一度の「誤検知」判定では緩和しません。',
+  ai_4: 'アラート：防がれていない可能性のある攻撃、誤検知でブロックされている利用者、進行中の攻撃（モデルが自ら出せる唯一の種類）。各種類とも 1 回の実行で最大 5 件。',
+  ai_5: '承認もルールの直接書き込みもしません。緩和は必ず人の承認を待ち、承認には新しいワンタイムコードとメモが必要です。確定ブロックが自動適用されるのは、管理者が専用のスイッチをオンにし、自動適用の条件をすべて満たすときだけです。',
+  ai_6: 'LLM のエラーは安全側に倒します。エラーを記録し、何も提案しません。API キーが記録に現れることはありません。',
+  ai_7: '実行ごとに要約が残ります：分析したイベント数、所要時間、判定、提案、アラート。',
+  ai_note: 'モデルはどちらの方向にも誤ることがあります。承認する前に提案の証拠を確認してください。',
+  crs_h: 'OWASP CRS の更新',
+  crs_sub: '任意で、既定はオフです。jt-waf-mgr が CRS を管理するとき、新しいリリースが nginx に入るのは変更フローを通るときだけです。',
+  crs_s1: '確認', crs_s1d: '毎日、または「今すぐ確認」で GitHub の CRS リリースを調べ、使用中のメジャーバージョンの最新版を選びます。新しいメジャーバージョンは知らせるだけです。',
+  crs_s2: '待機', crs_s2d: '公開から 7 日（wait_days）たってから採用し、問題のあるリリースを上流が直す時間を取ります。',
+  crs_s3: '検証', crs_s3d: '署名が有効で、固定した CRS リリース鍵（jt-waf-mgr に同梱）によるものであること。そうでなければダウンロードは残しません。',
+  crs_s4: '待機版として展開', crs_s4d: '展開（通常のファイルとディレクトリのみ、サイズ制限あり）してマニフェストを作り、更新があることをアラートで知らせます。',
+  crs_s5: '比較', crs_s5d: '承認者が切り替えを提案します。同じ最近のリクエストを、使用中のバージョンと新しいバージョンでサンドボックスに通し、違いを表示します。',
+  crs_s6: '承認', crs_s6d: '人が承認します。CRS の切り替えが自動適用されることはありません。',
+  crs_s7: 'インストール', crs_s7d: 'root プログラムが tarball のチェックサムと署名を再確認し、自分で展開し、比較したファイルと一致する場合だけ受け入れて、crs リンクを crs-<バージョン> に向けます。',
+  crs_s8: '確認または切り戻し', crs_s8d: 'nginx -t、reload、ヘルスチェック。どこかで失敗すればリンクを元に戻します。3 バージョンを保持。',
+  crs_more_h: '以前の版への切り戻しと初回インストール',
+  crs_1: '保持している以前のバージョンに戻すのも独立した変更で、同じように比較、承認、切り替えを行います。',
+  crs_2: 'CRS のないホスト：サンドボックスで CRS なしとありを比較し、root プログラムが crs-<バージョン>、crs リンク、crs-setup.conf（既存のものがなければ例から作成）を入れ、modsecurity.conf の直後に Include 行を 2 行挿入します。どこかで失敗すればすべて取り除きます。',
+  crs_3: 'CRS が通常のディレクトリのホストでは、最初の切り替えでそれを crs-<そのバージョン> に名前変更し、crs をそこへのリンクにします。nginx が読み込む内容は変わりません。',
+  crs_4: 'ホスト上で別のプログラム（cron ジョブなど）が CRS を更新しているなら、これをオンにする前に止めてください。2 つの更新プログラムが同じファイルを扱ってはいけません。',
+  bl_h: 'リクエスト量と一時的な IP ブロック',
+  bl_sub: 'WAF の隣にある 2 つの機能：全トラフィックの集計と、他のシステムが報告したアドレス用の短期の deny リスト。',
+  rv_h: 'リクエスト量',
+  rv_1: 'nginx のアクセスログを、前回読み終えた位置（inode とオフセット）から読み、ローテーションにも追従します。',
+  rv_2: 'サイトと時間ごとに数値だけを残します：合計、2xx、3xx、4xx、5xx、403、444、429、外部からのリクエスト数、バイト数。アドレス、URL、User-Agent は保存しません。',
+  rv_3: 'WAF の数字に比率を与えます：ブロック数を全リクエスト数と並べます。',
+  rv_4: '任意のアラート（既定はオフ）：ある時間のリクエストがそのサイトの過去 7 日の通常の 5 倍に達したとき、または応答の 20% 以上が 5xx のとき。',
+  ib_h: '一時的な IP ブロック',
+  ib_1: 'fail2ban、SOAR のプレイブック、スクリプトが blocks:write スコープのトークンで POST /api/v1/blocks を呼びます。承認者は「ブロック中の IP」画面からもブロックできます。',
+  ib_2: 'Web サービスと root プログラムの両方で確認：プライベート、ループバック、リンクローカル、マルチキャスト、予約済みのアドレス、内部ネットワーク、既知のスキャナー、信頼するプロキシ、保護リストは決してブロックしません。',
+  ib_3: 'リストはデータベースが持ちます。Web サービスはリスト全体を、最大で 1 分に 1 回、適用プログラムに渡します。',
+  ib_4: '適用プログラムが deny ファイルを書き、nginx -t と reload を行います。nginx -t が失敗すれば前のファイルに戻します。',
+  ib_5: 'ブロックは期限が来ると自動で終わり、リストが書き直されます。',
+  il_h: '制限',
+  il_1: 'トークンがブロックできるのは単一のアドレスだけです。承認者は /24（IPv4）または /64（IPv6）までの範囲をブロックできます。',
+  il_2: '既定 24 時間、トークンからは最長 7 日、画面からは最長 30 日。永久のブロックはありません。',
+  il_3: '有効なブロックは最大 500 件、トークンごとに 200 件、トークンごとに 1 時間あたり 60 件の新規まで。',
+  il_4: '変更フローも承認もありません。ブロックは設定ではなく一時的なデータです。追加、延長、削除、拒否、期限切れはすべて監査記録に残ります。',
+  il_5: 'http { } 内で一度 include すれば、ModSecurity のないサイトも含めてすべてのサイトに効きます。独自の allow や deny 行を持つ server と location は引き継がないため、「ブロック中の IP」画面に一覧で示します。',
+  nt_h: '通知、ログ転送、アラート',
+  nt_sub: 'Web サービスは行を書くだけで、送信は別の場所で行います。チャットサービスやログサーバーが遅くても Web サービスは止まりません。',
+  nc_h: '通知',
+  nc_1: 'メール（テキストと HTML）、Telegram、Microsoft Teams、Slack、Discord、Zulip、Nextcloud Talk、タイムスタンプと本文に HMAC-SHA256 署名を付けた汎用 webhook。',
+  nc_2: 'イベント × チャネルのマトリクス。メッセージは英語・繁体字中国語・日本語で、ページへのリンク付き。チャネルごとにテスト送信できます。',
+  nc_3: 'notify ユニットが送信します。失敗すると 1、5、15 分後に再送し、チャネルごとに 1 時間 60 件まで、既定では毎日 8:00 に日次の要約を送ります。',
+  nc_4: 'リクエスト由来の値はコードとして表示するかエスケープし、書式・リンク・メンションにはしません。ボットのトークン、webhook の URL、パスワードは書き込み専用の設定です。',
+  ls_h: 'ログサーバー（syslog / SIEM）',
+  ls_1: '最大 8 か所。それぞれプロトコル（ローカルソケット、UDP、TCP、TLS）、syslog ヘッダー（RFC 3164 または 5424）、記録形式（JSON、CEF、LEEF 2.0、GELF 1.1、key=value）、内容（監査記録、WAF イベント、アラート）を選べます。',
+  ls_2: '送信先ごとに専用のキューと再送があり、テスト送信で実際に送った内容を確認できます。',
+  ls_3: '推奨はローカルの /dev/log に送り、ホストの rsyslog に転送させる方法です。Web サービスからリモートホストへ直接送るには、そのユニットでアドレスを許可する必要があります。',
+  al_h: 'アラート',
+  al_1: '進行中の攻撃や防がれていない可能性のある攻撃、利用者に影響する誤検知、完全性の問題、設定の外部変更、適用やバックアップの失敗、サインインへの攻撃、CRS 更新の準備完了、トラフィックの急増やエラーの多発。',
+  al_2: '同じ事柄には開いたアラートを 1 件だけ。繰り返し起きても件数が増えるだけです。',
+  al_3: '承認者がメモを付けて対応済みにするまで開いたままで、それまで 24 時間ごとに再通知します。誤検知のアラートは、その除外が適用されると自動で閉じます。',
+  al_4: 'アラートを開いたことも対応したことも監査記録に残ります。',
+  in_h: '完全性と監査',
+  in_sub: 'プログラム自体、起きたことの記録、jt-waf-mgr が管理する設定を守る仕組み。',
+  i1_h: '署名付きリリース',
+  i1: '各リリースは全ファイルの SHA-256（MANIFEST.sha256）を記載し、プロジェクトの RSA-3072 リリース鍵で署名します。tarball にも別の署名があります。install.sh はインストール前に両方を確認し、初回インストールで鍵を固定します。別の鍵で署名されたリリースには --accept-new-key が必要です。',
+  i2_h: 'プログラムの確認',
+  i2: 'サービスは毎時、インストール済みのファイルを署名付きリストと照合します：変更・欠落・余分なファイルなし、バイトコードキャッシュなし、シンボリックリンクなし、systemd ユニットも対象。root の適用プログラムも毎回実行前に同じ確認をし、一致しなければ拒否します。',
+  i3_h: '監査ハッシュチェーン',
+  i3: 'サインイン、変更、承認、設定、システム作業がそれぞれ 1 件の記録（時刻、誰、どこから、何を、結果）を書きます。各記録は sha256(前の記録のハッシュ + この記録) を持ち、データベースのトリガーが変更と削除を拒否します。新しい記録は数分ごと、チェーン全体は毎日 1 回確認します。',
+  i4_h: 'アンカー',
+  i4: '5 分ごとに最新の記録番号とハッシュを追記専用ファイル（chattr +a）に追記し、syslog にも送ります。各記録もハッシュ付きで syslog に送ります。書き換えたチェーンはこれらと一致しません。エクスポートは jt-waf-mgr audit-verify でオフライン検証できます。',
+  i5_h: '設定のスナップショット',
+  i5: '5 分ごとに、すべての nginx・ModSecurity・CRS・管理ファイルと nginx プログラムの SHA-256 を取ります。差分は記録し（config.changed）、jt-waf-mgr（適用したバージョン）、登録済みの自動化、外部のいずれかに帰属させます。外部の変更はアラートを開き、システムチェック画面に 7 日間警告を出します。',
+  i6_h: 'バックアップ',
+  i6: '毎日 SQLite のオンラインバックアップ（既定 3:00）を取り、完全性を確認して SHA-256 ファイルを付け、14 日間保持します。ダウンロードにはワンタイムコードが必要です。失敗したバックアップが正常なものを消すことはありません。',
+  i7_h: '自動ロールバック付きアップグレード',
+  i7: 'upgrade.sh はまず確認します（--check は何も変えません）：インストール済みのプログラムと固定した鍵による新リリースの検証、新しいコードが既存の設定を受け入れること、適用が進行中でないこと。続いてプログラム、ユニット、設定、データベースを /var/backups/jt-waf-mgr/ にバックアップし、移行、起動し、バージョン・マニフェスト・監査チェーンを確認します。どこかで失敗すれば自動で元に戻します。nginx には触れません。',
+  i8_h: '問題が起きたとき',
+  i8: '問題は syslog 優先度 crit の integrity.* 監査記録になり、続く間は 12 時間ごとに繰り返します。手動の upgrade.sh --rollback はデータベースを巻き戻すため、root だけが書き込める巻き戻し記録と、優先度 crit の syslog に書きます。',
+  b_h: 'セキュリティの境界',
+  b_sub: '何が何に届くのか、そしてコードが決してしないことのまとめ。',
+  br_h: '何が何に届くか',
+  br_1: '訪問者が届くのは nginx だけです。管理画面は別の nginx vhost です。例では内部ネットワークだけに許可し、画面が攻撃文字列を表示するため ModSecurity はオフにしています。',
+  br_2: 'Web サービスは 127.0.0.1:8095 で待ち受け、X-Real-IP はローカルの nginx からのものだけを信頼します。',
+  br_3: 'Web サービスから適用プログラムへは、スプールの要求ファイルを通してだけ届きます。適用プログラムが信頼するのは「どのバージョンか」だけで、リンクをたどらずに開き、パスはすべて自身の設定から取ります。',
+  br_4: 'インターネットに届くのは notify、GeoIP、CRS のユニットだけです。分析はプライベートネットワークまで、Web サービスと適用プログラムはループバックだけです。',
+  br_5: 'API トークン：エンドポイントごとに 1 つのスコープ、任意の送信元ネットワークと有効期限、保存するのは SHA-256 だけ。承認、アカウント、トークン、設定には使えません。',
+  nv_h: '決して起きないこと',
+  nv_1: 'shell=True は使いません。リクエストデータからコマンドラインを組み立てることはありません。',
+  nv_2: 'innerHTML も v-html も使いません。URL、User-Agent、一致したデータ、ルール本文、モデルの文章はテキストとして表示します。CSP は unsafe-inline もサードパーティのオリジンも許可しません。',
+  nv_3: '機密項目の元の値はデータベースになく、それを見る API もありません。',
+  nv_4: 'シークレットは読み戻せません。LLM キー、MaxMind キー、SMTP パスワード、ボットのトークンは設定上書き込み専用です。',
+  nv_5: '人なしでの緩和も、API トークンによる承認もありません。',
+  nv_6: 'アーキテクチャの項に挙げたファイル以外の nginx 設定には書き込みません。',
+  lim_h: '限界',
+  lim_1: 'ホストの root は何でも変更できます。アンカーと syslog のコピーで改ざんは検出できますが、不可能にはできません。別の SIEM にコピーを保管してください。',
+  lim_2: 'LXC コンテナでは追記専用フラグをホスト側で設定する必要があり、systemd のアドレス制限も効きません。',
+  lim_3: 'データベースは保存時に暗号化されません（Python 標準ライブラリに AES がないため）。ファイル権限（0600、ディレクトリ 0700）で保護します。',
+  more: '詳しくは：', sec_policy: 'セキュリティポリシー', comp_doc: 'コンプライアンス対照', api_doc: 'API 連携マニュアル',
+ },
+}
+function pick() {
+  const q = new URLSearchParams(location.search).get('lang')
+  if (T[q]) return q
+  const n = (navigator.language || 'en').toLowerCase()
+  return n.startsWith('zh') ? 'zh-TW' : n.startsWith('ja') ? 'ja' : 'en'
+}
+// an SVG label longer than its box is squeezed into it (data-w: the room it has)
+function fit(root) {
+  for (const el of root.querySelectorAll('svg text[data-w]')) {
+    el.removeAttribute('textLength'); el.removeAttribute('lengthAdjust')
+    let w = 0
+    try { w = el.getComputedTextLength() } catch (e) { continue }
+    if (w > +el.dataset.w) { el.setAttribute('textLength', el.dataset.w); el.setAttribute('lengthAdjust', 'spacingAndGlyphs') }
+  }
+}
+function apply(lang) {
+  const d = T[lang]
+  document.documentElement.lang = lang
+  for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
+  for (const b of document.querySelectorAll('.langs button')) b.classList.toggle('on', b.dataset.lang === lang)
+  for (const id of ['home-brand', 'home-btn']) document.getElementById(id).href = 'index.html?lang=' + lang
+  const sfx = { 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || ''
+  const gh = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/'
+  for (const id of ['sec-doc', 'sec-foot']) document.getElementById(id).href = gh + 'SECURITY' + ({ 'zh-TW': '_zh-TW', ja: '_ja' }[lang] || '') + '.md'
+  document.getElementById('comp-doc').href = gh + 'docs/COMPLIANCE' + sfx + '.md'
+  document.getElementById('api-doc').href = gh + 'docs/API' + sfx + '.md'
+  document.getElementById('zm-x').setAttribute('aria-label', d.close)
+  fit(document)
+  const u = new URL(location.href); u.searchParams.set('lang', lang); history.replaceState(null, '', u)
+}
+for (const b of document.querySelectorAll('.langs button')) b.addEventListener('click', () => apply(b.dataset.lang))
+// a diagram opens at full size in the page (scrolls on a phone); X, Escape or a click outside closes it
+const zoom = document.getElementById('zoom')
+for (const b of document.querySelectorAll('button.zoom')) b.addEventListener('click', () => {
+  if (!zoom.showModal) return
+  const svg = document.getElementById(b.dataset.fig).querySelector('svg').cloneNode(true)
+  for (const el of svg.querySelectorAll('[id]')) el.removeAttribute('id')
+  const body = document.getElementById('zm-body')
+  body.replaceChildren(svg)
+  document.getElementById('zm-title').textContent = svg.querySelector('title').textContent
+  zoom.showModal()
+  fit(body)
+  body.scrollTop = 0; body.scrollLeft = 0
+  document.body.classList.add('zm-on')
+})
+document.getElementById('zm-x').addEventListener('click', () => zoom.close())
+zoom.addEventListener('click', (e) => { if (e.target === zoom || e.target.id === 'zm-body') zoom.close() })
+zoom.addEventListener('close', () => { document.body.classList.remove('zm-on'); document.getElementById('zm-body').replaceChildren() })
+apply(pick())
+</script>
+</body>
+</html>

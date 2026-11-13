@@ -10,7 +10,7 @@ ModSecurity do not have to follow this guide: compare with "What jt-waf-mgr need
 
 jt-waf-mgr writes only ModSecurity files and never writes nginx configuration. It reads nginx's configuration (to find
 the sites and ModSecurity's main file), runs `nginx -t` and reloads nginx. `modsecurity on;` in nginx (section 3) and
-the management vhost ([README](../README.md#connect-to-the-management-interface)) are your own one-time edits.
+the management vhost ([README](../README.md#connect-to-the-management-interface)) are your own one-time edits. The one exception is optional: the temporary IP block list, a file of `deny` lines that you include once yourself.
 
 > Go live in detection-only mode (`DetectionOnly`) first, watch the events in jt-waf-mgr for a while and deal with the
 > false positives, then switch to blocking (`On`).

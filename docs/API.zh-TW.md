@@ -47,6 +47,8 @@
 - `lookups:read`：IP 查詢與 GeoIP 查詢。
 - `changes:read`：變更、版本、警示、事件分析記錄、回歸測試樣本。
 - `changes:propose`：提出變更（`POST /changes`、`POST /changes/preview`、`POST /rules/toggle`），永遠不能核准。
+- `blocks:read`：列出暫時封鎖的 IP（`GET /blocks`）。
+- `blocks:write`：新增、延長、解除這個權杖自己的暫時封鎖（只能單一位址）。
 
 每個權杖只給需要的 scope。只讀事件的 SIEM 給 `events:read`；會提出封鎖規則的劇本給 `changes:propose` 與
 `changes:read`。
@@ -397,10 +399,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
  "first_seen": "2026-10-20T03:11:09+08:00", "last_seen": "2026-11-13T15:13:27+08:00",
  "hosts": [{"key": "app.example.com", "events": 40}],
  "rules": [{"key": "941100", "events": 12, "msg": "XSS Attack Detected via libinjection", "family": "xss"}],
- "blocked_now": false}
+ "blocked_now": false, "blocks": []}
 ```
 
-這一版的 `blocked_now` 一律是 `false`：jt-waf-mgr 目前還沒有暫時封鎖 IP 的端點。
+有暫時封鎖（4.9 節）涵蓋這個位址時，`blocked_now` 是 `true`，`blocks` 列出那些封鎖。
 
 ### 4.7 事件分析與回歸測試樣本
 
@@ -415,6 +417,51 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/lookup
 
 稽核記錄（`GET /audit`、`GET /audit/export`）只開放給以 session 登入的管理者，權杖會得到 403。要把稽核記錄送進
 SIEM，請在網頁介面的設定中新增外送記錄目的地（syslog 等格式），並勾選稽核記錄。
+
+### 4.9 暫時封鎖 IP
+
+給看到攻擊者、想在一分鐘內把它封鎖在外的系統用，不經過變更與核准：例如網頁信箱在 WAF 後面的郵件主機，用 fail2ban
+呼叫。封鎖是暫時的資料，不是設定，時間到就自動結束。
+
+運作方式：jt-waf-mgr 把清單存在資料庫，由 root 的套用程式寫進一個 nginx 檔案（每行 `deny <位址>;`，最快每
+`reload_seconds` 秒寫一次，預設 60），測試 nginx 後 reload。管理者在 `http { }` 裡加一次 include 這個檔案；jt-waf-mgr
+本身不修改 nginx 設定。http 層的 `deny` 涵蓋所有站台（沒開 ModSecurity 的也算），但自己有 `allow` / `deny` 的 server
+與 location 例外（「封鎖中的 IP」頁會列出）。在「設定」啟用之前，每個呼叫都回 409 `blocks_off`。
+
+- **`POST /blocks`**（scope `blocks:write`）：內容 `{"ip", "ttl", "source", "reason"}`。
+  - `ip`：單一位址（IPv4 或 IPv6）。網段只有人在網頁介面可以封鎖（最大 /24 或 /64）。
+  - `ttl`：秒數，60 秒到 7 天（設定 `blocks.min_ttl`、`blocks.api_max_ttl`）；預設 24 小時。
+  - `source`：呼叫的來源，`[A-Za-z0-9_.:@/+-]{1,64}`，例如 `mail2/zimbra-webmail`。
+  - `reason`：必填，最多 300 字。
+  - 同一個來源再送同一個位址，會延長到期時間（`extended` 加一），不會多一筆。不同來源各自一筆；最後一筆結束後才解除封鎖。
+  - 回 201 與該筆資料：`{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at", "created_by",
+    "via": "token", "extended", "ended_at", "ended_by"}`。
+- **`DELETE /blocks/{ip}?source=`**（scope `blocks:write`）：解除這個權杖自己對該位址的封鎖（有 `source` 就只解除那個來源）。
+  其他權杖的封鎖永遠不會動到：回 404 `not_found`。回 `{"removed": n}`。
+- **`GET /blocks?state=active|all|removed|expired`**（scope `blocks:read`）：封鎖清單，以及 nginx 是否真的載入清單檔：
+  `included`（在 `http { }` 裡載入時為 true）、`uncovered`（涵蓋不到的 server 與 location）、`applied`（最後寫入的時間與結果）、
+  `in_sync`、`limits`。
+
+會被拒絕（並寫進稽核 `block.refused`）的情況：
+
+- 422 `not_public`（私有、迴環、鏈路本地、CGNAT、多播）、`protected`（內部網路、已知掃描器、信任的代理，或保護清單：
+  例如站台前面的 CDN）、`invalid_ip`、`single_address_only`、`invalid_ttl`、`invalid_source`、`reason_required`；
+- 429 `rate_limited`（同一個權杖一小時內新增超過 `blocks.token_per_hour`，預設 60）；
+- 409 `too_many_blocks`（清單已滿，`blocks.max_active`，預設 500，會開立警示）或 `too_many_for_token`
+  （`blocks.max_per_token`，預設 200）。
+
+每次新增、延長、解除、拒絕、到期都寫進稽核記錄，並送到外送記錄目的地：`block.add`、`block.extend`、`block.remove`、
+`block.refused`、`block.expired`，清單檔本身是 `block.applied` / `block.apply_failed`，帶 `ip`、`source`、`ttl`、`token_id`。
+
+```sh
+# fail2ban 的封鎖動作
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"ip": "203.0.113.7", "ttl": 86400, "source": "mail2/zimbra-webmail", "reason": "4 failed logins in 24 h"}' \
+  https://waf.example.com/api/v1/blocks
+# fail2ban 的解除動作
+curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" \
+  'https://waf.example.com/api/v1/blocks/203.0.113.7?source=mail2/zimbra-webmail'
+```
 
 ## 5. 只能在網頁介面使用的端點
 

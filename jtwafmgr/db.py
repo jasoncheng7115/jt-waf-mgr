@@ -317,6 +317,26 @@ SCHEMA = [
     );
     CREATE INDEX traffic_hourly_host ON traffic_hourly(host, hour);
     """,
+    # 9: temporary IP blocks (blocks.py): one row per (address, source) while active, kept after it ends
+    """
+    CREATE TABLE ip_blocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        source TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'active',
+        created_at REAL NOT NULL,
+        expires_at REAL NOT NULL,
+        created_by TEXT NOT NULL,
+        via TEXT NOT NULL,
+        token_id TEXT,
+        extended INTEGER NOT NULL DEFAULT 0,
+        ended_at REAL,
+        ended_by TEXT
+    );
+    CREATE INDEX ip_blocks_active ON ip_blocks(state, ip);
+    CREATE INDEX ip_blocks_token ON ip_blocks(token_id, state);
+    """,
 ]
 
 

@@ -82,6 +82,11 @@ sandbox_dir = "{w}/sandbox"
 apply_state = "{w}/apply-state"
 [evidence]
 access_logs = ["{w}/access.log"]
+[traffic]
+logs = ["{w}/traffic/*access.log"]
+[blocks]
+enabled = true
+file = "{w}/nginx-blocks/blocked-ips.conf"
 [waf]
 focus_sites = ["sso.example.com"]
 [integrity]

@@ -81,6 +81,8 @@ class Applier:
             req = json.loads(fh.read(MAX_REQUEST + 1).decode('utf-8'))
         if isinstance(req, dict) and req.get('action') == 'crs_switch':
             return self.check_crs(req)
+        if isinstance(req, dict) and req.get('action') == 'blocks':
+            return self.check_blocks(req)
         if not isinstance(req, dict) or req.get('action') != 'apply':
             raise Fail('request', 'unknown action')
         if not isinstance(req.get('version'), int) or not isinstance(req.get('change_id'), int):
@@ -447,6 +449,55 @@ class Applier:
         os.symlink(name, tmp)
         os.replace(tmp, link)
 
+    # --- temporary IP blocks -------------------------------------------------------------------
+    def never_blocked(self):
+        from .blocks import _nets
+        return (list(self.cfg.internal_networks) + list(self.cfg.known_scanners)
+                + _nets(self.cfg['server'].get('trusted_proxies')) + _nets(self.cfg['blocks'].get('protected')))
+
+    def check_blocks(self, req):
+        from .blocks import validate_entries
+        entries = req.get('entries')
+        try:
+            norm = validate_entries(entries, self.never_blocked())
+        except ValueError as e:
+            raise Fail('validate', 'blocks: %s' % clean(str(e), 300))
+        if norm != entries or hashlib.sha256('\n'.join(entries).encode()).hexdigest() != req.get('sha256'):
+            raise Fail('request', 'blocks: the list is not normalised or its checksum does not match')
+        return req
+
+    def blocks_write(self, req):
+        """Write the deny list (the path comes from the configuration, never from the request), test, reload;
+        put the previous file back when nginx -t fails."""
+        from .blocks import render
+        path = self.cfg['blocks']['file']
+        d = os.path.dirname(path)
+        if os.path.islink(d) or (os.path.lexists(path) and (os.path.islink(path) or not os.path.isfile(path))):
+            raise Fail('blocks', '%s or its directory is a link or not a regular file' % path)
+        os.makedirs(d, mode=0o755, exist_ok=True)
+        old = None
+        if os.path.exists(path):
+            old = self._read_nofollow(path, 8 * 1024 * 1024)
+        entries = req['entries']
+        new = render(entries, path).encode()
+        body = lambda b: [l for l in (b or b'').decode('utf-8', 'replace').splitlines() if l and not l.startswith('#')]
+        if old is not None and body(old) == body(new):
+            return {'result': 'ok', 'count': len(entries), 'sha256': req['sha256'], 'changed': False,
+                    'summary': 'unchanged (%d entries)' % len(entries)}
+        self.check_binary()
+        write_atomic(path, new, 0o644)
+        try:
+            self.test_config()
+        except Fail:
+            if old is None:
+                os.unlink(path)
+            else:
+                write_atomic(path, old, 0o644)
+            raise
+        note = self.reload(0)
+        return {'result': 'ok', 'count': len(entries), 'sha256': req['sha256'], 'changed': True,
+                'summary': '%d entries written, nginx reloaded (%s)' % (len(entries), note)}
+
     def crs_switch(self, req):
         from . import crsupdate
         crs, to = req['crs_path'].rstrip('/'), req['to']
@@ -624,6 +675,9 @@ class Applier:
                 if req.get('action') == 'crs_switch':
                     res.update(action='crs_switch', change_id=req['change_id'])
                     res.update(self.crs_switch(req))
+                elif req.get('action') == 'blocks':
+                    res.update(action='blocks')
+                    res.update(self.blocks_write(req))
                 else:
                     res.update(version=req['version'], change_id=req['change_id'])
                     res.update(self.apply(req))
@@ -631,6 +685,8 @@ class Applier:
                 res.update(result='failed', step=e.step, summary=e.summary, **e.extra)
             except Exception as e:
                 res.update(result='failed', step='request', summary='%s: %s' % (type(e).__name__, clean(str(e), 300)))
+            if base.startswith('blocks-'):
+                res.update(action='blocks')
             mc = re.match(r'crs-c(\d+)$', base)
             if mc:
                 res.update(action='crs_switch', change_id=int(mc.group(1)))

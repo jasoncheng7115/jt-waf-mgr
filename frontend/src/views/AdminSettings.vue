@@ -4,7 +4,7 @@
     <WorkflowSettings />
     <RegressionSamples />
     <GeoipSettings @saved="load" />
-    <UiSettings :groups="['llm', 'analyst', 'traffic', 'network']" @saved="load" />
+    <UiSettings :groups="['llm', 'analyst', 'traffic', 'blocks', 'network']" @saved="load" />
     <SyslogDestinations />
     <UiSettings :groups="['policy']" @saved="load" />
     <ErrorBox :error="error" />

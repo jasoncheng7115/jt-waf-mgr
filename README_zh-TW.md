@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.23
+# jt-waf-mgr v0.4.24
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -43,6 +43,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
   **寫入之前**就遮蔽。
 - **總覽與事件**：在時間軸上拖曳即可放大，或自訂最長 31 天的範圍；篩選條件存在網址；事件詳情列出每條命中的規則；一鍵草擬
   排除或封鎖。
+- **暫時封鎖 IP**（0.4.24 新增，選用）：郵件主機的 fail2ban、SOAR 劇本或核准者可以暫時封鎖單一位址；一個 nginx deny
+  清單涵蓋所有站台。見[暫時封鎖 IP](#暫時封鎖-ip選用)。
 - **請求量**（0.4.23 新增）：計算 nginx 存取記錄裡的每一個請求，依站台與小時統計（2xx、3xx、4xx、5xx、403、444、429、
   外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量放在一起，讓 WAF 的數字有分母可以比較。
   在管理的「設定」→「請求量統計」啟用或關閉並設定警示；選用的警示（預設關閉）：流量暴增（該站台前 7 天同一時段平常量的
@@ -95,8 +97,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
-tar xzf jt-waf-mgr-0.4.23.tar.gz && cd jt-waf-mgr-0.4.23
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
+tar xzf jt-waf-mgr-0.4.24.tar.gz && cd jt-waf-mgr-0.4.24
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -141,7 +143,7 @@ sudo openssl req -x509 -newkey rsa:3072 -nodes -days 825 -keyout /etc/ssl/privat
 ### 讓 jt-waf-mgr 修改規則
 
 jt-waf-mgr 只寫 ModSecurity 的檔案，永遠不寫 nginx 設定。它會讀 nginx 設定（找出站台與 ModSecurity 主設定檔）、執行
-`nginx -t` 並 reload nginx。管理介面的 vhost 與 nginx 裡的 `modsecurity on;` 是管理者自己做一次的修改。
+`nginx -t` 並 reload nginx。管理介面的 vhost 與 nginx 裡的 `modsecurity on;` 是管理者自己做一次的修改。唯一的例外是選用的暫時封鎖 IP 清單：只有 `deny` 行的一個檔案，由你自己 include 一次。
 
 要讓 jt-waf-mgr 修改規則：啟用套用程式（`sudo ./install.sh --enable-apply`）、設定健康檢查網址，再到「規則 → 受管理的
 規則」納管現有規則檔（由 admin 核准，跟一般變更一樣）。在那之前什麼都不會寫入。沒有站台規則檔也能納管。
@@ -159,6 +161,26 @@ CRS 由 jt-waf-mgr 處理。新主機只需要 nginx 加 ModSecurity 模組、�
 5. 接著納管，在 CRS 規則前後加上 jt-waf-mgr 受管理的規則檔。
 
 之後的 CRS 更新也一樣：下載、驗證、沙箱比對、由人核准、安裝；保留 3 個版本可以退回。也可以自己手動安裝 CRS（見安裝手冊）。
+
+### 暫時封鎖 IP（選用）
+
+其他系統（例如網頁信箱在這台代理後面的郵件主機上的 fail2ban）可以透過 API（scope `blocks:write`）暫時封鎖單一位址；
+核准者也可以在「封鎖中的 IP」頁操作。jt-waf-mgr 把清單寫進一個只有 `deny` 行的 nginx 檔案，涵蓋所有站台，沒開
+ModSecurity 的也算。使用方式：
+
+1. 建立檔案，並在 nginx.conf 的 `http { }` 裡 include 一次，然後測試並 reload：
+   ```sh
+   sudo install -D -m 644 /dev/null /etc/nginx/jt-waf-mgr/blocked-ips.conf
+   # 在 nginx.conf 的 http { } 裡：   include /etc/nginx/jt-waf-mgr/blocked-ips.conf;
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+2. 設定 → 暫時封鎖 IP：啟用，並列出永遠不能封鎖的網段（例如站台前面的 CDN）。
+3. 管理 → API 權杖：建立有 `blocks:write`（與 `blocks:read`）的權杖，來源限定為呼叫端主機的位址。
+
+封鎖預設 24 小時，權杖最長 7 天、手動最長 30 天，沒有永久封鎖。內部網路、已知掃描器、信任的代理與保護清單永遠不會被
+封鎖。nginx 比對的是 `real_ip` 之後的位址，所以在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。自己有
+`allow` / `deny` 的 server 與 location 不會繼承這份清單，「封鎖中的 IP」頁會列出。詳細說明見 [API 手冊](docs/API.zh-TW.md)
+第 4.9 節。
 
 ### 帳號與救援
 

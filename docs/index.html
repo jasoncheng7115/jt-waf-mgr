@@ -25,8 +25,9 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand { display: flex; align-items: center; gap: 9px; font: 700 19px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
-nav.links { display: flex; gap: 16px; flex: 1; overflow-x: auto; white-space: nowrap; }
+nav.links { display: flex; gap: 12px; flex: 1; overflow-x: auto; white-space: nowrap; }
 nav.links a { color: var(--text); font-size: 14.5px; font-weight: 500; } nav.links a:hover { color: var(--blue); text-decoration: none; }
+@media (max-width: 1240px) { nav.links { gap: 9px; } nav.links a { font-size: 13.5px; } }
 .langs { display: flex; gap: 4px; }
 .langs button { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; }
 .langs button:hover { border-color: var(--blue); }
@@ -57,6 +58,12 @@ section.alt .card { background: var(--panel-2); }
 .card h3 { margin: 0 0 8px; font-size: 17px; display: flex; gap: 10px; align-items: center; }
 .card h3 .ic { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none; box-shadow: 0 2px 8px rgba(37, 99, 196, .30); }
 .card p { margin: 0; color: var(--muted); font-size: 15px; }
+.grid.specs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .grid.specs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .grid.specs { grid-template-columns: minmax(0, 1fr); } }
+.specs .card p.by { font-size: 13px; font-weight: 600; color: var(--blue-d); margin-bottom: 6px; }
+.card ul.src { margin: 6px 0 0; padding-left: 18px; color: var(--ink); font-size: 14.5px; }
+.card ul.src li { margin: 4px 0; }
 ol.flow { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; counter-reset: s; }
 ol.flow li { counter-increment: s; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; position: relative; box-shadow: var(--shadow); }
 section.alt ol.flow li { background: var(--panel-2); }
@@ -77,6 +84,11 @@ pre .c { color: #8193ab; }
 ul.ticks { padding-left: 0; list-style: none; } ul.ticks li { padding-left: 32px; position: relative; margin: 9px 0; color: var(--ink); }
 ul.ticks li::before { content: "✓"; position: absolute; left: 0; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-h), var(--blue-d)); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(37, 99, 196, .30); }
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: center; }
+.two.top { align-items: start; } .two.top .shot { margin-top: 8px; }
+.reccard { margin-top: 30px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px 16px; box-shadow: var(--shadow); }
+.reccard h3 { margin: 0 0 4px; font-size: 18px; }
+ul.ticks.recgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; margin: 0; }
+@media (max-width: 860px) { ul.ticks.recgrid { grid-template-columns: minmax(0, 1fr); } }
 footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); background: #fff; }
 @media (max-width: 860px) { .hero .wrap, .two { grid-template-columns: minmax(0, 1fr); } .hero h1 { font-size: 34px; } nav.links { display: none; } }
 /* a palette around the logo blue: every card, step and block gets its own colour (--c, --c2) */
@@ -143,7 +155,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   <nav class="links">
     <a href="#features" data-t="nav_features"></a><a href="#flow" data-t="nav_flow"></a><a href="#ai" data-t="nav_ai"></a>
     <a href="#notify" data-t="nav_notify"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
-    <a href="#install" data-t="nav_install"></a>
+    <a href="#install" data-t="nav_install"></a><a href="#specs" data-t="nav_specs"></a><a href="how.html" id="how-link" data-t="nav_how"></a>
   </nav>
   <div class="langs" role="group" aria-label="Language">
     <button type="button" data-lang="en">EN</button><button type="button" data-lang="zh-TW">繁中</button><button type="button" data-lang="ja">日本語</button>
@@ -152,7 +164,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.23</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.24</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -192,13 +204,17 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   </ol>
 </div></section>
 
-<section id="ai"><div class="wrap two">
-  <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
-    <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul>
+<section id="ai"><div class="wrap">
+  <div class="two top">
+    <div><h2 data-t="ai_h"></h2><p class="sub" data-t="ai_sub"></p>
+      <ul class="ticks"><li data-t="ai1"></li><li data-t="ai2"></li><li data-t="ai3"></li><li data-t="ai4"></li><li data-t="ai5"></li></ul></div>
+    <a class="shotlink" href="shots/en/analysis.png" data-shot="analysis"><img class="shot" src="shots/en/thumb/analysis.webp" alt="" loading="lazy"></a>
+  </div>
+  <div class="reccard">
     <h3 data-t="ai_rec_h"></h3>
-    <ul class="ticks"><li data-t="ai_rec1"></li><li data-t="ai_rec2"></li><li data-t="ai_rec3"></li><li data-t="ai_rec4"></li></ul>
-    <p class="disclaimer" data-t="ai_disclaimer"></p></div>
-  <a class="shotlink" href="shots/en/analysis.png" data-shot="analysis"><img class="shot" src="shots/en/thumb/analysis.webp" alt="" loading="lazy"></a>
+    <ul class="ticks recgrid"><li data-t="ai_rec1"></li><li data-t="ai_rec2"></li><li data-t="ai_rec3"></li><li data-t="ai_rec4"></li></ul>
+    <p class="disclaimer" data-t="ai_disclaimer"></p>
+  </div>
 </div></section>
 
 <section id="notify" class="alt"><div class="wrap two">
@@ -245,8 +261,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="iblock c-install">
       <div class="ihead"><span class="ic">↓</span><div><h3 data-t="ib_h"></h3><p data-t="ib_d"></p></div></div>
       <div class="code"><button type="button" class="copy" data-t="copy"></button><pre><span class="c" data-t="c_verify"></span>
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.23.tar.gz.sig jt-waf-mgr-0.4.23.tar.gz
-tar xzf jt-waf-mgr-0.4.23.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.23
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.24.tar.gz.sig jt-waf-mgr-0.4.24.tar.gz
+tar xzf jt-waf-mgr-0.4.24.tar.gz &amp;&amp; cd jt-waf-mgr-0.4.24
 <span class="c" data-t="c_install"></span>
 sudo ./install.sh
 <span class="c" data-t="c_check"></span>
@@ -283,6 +299,18 @@ sudo ./uninstall.sh --purge</pre></div>
   </div>
 </div></section>
 
+<section id="specs" class="alt"><div class="wrap">
+  <h2 data-t="sp_h"></h2><p class="sub" data-t="sp_sub"></p>
+  <div class="grid specs">
+    <div class="card"><h3><span class="ic">▣</span><span data-t="sp1_h"></span></h3><p class="by" data-t="sp1_by"></p><ul class="src"><li data-t="sp1_1"></li><li data-t="sp1_2"></li><li data-t="sp1_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">☰</span><span data-t="sp2_h"></span></h3><p class="by" data-t="sp2_by"></p><ul class="src"><li data-t="sp2_1"></li><li data-t="sp2_2"></li><li data-t="sp2_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">◉</span><span data-t="sp3_h"></span></h3><p class="by" data-t="sp3_by"></p><ul class="src"><li data-t="sp3_1"></li><li data-t="sp3_2"></li><li data-t="sp3_3"></li><li data-t="sp3_4"></li><li data-t="sp3_5"></li><li data-t="sp3_6"></li><li data-t="sp3_7"></li></ul></div>
+    <div class="card"><h3><span class="ic">✎</span><span data-t="sp4_h"></span></h3><p class="by" data-t="sp4_by"></p><ul class="src"><li data-t="sp4_1"></li><li data-t="sp4_2"></li><li data-t="sp4_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">⧉</span><span data-t="sp5_h"></span></h3><p class="by" data-t="sp5_by"></p><ul class="src"><li data-t="sp5_1"></li><li data-t="sp5_2"></li><li data-t="sp5_3"></li></ul></div>
+    <div class="card"><h3><span class="ic">⇲</span><span data-t="sp6_h"></span></h3><p class="by" data-t="sp6_by"></p><ul class="src"><li data-t="sp6_1"></li><li data-t="sp6_2"></li><li data-t="sp6_3"></li><li data-t="sp6_4"></li></ul></div>
+  </div>
+</div></section>
+
 <dialog id="lb" aria-labelledby="lb-title">
   <div class="lb-bar"><span id="lb-title"></span><a id="lb-open" target="_blank" rel="noopener" data-t="open_full"></a>
     <button type="button" class="lb-x" id="lb-x" aria-label="Close">✕</button></div>
@@ -297,10 +325,49 @@ sudo ./uninstall.sh --purge</pre></div>
 <script>
 const T = {
  en: {
+  nav_specs: "Specs",
+  nav_how: "How it works",
+  sp_h: "What's inside, and who wrote it",
+  sp_sub: "jt-waf-mgr manages a WAF built from well-known open-source parts. This is what each part is, where it comes from and what we wrote ourselves. The rule list in the interface shows the same for every single rule.",
+  sp1_h: "WAF engine",
+  sp1_by: "Not ours · nginx (BSD-2-Clause), OWASP ModSecurity v3 and its nginx connector (Apache-2.0)",
+  sp1_1: "nginx: reverse proxy, TLS, HTTP/2, access rules. You install and configure it; jt-waf-mgr never writes its configuration (only the optional IP block list, which you include yourself).",
+  sp1_2: "libmodsecurity v3: runs the rules on every request and writes the audit log.",
+  sp1_3: "ModSecurity-nginx connector: loads ModSecurity into nginx.",
+  sp2_h: "Detection rules",
+  sp2_by: "Not ours · OWASP CRS project (Apache-2.0)",
+  sp2_1: "OWASP CRS 4: about 700 rules for SQL injection, XSS, code execution, path traversal and protocol abuse, with anomaly scoring and paranoia levels.",
+  sp2_2: "CRS plugins (WordPress, Nextcloud and others): exclusions for common applications, switched on per site.",
+  sp2_3: "jt-waf-mgr downloads new CRS releases, checks the CRS signature, compares them in a sandbox and installs them only after a person approves.",
+  sp3_h: "jt-waf-mgr",
+  sp3_by: "Written by Jason Tools · AGPL-3.0",
+  sp3_1: "The web interface, the event collector and its database.",
+  sp3_2: "The change workflow: evidence from your logs, sandbox, approval, versions and rollback.",
+  sp3_3: "Event analysis with your self-hosted LLM: proposals and alerts; loosening always needs a person.",
+  sp3_4: "CRS update management and request volume statistics.",
+  sp3_5: "Notifications and log shipping (syslog with JSON, CEF, LEEF, GELF or key=value).",
+  sp3_6: "Audit hash chain, integrity and compliance checks, signed releases, and the API.",
+  sp3_7: "Temporary IP blocks: an nginx deny list that fail2ban and other systems fill through the API.",
+  sp4_h: "Rules written by Jason Tools",
+  sp4_by: "Written by Jason Tools",
+  sp4_1: "The rules jt-waf-mgr generates from a form: confident blocks, narrowest exclusions, redactions. The rule list marks them \"Jason Tools\".",
+  sp4_2: "Wazuh rules and decoders for jt-waf-mgr's audit records.",
+  sp4_3: "Rules your site wrote by hand stay yours: adoption imports them unchanged and the rule list marks them \"this site\".",
+  sp5_h: "Bundled third-party code",
+  sp5_by: "MIT licence · listed in the SBOM of every release",
+  sp5_1: "Vue 3 and Vue Router (the interface).",
+  sp5_2: "Iconoir icons.",
+  sp5_3: "The server uses the Python standard library only: no other packages to install.",
+  sp6_h: "Optional outside data",
+  sp6_by: "Yours to connect",
+  sp6_1: "MaxMind GeoLite2 databases for countries and cities: needs your own free MaxMind account.",
+  sp6_2: "Your self-hosted LLM server for the event analysis.",
+  sp6_3: "OWASP CRS releases from GitHub, signature-checked before use.",
+  sp6_4: "The world-map outline comes from jt-glogarch (same author, AGPL-3.0).",
   nav_features: 'Features', nav_flow: 'Change workflow', nav_ai: 'Event analysis', nav_notify: 'Notifications', nav_security: 'Security', nav_screens: 'Screenshots', nav_install: 'Install',
   lead: 'A self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4. Read what the WAF did, tune it through an evidence-checked, sandbox-tested and approved workflow, let your own LLM review the events, and get told what needs a person.',
   releases: 'Releases', get_started: 'Get started',
-  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one. It writes nothing until you adopt your rule files, and even then only ModSecurity files, never the nginx configuration.',
+  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one. It writes nothing until you adopt your rule files, and even then only ModSecurity files and, if you switch it on, one IP block list you include yourself; never the rest of the nginx configuration.',
   f1_h: 'Events you can read', f1: 'Blocked and logged requests by site, attack type, source country and network (with a world map drawn in the page, no map service), rule and time. "Blocked only by the CRS score" first: the likely false positives.',
   f2_h: 'Safe rule changes', f2: 'Exclusions, confident blocks, redactions, plugin toggles and expert rules, checked against the access logs and a sandbox, approved, applied by a small root program that restores on failure.',
   f3_h: 'WAF model', f3: 'How a request is decided on your sites, drawn from the live configuration: engine per site, scoring, thresholds, exclusions and blocks.',
@@ -321,7 +388,7 @@ const T = {
   n1: 'A matrix of events and channels, messages in English, Traditional Chinese or Japanese with a link back', n2: 'Values from requests are never markup, links or mentions; secrets are write-only',
   n3: 'Generic webhook with an HMAC-SHA256 signature over timestamp and body',
   sec_h: 'Security design', sec_sub: 'The manager itself is built with least privilege, strict handling of request data and security tests in every release.',
-  sec1_h: 'Least privilege', sec1: 'The web service listens on loopback, runs unprivileged and connects out only to a syslog server you set; downloads, the LLM and notifications run in separate restricted units; only the apply program runs as root and writes only the managed files.',
+  sec1_h: 'Least privilege', sec1: 'The web service listens on loopback, runs unprivileged and its unit allows connections to localhost only (logs go to the local syslog by default; a remote log server needs an IPAddressAllow drop-in); downloads, the LLM and notifications run in separate restricted units; only the apply program runs as root and writes only the managed files.',
   sec2_h: 'OWASP Top 10:2025', sec2: 'Strict CSP without unsafe-inline, attacker data rendered as text, scrypt and TOTP, lockout, scoped API tokens that can never approve.',
   sec3_h: 'Tested every release', sec3: 'Unit tests, a browser test of every page, a security scan of every route, an OWASP ZAP active scan, an independent review, upgrade and rollback tests.',
   sec4_h: 'Compliance views', sec4: 'Mapped to ISO/IEC 27001:2022, Taiwan\'s Cyber Security Management Act baseline and OWASP Top 10:2025, with a system check page.',
@@ -384,10 +451,49 @@ const T = {
   api_link: 'API manual →',
  },
  'zh-TW': {
+  nav_specs: "規格",
+  nav_how: "運作架構",
+  sp_h: "規格與來源",
+  sp_sub: "jt-waf-mgr 管理的是由知名開源元件組成的 WAF。下面列出每個部分是什麼、來自哪裡，以及哪些是我們自己寫的。介面的規則清單也會逐條標示撰寫者。",
+  sp1_h: "WAF 引擎",
+  sp1_by: "不是我們寫的 · nginx（BSD-2-Clause）、OWASP ModSecurity v3 與 nginx 連接器（Apache-2.0）",
+  sp1_1: "nginx：反向代理、TLS、HTTP/2、存取限制。由你安裝與設定；jt-waf-mgr 不會寫入 nginx 設定（只有選用的 IP 封鎖清單檔，由你自己 include）。",
+  sp1_2: "libmodsecurity v3：對每個請求執行規則，並寫出稽核記錄。",
+  sp1_3: "ModSecurity-nginx 連接器：把 ModSecurity 載入 nginx。",
+  sp2_h: "偵測規則",
+  sp2_by: "不是我們寫的 · OWASP CRS 專案（Apache-2.0）",
+  sp2_1: "OWASP CRS 4：約 700 條規則，涵蓋 SQL 注入、XSS、程式碼執行、路徑穿越、協定濫用，採異常分數與偏執等級。",
+  sp2_2: "CRS 外掛（WordPress、Nextcloud 等）：常見應用程式的排除，依站台啟用。",
+  sp2_3: "jt-waf-mgr 下載新版 CRS、驗證 CRS 簽章、在沙箱比對，經人核准後才安裝。",
+  sp3_h: "jt-waf-mgr",
+  sp3_by: "Jason Tools 撰寫 · AGPL-3.0",
+  sp3_1: "網頁介面、事件收集與資料庫。",
+  sp3_2: "變更流程：用你的記錄檢查證據、沙箱、核准、版本與還原。",
+  sp3_3: "用地端 LLM 做事件分析：提出變更與警示；放寬一律要人核准。",
+  sp3_4: "CRS 更新管理、請求量統計。",
+  sp3_5: "通知與外送記錄（syslog，JSON、CEF、LEEF、GELF 或 key=value）。",
+  sp3_6: "稽核雜湊鏈、完整性與合規檢核、簽章發行檔，以及 API。",
+  sp3_7: "暫時封鎖 IP：fail2ban 等系統透過 API 填入的 nginx deny 清單。",
+  sp4_h: "Jason Tools 撰寫的規則",
+  sp4_by: "Jason Tools 撰寫",
+  sp4_1: "jt-waf-mgr 依表單產生的規則：確定阻擋、最窄排除、遮蔽。規則清單標示為「Jason Tools」。",
+  sp4_2: "給 jt-waf-mgr 稽核記錄用的 Wazuh 規則與解碼器。",
+  sp4_3: "站台自己手寫的規則仍屬於站台：納管時原樣匯入，規則清單標示為「站台自寫」。",
+  sp5_h: "內含的第三方程式碼",
+  sp5_by: "MIT 授權 · 每個發行檔的 SBOM 都有列出",
+  sp5_1: "Vue 3 與 Vue Router（網頁介面）。",
+  sp5_2: "Iconoir 圖示。",
+  sp5_3: "伺服器只用 Python 標準函式庫，不必另外安裝套件。",
+  sp6_h: "選用的外部資料",
+  sp6_by: "由你自行接上",
+  sp6_1: "MaxMind GeoLite2 國家與城市資料庫：需要你自己的免費 MaxMind 帳號。",
+  sp6_2: "事件分析用的地端 LLM 伺服器。",
+  sp6_3: "來自 GitHub 的 OWASP CRS 發行版，使用前驗證簽章。",
+  sp6_4: "世界地圖輪廓取自 jt-glogarch（同一作者，AGPL-3.0）。",
   nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
   lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
   releases: '下載發行版', get_started: '開始使用',
-  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，永遠不寫 nginx 設定。',
+  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，以及你啟用時的一個 IP 封鎖清單檔（由你自己 include）；其他 nginx 設定一律不碰。',
   f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路（頁面內繪製的世界地圖，不使用地圖服務）、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
   f2_h: '安全的規則變更', f2: '排除、確定阻擋、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
   f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
@@ -408,7 +514,7 @@ const T = {
   n1: '事件 × 管道矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結', n2: '來自請求的內容永遠不會變成格式、連結或提及；金鑰只能寫入',
   n3: '通用 webhook 以 HMAC-SHA256 對時間戳與內容簽章',
   sec_h: '安全設計', sec_sub: '管理工具本身也照最小權限、嚴格的輸入處理與每版安全測試來設計。',
-  sec1_h: '最小權限', sec1: '網頁服務只聽 loopback、以非特權執行，只會連到你設定的 syslog 伺服器；GeoIP 下載、LLM 與通知各在受限的獨立 unit 執行；只有套用程式是 root，而且只寫受管理的檔案。',
+  sec1_h: '最小權限', sec1: '網頁服務只聽 loopback、以非特權執行，它的 unit 只允許連到本機（記錄預設送到本機 syslog；要直接送遠端記錄伺服器，需另加 IPAddressAllow 設定）；GeoIP 下載、LLM 與通知各在受限的獨立 unit 執行；只有套用程式是 root，而且只寫受管理的檔案。',
   sec2_h: 'OWASP Top 10:2025', sec2: '不允許 unsafe-inline 的嚴格 CSP、攻擊者資料一律純文字、scrypt 與 TOTP、鎖定、永遠不能核准的範圍化 API 權杖。',
   sec3_h: '每次發版都測', sec3: '單元測試、每一頁的瀏覽器測試、每個路由的安全檢測、OWASP ZAP 主動掃描、獨立審查、升級與還原測試。',
   sec4_h: '合規對照', sec4: '對照 ISO/IEC 27001:2022、資通安全管理法防護基準與 OWASP Top 10:2025，並有系統檢查頁。',
@@ -471,10 +577,49 @@ const T = {
   api_link: 'API 介接手冊 →',
  },
  ja: {
+  nav_specs: "構成",
+  nav_how: "仕組み",
+  sp_h: "構成と作成元",
+  sp_sub: "jt-waf-mgr が管理するのは、よく知られたオープンソースの部品で構成された WAF です。各部品が何で、どこから来ていて、どこを私たちが書いたのかを示します。画面のルール一覧でも、ルールごとに作成元を表示します。",
+  sp1_h: "WAF エンジン",
+  sp1_by: "私たちのものではありません · nginx（BSD-2-Clause）、OWASP ModSecurity v3 と nginx コネクタ（Apache-2.0）",
+  sp1_1: "nginx：リバースプロキシ、TLS、HTTP/2、アクセス制限。インストールと設定はお客様が行い、jt-waf-mgr は nginx の設定を書きません（任意の IP ブロックリストだけで、include はお客様が行います）。",
+  sp1_2: "libmodsecurity v3：すべてのリクエストにルールを適用し、監査ログを書きます。",
+  sp1_3: "ModSecurity-nginx コネクタ：ModSecurity を nginx に読み込みます。",
+  sp2_h: "検知ルール",
+  sp2_by: "私たちのものではありません · OWASP CRS プロジェクト（Apache-2.0）",
+  sp2_1: "OWASP CRS 4：SQL インジェクション、XSS、コード実行、パストラバーサル、プロトコルの悪用に対する約 700 のルール。異常スコアとパラノイアレベル。",
+  sp2_2: "CRS プラグイン（WordPress、Nextcloud など）：よく使われるアプリケーション向けの除外。サイトごとに有効化。",
+  sp2_3: "jt-waf-mgr は新しい CRS をダウンロードし、CRS の署名を検証し、サンドボックスで比較して、人が承認してからインストールします。",
+  sp3_h: "jt-waf-mgr",
+  sp3_by: "Jason Tools 作成 · AGPL-3.0",
+  sp3_1: "Web 画面、イベントの収集とデータベース。",
+  sp3_2: "変更フロー：ログによる証拠、サンドボックス、承認、バージョン、ロールバック。",
+  sp3_3: "オンプレミスの LLM によるイベント分析：提案と警告。緩和は必ず人が承認します。",
+  sp3_4: "CRS 更新の管理、リクエスト量の集計。",
+  sp3_5: "通知とログ転送（syslog、JSON、CEF、LEEF、GELF、key=value）。",
+  sp3_6: "監査ハッシュチェーン、完全性とコンプライアンスの確認、署名付きリリース、API。",
+  sp3_7: "一時的な IP ブロック：fail2ban などのシステムが API で追加する nginx の deny リスト。",
+  sp4_h: "Jason Tools が書いたルール",
+  sp4_by: "Jason Tools 作成",
+  sp4_1: "jt-waf-mgr がフォームから生成するルール：確定ブロック、最小範囲の除外、マスク。ルール一覧では「Jason Tools」と表示します。",
+  sp4_2: "jt-waf-mgr の監査記録用の Wazuh ルールとデコーダー。",
+  sp4_3: "サイトで手書きしたルールはサイトのものです。取り込み時にそのまま取り込み、ルール一覧では「サイト独自」と表示します。",
+  sp5_h: "同梱のサードパーティコード",
+  sp5_by: "MIT ライセンス · 各リリースの SBOM に記載",
+  sp5_1: "Vue 3 と Vue Router（Web 画面）。",
+  sp5_2: "Iconoir のアイコン。",
+  sp5_3: "サーバーは Python 標準ライブラリだけを使い、追加のパッケージは不要です。",
+  sp6_h: "任意の外部データ",
+  sp6_by: "お客様が接続するもの",
+  sp6_1: "MaxMind GeoLite2 の国・都市データベース：お客様自身の無料 MaxMind アカウントが必要です。",
+  sp6_2: "イベント分析に使うオンプレミスの LLM サーバー。",
+  sp6_3: "GitHub から取得する OWASP CRS のリリース。使う前に署名を検証します。",
+  sp6_4: "世界地図の輪郭は jt-glogarch（同じ作者、AGPL-3.0）から取っています。",
   nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
   lead: 'nginx + libmodsecurity v3 + OWASP CRS 4 のためのセルフホスト型 Web 管理ツール。WAF が何をしたかを読み取り、証拠確認・サンドボックス試験・承認を経るフローで調整し、自前の LLM にイベントを確認させ、人の対応が必要なことを知らせます。',
   releases: 'リリース', get_started: 'はじめる',
-  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補います。ルールファイルを取り込むまで何も書き込まず、その後も書き込むのは ModSecurity のファイルだけで、nginx の設定には決して書き込みません。',
+  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補います。ルールファイルを取り込むまで何も書き込まず、その後も書き込むのは ModSecurity のファイルと、オンにした場合の IP ブロックリスト 1 つ（include はお客様が行います）だけで、それ以外の nginx の設定には書き込みません。',
   f1_h: '読めるイベント', f1: 'ブロック・記録のみのリクエストを、サイト、攻撃の種類、送信元の国とネットワーク（ページ内で描画する世界地図、地図サービスは不使用）、ルール、時間ごとに表示。「CRS スコアだけでブロック」を先頭に：誤検知の可能性が高いものです。',
   f2_h: '安全なルール変更', f2: '除外、確定ブロック、マスク、プラグイン切替、エキスパートルールを、アクセスログとサンドボックスで確認し、承認後、失敗時に復元する小さな root プログラムが適用。',
   f3_h: 'WAF 判定フロー', f3: '現在の設定から、サイトでリクエストがどう判定されるか（サイトごとのエンジン、スコア、しきい値、除外、ブロック）を図示。',
@@ -495,7 +640,7 @@ const T = {
   n1: 'イベント × チャネルのマトリクス。メッセージは英語・繁体字中国語・日本語で、ページへのリンク付き', n2: 'リクエスト由来の値が書式・リンク・メンションになることはなく、シークレットは書き込み専用',
   n3: '汎用 webhook はタイムスタンプと本文に対する HMAC-SHA256 署名付き',
   sec_h: 'セキュリティ設計', sec_sub: '管理ツール自体も、最小権限、リクエストデータの厳格な扱い、リリースごとのセキュリティテストに基づいて設計しています。',
-  sec1_h: '最小権限', sec1: 'Web サービスは loopback のみで待ち受け、非特権で動作し、外部への接続は設定した syslog サーバーだけです。GeoIP のダウンロード、LLM、通知は制限された別の unit で動きます。root で動くのは適用プログラムだけで、管理対象のファイルだけを書き込みます。',
+  sec1_h: '最小権限', sec1: 'Web サービスは loopback のみで待ち受け、非特権で動作し、unit はローカルホストへの接続だけを許可します（ログは既定でローカルの syslog へ。リモートのログサーバーへ直接送るには IPAddressAllow の追加設定が必要です）。GeoIP のダウンロード、LLM、通知は制限された別の unit で動きます。root で動くのは適用プログラムだけで、管理対象のファイルだけを書き込みます。',
   sec2_h: 'OWASP Top 10:2025', sec2: 'unsafe-inline を許可しない厳格な CSP、攻撃者データはテキスト表示、scrypt と TOTP、ロックアウト、決して承認できないスコープ付き API トークン。',
   sec3_h: 'リリースごとに試験', sec3: '単体テスト、全ページのブラウザ試験、全ルートのセキュリティ検査、OWASP ZAP のアクティブスキャン、独立レビュー、アップグレードとロールバックの試験。',
   sec4_h: 'コンプライアンス対照', sec4: 'ISO/IEC 27001:2022、台湾の資通安全管理法の防護基準、OWASP Top 10:2025 との対照とシステムチェック画面。',
@@ -577,6 +722,7 @@ function apply(lang) {
     a.querySelector('img').alt = cap ? cap.textContent : 'jt-waf-mgr'
   }
   document.getElementById('lb-x').setAttribute('aria-label', d.close)
+  document.getElementById('how-link').href = 'how.html?lang=' + lang
   document.getElementById('ms-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/MODSECURITY' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   document.getElementById('off-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/OFFLINE' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'
   document.getElementById('api-guide').href = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/docs/API' + ({ 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || '') + '.md'

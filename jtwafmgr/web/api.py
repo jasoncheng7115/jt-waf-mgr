@@ -851,7 +851,9 @@ def lookup_ip(app, req):
         'd7': {'events': d7['n'] or 0, 'blocked': d7['b'] or 0}, 'd30': {'events': d30['n'] or 0, 'blocked': d30['b'] or 0},
         'first_seen': util.iso(d30['f']), 'last_seen': util.iso(d30['l']),
         'hosts': [{'key': r['k'], 'events': r['n']} for r in hosts],
-        'rules': [_rule_label(app, r['k'], {'key': str(r['k']), 'events': r['n']}) for r in rules_], 'blocked_now': False})
+        'rules': [_rule_label(app, r['k'], {'key': str(r['k']), 'events': r['n']}) for r in rules_],
+        'blocked_now': bool(app.blocks.blocked(ip)) if getattr(app, 'blocks', None) else False,
+        'blocks': app.blocks.blocked(ip) if getattr(app, 'blocks', None) else []})
 
 
 def _rule_label(app, rule_id, out):
@@ -1084,9 +1086,10 @@ def register(router):
     R('GET', V + '/settings', settings, admin)
     register_p2(router)
     register_compliance(router)
-    from . import api_analyst, api_notify
+    from . import api_analyst, api_notify, api_blocks
     api_analyst.register(router)
     api_notify.register(router)
+    api_blocks.register(router)
 
 
 # --- P2: managed files, changes, versions -----------------------------------------------------

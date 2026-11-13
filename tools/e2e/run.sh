@@ -28,6 +28,10 @@ apply_state = "$W/apply-state"
 access_logs = ["$W/access.log"]
 [traffic]
 logs = ["$W/traffic/*access.log"]
+[blocks]
+enabled = true
+file = "$W/nginx-blocks/blocked-ips.conf"
+protected = ["198.51.100.0/25"]
 [waf]
 focus_sites = ["sso.example.com"]
 [auth]

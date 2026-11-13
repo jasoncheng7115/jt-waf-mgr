@@ -18,7 +18,8 @@ USERNAME_RE = re.compile(r'^[a-z0-9][a-z0-9._-]{1,31}$')
 # names the program itself acts under (audit actor, proposer): never an account or a token
 RESERVED_NAMES = ('analyst', 'system', 'cli')
 TOKEN_RE = re.compile(r'^jwm_([a-z0-9]{12})_([A-Za-z0-9_-]{32,64})$')
-SCOPES_P1 = ('status:read', 'events:read', 'rules:read', 'lookups:read', 'changes:read', 'changes:propose')
+SCOPES_P1 = ('status:read', 'events:read', 'rules:read', 'lookups:read', 'changes:read', 'changes:propose',
+             'blocks:read', 'blocks:write')
 LANGUAGES = ('en', 'zh-TW', 'ja')
 
 # scrypt parameters: n=2**15, r=8, p=1 -> 32 MiB, ~0.1 s per check.

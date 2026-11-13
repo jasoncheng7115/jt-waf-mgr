@@ -55,6 +55,7 @@ docs/API.md
 docs/API.zh-TW.md
 docs/API.ja.md
 docs/index.html
+docs/how.html
 docs/shots/
 docs/logo-mark.svg
 docs/favicon.svg

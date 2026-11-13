@@ -63,7 +63,7 @@ async function setLang(page, lang) {
 
 const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
-  '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/traffic', '/nope'];
+  '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/traffic', '/blocks', '/nope'];
 
 const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9', '/traffic'];
 
@@ -216,6 +216,20 @@ async function audit(page, where) {
      'traffic: tiles, charts and one row per site');
   await page.goto(base + '/traffic?range=7d&host=shop.example.com', { waitUntil: 'networkidle' });
   ok((await page.locator('.datatable tbody tr').count()) === 1, 'traffic: one site');
+  // temporary IP blocks: the list, the include hint (the e2e nginx does not load the file), adding and ending one
+  await page.goto(base + '/blocks', { waitUntil: 'networkidle' });
+  ok((await page.locator('.datatable tbody tr').count()) === 3 && (await page.locator('.alert.warn pre').innerText()).includes('blocked-ips.conf'),
+     'blocks: active list and the include line');
+  await page.locator('.card.form input.mono').fill('203.0.113.99');
+  await page.locator('.card.form .field.grow input').fill('e2e test');
+  await page.locator('.card.form button.primary').click();
+  await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 4, null, { timeout: 5000 }).catch(() => {});
+  ok((await page.locator('.datatable tbody tr').count()) === 4, 'blocks: an approver blocks an address');
+  await page.locator('.datatable tbody tr').filter({ hasText: '203.0.113.99' }).locator('button').click();
+  await page.locator('section[role=dialog] input').fill('e2e done');
+  await page.locator('section[role=dialog] button.primary').click();
+  await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 3, null, { timeout: 5000 }).catch(() => {});
+  ok((await page.locator('.datatable tbody tr').count()) === 3, 'blocks: ending one with a note');
   // several rules at once: tick, "switch off" opens the change form with its preview (or why it cannot)
   await page.goto(base + '/rules', { waitUntil: 'networkidle' });
   await page.locator('input.rowsel').first().check();

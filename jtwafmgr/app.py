@@ -33,6 +33,8 @@ class App:
         self.workflow = Workflow(self)
         self.workflow.evidence = Evidence(cfg, self.db)
         self.workflow.sandbox = Sandbox(cfg, self.site)
+        from .blocks import Blocks
+        self.blocks = Blocks(self)
         from .compliance import Monitor
         self.monitor = Monitor(self)
         self._note_version()
@@ -72,6 +74,9 @@ class App:
         hk = threading.Thread(target=self._housekeeping, name='housekeeping', daemon=True)
         hk.start()
         self._threads.append(hk)
+        bt = threading.Thread(target=self.blocks.run, args=(self.tailer._stop,), name='blocks', daemon=True)
+        bt.start()
+        self._threads.append(bt)
         from . import traffic
         tr = threading.Thread(target=traffic.run, args=(self, self.tailer._stop), name='traffic', daemon=True)
         tr.start()
