@@ -91,6 +91,8 @@ short form used while releasing; this document says what each gate covers, how i
   by name, names no rule covers, refusals of the last 7 days by country, rules and changes that match no site); the
   preview's direction; no address to send from fails the check; a block by a country rule is a confident block (and
   stored events are corrected once).
+- Who can reach a server block (`tests/test_reach.py`): geo and map variables, `=` and `!=`, allow / deny all, the
+  narrowest of several checks, location checks not counted, redirect-only blocks.
 - Outside configuration changes (`tests/test_logins.py`): the authentication log (sshd logins, session ends, sudo and
   su, rotated file, ISO and syslog time stamps, missing files), the masked file contents (no secret stored), the
   difference per file, the alert naming the files and the logins.

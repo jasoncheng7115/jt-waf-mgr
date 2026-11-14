@@ -386,7 +386,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/change
 - **`GET /rules/{id}/hits`**：每日命中數，`days` 1 到 365（預設 30）：
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`。
 - **`GET /rules/removals`**：被 `SecRuleRemoveById` 等指令移除的規則。
-- **`GET /vhosts`**：nginx 站台與各自的 WAF 設定；`countries` 列出每站的國家規則（模式、國家、規則編號、是否啟用），
+- **`GET /vhosts`**：nginx 站台與各自的 WAF 設定；`reach`（internal、country、limited、restricted、open）依 nginx 對整個
+  server 區塊的來源檢查判斷，另有 `redirect_only`、`outside_7d`；`countries` 列出每站的國家規則（模式、國家、規則編號、是否啟用），
   `country_changes` 列出還在處理中的國家變更。
 - **`GET /crs`**：CRS 版本、偏執等級、門檻、引擎模式、外掛。
 - **`GET /crs/updates`**：jt-waf-mgr 是否負責更新 CRS、主機上有哪些版本、最新發行版。

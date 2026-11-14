@@ -239,6 +239,11 @@ async function audit(page, where) {
   await page.locator('section[role=dialog] button.primary').click();
   await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 3, null, { timeout: 5000 }).catch(() => {});
   ok((await page.locator('.datatable tbody tr').count()) === 3, 'blocks: ending one with a note');
+  // the top bar: theme, language, account and log out are the same height (icon-only buttons were shorter)
+  await page.goto(base + '/', { waitUntil: 'networkidle' });
+  const heights = await page.evaluate(() => [...document.querySelectorAll('.topright .btn, .topright .userlink')]
+    .filter((e) => e.offsetParent !== null).map((e) => Math.round(e.getBoundingClientRect().height)));
+  ok(heights.length >= 4 && new Set(heights).size === 1, 'top bar: controls of one height (' + heights.join(',') + ')');
   // country blocks: the form lists the staged countries, the preview builds the rule, Settings shows the lists
   await page.goto(base + '/changes/new?kind=country', { waitUntil: 'networkidle' });
   await page.locator('.card.form .field.grow input.mono').first().fill('shop.example.com');
@@ -249,23 +254,32 @@ async function audit(page, where) {
   await page.waitForFunction(() => /ipMatchFromFile/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
   ok(nCountries === 6 && (await page.locator('.cochip').count()) === 1 && (await page.locator('body').innerText()).includes('ipMatchFromFile'),
      'country block: staged countries, a chosen one, the rule preview (' + nCountries + ')');
-  // the sites page: a country-limit column; "add limit" opens the same form with the site filled in
+  // the sites page: one line per site (what its country rules allow), a link to that site on the country-limits page;
+  // no buttons there (the actions are on the country-limits page)
   await page.goto(base + '/vhosts', { waitUntil: 'networkidle' });
-  const addLimit = page.locator('.datatable tbody tr').filter({ hasText: 'intra.example.com' }).locator('a', { hasText: '新增限制' });
-  const offRow = page.locator('.datatable tbody tr').filter({ hasText: 'static.example.com' });
-  ok((await page.locator('.datatable thead', { hasText: '國家限制' }).count()) === 1 && (await addLimit.count()) === 1
-     && (await offRow.locator('a', { hasText: '新增限制' }).count()) === 0 && (await offRow.locator('.cocell', { hasText: 'WAF' }).count()) === 1,
-     'sites: "add limit" where ModSecurity runs, a note instead where it is off');
-  await addLimit.first().click();
+  const vRow = (h) => page.locator('.datatable tbody tr').filter({ hasText: h }).first();
+  const sumLink = vRow('app.example.com').locator('a.cosum');
+  ok((await page.locator('.datatable thead', { hasText: '國家限制' }).count()) === 1 && (await sumLink.count()) === 1
+     && /只允許\s*JP TW/.test(await sumLink.innerText()) && (await vRow('static.example.com').locator('a.cosum').count()) === 0
+     && (await page.locator('.datatable tbody a', { hasText: '新增限制' }).count()) === 0,
+     'sites: a one-line country summary linking to the country-limits page, no buttons');
+  ok((await vRow('intra.example.com').locator('.badge', { hasText: '僅內部' }).count()) === 1
+     && (await vRow('app.example.com').locator('.badge', { hasText: '內外皆可' }).count()) === 1,
+     'sites: who can reach each block, from nginx\'s own checks');
+  await sumLink.click();
+  await page.waitForFunction(() => location.pathname === '/countries' && document.querySelectorAll('.datatable tbody tr').length === 1, null, { timeout: 8000 }).catch(() => {});
+  ok(/\/countries\?host=app\.example\.com/.test(page.url()) && (await page.locator('.datatable tbody tr').count()) === 1,
+     'sites: the summary opens that one site on the country-limits page');
+  // "add limit" on the country-limits page opens the form with the site filled in
+  await page.goto(base + '/countries', { waitUntil: 'networkidle' });
+  const cRow = (h) => page.locator('.datatable tbody tr').filter({ hasText: h }).first();
+  await cRow('intranet.example.com').locator('a', { hasText: '新增限制' }).click();
   await page.waitForLoadState('networkidle');
   ok(/kind=country/.test(page.url()) && (await page.locator('.card.form .field.grow input.mono').first().inputValue()) === 'intranet.example.com',
-     'sites: "add limit" opens the country form for that site');
-  // a limit in place: shown on its site with "modify"; fewer allowed countries tighten, one more loosens
-  await page.goto(base + '/vhosts', { waitUntil: 'networkidle' });
-  const appRow = page.locator('.datatable tbody tr').filter({ hasText: 'app.example.com' });
-  ok((await appRow.locator('.corow', { hasText: '只允許' }).count()) === 1 && (await appRow.locator('.cocode', { hasText: 'JP' }).count()) === 1
-     && (await appRow.locator('a', { hasText: '新增限制' }).count()) === 0 && (await appRow.locator('.cocell .warn', { hasText: 'location' }).count()) === 1,
-     'sites: the limit in place, a note on the location that skips the WAF, no "add limit" beside it');
+     'country limits: "add limit" opens the country form for that site');
+  // a limit in place: "modify" opens it; fewer allowed countries tighten, one more loosens
+  await page.goto(base + '/countries', { waitUntil: 'networkidle' });
+  const appRow = cRow('app.example.com');
   await appRow.locator('a', { hasText: '修改' }).first().click();
   await page.waitForLoadState('networkidle');
   await page.waitForFunction(() => document.querySelectorAll('.cochip').length === 2, null, { timeout: 5000 }).catch(() => {});

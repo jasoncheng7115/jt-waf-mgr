@@ -6,6 +6,7 @@ server blocks with their WAF state.
 """
 import glob
 import os
+import ipaddress
 import re
 
 
@@ -181,6 +182,7 @@ class NginxConfig:
         http_waf = _flag(h.children, 'modsecurity')
         http_body = _value(h.children, 'client_max_body_size')
         http_realip = any(d.name == 'set_real_ip_from' for d in h.children)
+        variables = _variables(h.children)
         out = []
         for s in h.children:
             if s.name != 'server' or s.children is None:
@@ -213,9 +215,11 @@ class NginxConfig:
                             restrictions.append('if (%s) { return %s; }' % (' '.join(d.args).strip('()').strip(), c.args[0]))
             body = _value(s.children, 'client_max_body_size') or http_body
             realip = http_realip or any(d.name == 'set_real_ip_from' for d in s.children)
+            scope, scope_by = _reach(s.children, variables)
             out.append({'server_names': names, 'listen': listen, 'file': s.file, 'line': s.line, 'waf': state,
                         'inline_rule_ids': inline_ids, 'bypass': bypass, 'body_limit': body,
-                        'restrictions': _dedupe(restrictions), 'realip': realip, 'upstreams': _dedupe(upstreams)})
+                        'restrictions': _dedupe(restrictions), 'realip': realip, 'upstreams': _dedupe(upstreams),
+                        'reach': scope, 'reach_by': scope_by, 'redirect_only': _redirect_only(s.children)})
         return out
 
     def inline_rules(self):
@@ -266,6 +270,135 @@ def _scan_locations(children, waf, bypass, restrictions, upstreams, prefix):
             if c.name == 'return' and c.args and c.args[0] in ('403', '404', '444') and loc:
                 restrictions.append('location %s { return %s; }' % (loc, c.args[0]))
         _scan_locations(d.children, here, bypass, restrictions, upstreams, prefix + loc)
+
+
+# --- who can reach a server block: the source checks nginx makes for the whole block ------------------------------
+_PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '100.64.0.0/10',
+                                               '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10')]
+
+
+def _net(x):
+    try:
+        return ipaddress.ip_network(x, strict=False)
+    except ValueError:
+        return None
+
+
+def _private(n):
+    return any(n.version == p.version and n.subnet_of(p) for p in _PRIVATE)
+
+
+def _variables(http_children):
+    """geo and map variables of the http block: {name: ('geo', default, [(network, value)]) |
+    ('map', source, default, {value: value}) | None (a form not understood)}."""
+    out = {}
+    for d in http_children:
+        if d.children is None or d.name not in ('geo', 'map'):
+            continue
+        if d.name == 'geo':
+            if len(d.args) != 1:                     # geo $source $var: not the client address, not understood
+                if len(d.args) == 2 and d.args[0] in ('$remote_addr', '$binary_remote_addr'):
+                    pass
+                else:
+                    out[d.args[-1].lstrip('$')] = None
+                    continue
+            default, entries, ok = '', [], True
+            for e in d.children:
+                if e.name == 'default' and e.args:
+                    default = e.args[0]
+                elif e.name in ('include', 'ranges', 'delete', 'proxy', 'proxy_recursive'):
+                    if e.name in ('ranges', 'proxy', 'proxy_recursive'):
+                        ok = False
+                elif e.args:
+                    n = _net(e.name)
+                    if n is None:
+                        ok = False
+                    else:
+                        entries.append((n, e.args[0]))
+            out[d.args[-1].lstrip('$')] = ('geo', default, entries) if ok else None
+        elif len(d.args) == 2:
+            table, default, ok = {}, '', True
+            for e in d.children:
+                if e.name == 'default' and e.args:
+                    default = e.args[0]
+                elif e.name in ('hostnames', 'volatile', 'include'):
+                    continue
+                elif e.name.startswith('~') or not e.args:
+                    ok = False
+                else:
+                    table[e.name.strip('"\'')] = e.args[0].strip('"\'')
+            out[d.args[1].lstrip('$')] = ('map', d.args[0].lstrip('$'), default, table) if ok else None
+    return out
+
+
+def _values(variables, name, depth=0):
+    """The value a geo variable (or a map of one) takes: (default, [(network, value)]) or None."""
+    v = variables.get(name)
+    if not v or depth > 3:
+        return None
+    if v[0] == 'geo':
+        return v[1], v[2]
+    src = _values(variables, v[1], depth + 1)
+    if src is None:
+        return None
+    default, entries = src
+    m, d = v[3], v[2]
+    return m.get(default.strip('"\''), d), [(n, m.get(val.strip('"\''), d)) for n, val in entries]
+
+
+def _passing(default, entries, refused):
+    """The networks whose value is not refused, and whether everything else passes too (the default)."""
+    nets = [n for n, val in entries if not refused(val)]
+    return nets, not refused(default)
+
+
+def _reach(children, variables):
+    """Who can reach a server block, from the checks it makes for every request (location checks do not count):
+    'internal' (private networks only), 'country' (lists of public networks, as from a registry), 'limited' (a few
+    public addresses), 'open' (no check), 'restricted' (a check that is not understood). Returns (scope, text)."""
+    checks, texts = [], []
+    allows, denied_all = [], False
+    for d in children:
+        if d.name == 'allow' and d.args:
+            allows.append(d.args[0])
+        elif d.name == 'deny' and d.args and d.args[0] == 'all':
+            denied_all = True
+        elif d.name == 'if' and d.children is not None and any(
+                c.name == 'return' and c.args and c.args[0] in ('403', '404', '444') for c in d.children):
+            cond = ' '.join(d.args).strip()
+            texts.append('if %s' % cond)
+            m = re.fullmatch(r'\(\s*\$(\w+)\s*(=|!=)\s*"?([^"\s)]*)"?\s*\)', cond)
+            vals = _values(variables, m.group(1)) if m else None
+            if not m or vals is None:
+                checks.append(None)
+                continue
+            want = m.group(3)
+            refused = (lambda val, w=want: val == w) if m.group(2) == '=' else (lambda val, w=want: val != w)
+            checks.append(_passing(vals[0], vals[1], refused))
+    if denied_all:
+        texts.append('allow %s; deny all' % ' '.join(allows) if allows else 'deny all')
+        nets = [n for n in (_net(a) for a in allows) if n is not None]
+        checks.append((nets, False) if len(nets) == len(allows) else None)
+    if not checks:
+        return 'open', ''
+    known = [c for c in checks if c is not None]
+    closed = [c for c in known if not c[1]]          # a check whose default refuses: only its networks pass
+    if not closed:
+        return 'restricted', '; '.join(texts)
+    # a request must pass every check: the narrowest closed one decides
+    best = min(closed, key=lambda c: len(c[0]))
+    nets = best[0]
+    if all(_private(n) for n in nets):
+        return 'internal', '; '.join(texts)
+    public = [n for n in nets if not _private(n)]
+    return ('country' if len(public) > 50 else 'limited'), '; '.join(texts)
+
+
+def _redirect_only(children):
+    """A block that only sends clients elsewhere (an http -> https redirect): nothing in it to protect."""
+    ret = [d for d in children if d.name == 'return' and d.args and d.args[0] in ('301', '302', '303', '307', '308')]
+    serving = {'location', 'proxy_pass', 'root', 'alias', 'fastcgi_pass', 'uwsgi_pass', 'grpc_pass', 'try_files', 'index'}
+    return bool(ret) and not any(d.name in serving for d in children)
 
 
 def _dedupe(xs):

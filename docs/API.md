@@ -414,7 +414,8 @@ All with scope `rules:read`.
 - **`GET /rules/{id}/hits`**: daily counts, `days` 1 to 365 (default 30):
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`.
 - **`GET /rules/removals`**: rules removed by `SecRuleRemoveById` and similar.
-- **`GET /vhosts`**: the nginx sites and their WAF settings; `countries` lists each site's country rules (mode, countries,
+- **`GET /vhosts`**: the nginx sites and their WAF settings; `reach` (internal, country, limited, restricted, open) from
+  nginx's own checks for the whole server block, `redirect_only`, `outside_7d`; `countries` lists each site's country rules (mode, countries,
   rule id, enabled) and `country_changes` the country changes still on their way.
 - **`GET /crs`**: the CRS version, paranoia levels, thresholds, engine mode, plugins.
 - **`GET /crs/updates`**: whether jt-waf-mgr keeps the CRS current, the versions on the host, the newest release.

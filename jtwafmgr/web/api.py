@@ -768,7 +768,21 @@ def vhosts(app, req):
     items = n.servers()
     items.sort(key=lambda s: (s['server_names'][0] if s['server_names'] else '~', s['file'], s['line']))
     _vhost_countries(app, items)
+    ext = _outside_requests(app)
+    for s in items:
+        s['outside_7d'] = sum(ext.get(x.lower(), 0) for x in s['server_names'] if x and x != '_') if ext is not None else None
     return json_response(200, {'items': items, 'warnings': m.warnings + n.errors + m.errors})
+
+
+def _outside_requests(app, days=7):
+    """Requests from outside sources per site name over the last days (the request statistics); None when they are
+    not collected."""
+    try:
+        rows = app.db.q('SELECT host, SUM(external) FROM traffic_hourly WHERE hour >= ? GROUP BY host',
+                        (util.now() - days * 86400,))
+    except Exception:          # noqa: BLE001 -- statistics off or not migrated: the column stays empty
+        return None
+    return {h.lower(): n or 0 for h, n in rows}
 
 
 def _vhost_countries(app, servers):
@@ -1706,7 +1720,8 @@ def country_sites(app, req):
         for x in s['server_names']:
             if x not in site['names']:
                 site['names'].append(x)
-        site['blocks'].append({'file': s['file'], 'line': s['line'], 'listen': s.get('listen') or [], 'waf': s.get('waf')})
+        site['blocks'].append({'file': s['file'], 'line': s['line'], 'listen': s.get('listen') or [], 'waf': s.get('waf'),
+                               'reach': s.get('reach'), 'reach_by': s.get('reach_by'), 'redirect_only': s.get('redirect_only')})
         site['bypass'] += [b['location'] for b in s.get('bypass') or [] if b['location'] not in site['bypass']]
         site['restrictions'] += [r for r in s.get('restrictions') or [] if r not in site['restrictions']]
         for c in s['countries']:
@@ -1714,6 +1729,7 @@ def country_sites(app, req):
         for c in s['country_changes']:
             site['country_changes'][(c['change_id'], c.get('item_id'))] = c
     since = util.now() - 7 * 86400
+    ext = _outside_requests(app)
     lk = None
     try:
         lk = app.countries.lookup()
@@ -1726,7 +1742,12 @@ def country_sites(app, req):
         site['country_changes'] = list(site['country_changes'].values())
         used_items.update(c['item_id'] for c in site['countries'])
         used_changes.update((c['change_id'], c.get('item_id')) for c in site['country_changes'])
-        site['waf_off'] = all(b['waf'] == 'off' for b in site['blocks'])
+        serving = [b for b in site['blocks'] if not b['redirect_only']] or site['blocks']
+        site['waf_off'] = all(b['waf'] == 'off' for b in serving)
+        order = ['open', 'restricted', 'country', 'limited', 'internal']
+        widest = min(serving, key=lambda b: order.index(b['reach']) if b['reach'] in order else 0)
+        site['reach'], site['reach_by'] = widest['reach'], widest['reach_by']
+        site['outside_7d'] = sum(ext.get(x.lower(), 0) for x in site['names']) if ext is not None else None
         # a rule names one site; a server block with several names is limited only where a rule names it
         mine = [r for r in rules if r['item_id'] in {c['item_id'] for c in site['countries']}]
         plain = [x.lower() for x in site['names'] if x and x != '_' and not x.startswith('~')]

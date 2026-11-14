@@ -233,6 +233,10 @@ Audit: `block.add`, `block.extend`, `block.remove`, `block.refused`, `block.expi
   "restrictions": ["if ($lan = 0) { return 444; }", "allow 192.0.2.0/24; deny all"],   // raw directives, text only
   "realip": false,                // set_real_ip_from in effect for this server
   "upstreams": ["http://192.0.2.10:8080"],
+  "reach": "internal",            // internal | country | limited | restricted | open: nginx's own checks for the block
+  "reach_by": "if ($lan = 0)",    // the checks it was decided from, text only
+  "redirect_only": false,         // the block only redirects (return 30x, nothing served)
+  "outside_7d": 0,                // outside requests to its names in the last 7 days (null: statistics off)
   // the managed country rules whose site covers one of the server names, and country changes still on their way
   "countries": [{"item_id": 7, "rule_id": 10301, "enabled": true, "mode": "allow", "countries": ["JP", "TW"]}],
   "country_changes": [{"change_id": 41, "op": "modify", "state": "pending_approval", "item_id": 7, "mode": "allow",

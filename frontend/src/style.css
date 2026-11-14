@@ -197,6 +197,12 @@ a.navitem:hover, button.navitem:hover { background: var(--panel-2); text-decorat
 .np-me { display: none; border-top: 1px solid var(--border); padding-top: 10px; }
 .np-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 6px; }
 .topright { display: flex; gap: 10px; align-items: center; flex: none; }
+/* every control of the top bar has the same height and frame: icon-only buttons (theme, language) were shorter than
+   "log out", and the account name had no frame */
+.topright .btn, .topright .userlink { height: 32px; box-sizing: border-box; }
+.topright .userlink { align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--panel); text-decoration: none; }
+.topright .userlink:hover { background: var(--panel-2); }
 .userlink { color: var(--text); white-space: nowrap; display: inline-flex; align-items: baseline; min-width: 0; }
 .username { max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
 .role { font-size: 12px; color: var(--muted); margin-left: 4px; }

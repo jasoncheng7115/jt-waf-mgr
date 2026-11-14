@@ -348,8 +348,25 @@ class Monitor:
         r = self.db.one('SELECT * FROM config_snapshots WHERE id=?', (sid,))
         if not r:
             return None
+        changes = json.loads(r['changes'])
+        if r['cause'] not in ('jt-waf-mgr', 'baseline') and 'logins' not in changes:
+            # recorded before jt-waf-mgr kept the logins (0.4.30): looked up now, while the host still has the log
+            prev = self.db.one('SELECT ts FROM config_snapshots WHERE id < ? ORDER BY id DESC LIMIT 1', (sid,))
+            if prev:
+                from . import logins
+                try:
+                    found, loose = logins.sessions(self.cfg['integrity']['auth_logs'], prev['ts'], r['ts'])
+                except Exception:          # noqa: BLE001
+                    found, loose = [], []
+                for x in found:
+                    x['start'], x['end'] = util.iso(x['start']), util.iso(x['end']) if x['end'] else None
+                    for c in x['commands']:
+                        c['at'] = util.iso(c['at'])
+                for c in loose:
+                    c['at'] = util.iso(c['at'])
+                changes.update(logins=found, commands=loose, logins_live=True)
         return {'id': r['id'], 'ts': util.iso(r['ts']), 'digest': r['digest'], 'cause': r['cause'],
-                'changes': json.loads(r['changes']), 'files': json.loads(r['files'])}
+                'changes': changes, 'files': json.loads(r['files'])}
 
     # --- accounts -------------------------------------------------------------------------------
     def check_accounts(self):

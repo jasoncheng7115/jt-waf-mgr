@@ -413,7 +413,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/change
 - **`GET /rules/{id}/hits`**：日ごとのヒット数。`days` は 1〜365（デフォルト 30）：
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`。
 - **`GET /rules/removals`**：`SecRuleRemoveById` などで除去されたルール。
-- **`GET /vhosts`**：nginx のサイトとその WAF 設定。`countries` はサイトごとの国別ルール（モード、国、ルール ID、有効かどうか）、
+- **`GET /vhosts`**：nginx のサイトとその WAF 設定。`reach`（internal、country、limited、restricted、open）は nginx が
+  サーバーブロック全体で行うチェックから判定し、`redirect_only`、`outside_7d` もあります。`countries` はサイトごとの国別ルール（モード、国、ルール ID、有効かどうか）、
   `country_changes` は処理中の国別変更です。
 - **`GET /crs`**：CRS のバージョン、パラノイアレベル、しきい値、エンジンモード、プラグイン。
 - **`GET /crs/updates`**：jt-waf-mgr が CRS を更新しているか、ホスト上のバージョン、最新のリリース。

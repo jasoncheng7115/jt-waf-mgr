@@ -28,6 +28,7 @@
         <template v-if="Array.isArray(snap.changes.logins)">
           <h3><Icon name="users" /> {{ t('cfgchg.who') }}</h3>
           <p class="muted small">{{ t('cfgchg.who_hint') }}</p>
+          <p v-if="snap.changes.logins_live" class="muted small">{{ t('cfgchg.who_live') }}</p>
           <p v-if="!snap.changes.logins.length" class="alert warn">{{ t('cfgchg.who_none') }}</p>
           <ul class="plainlist wholist">
             <li v-for="(s, i) in snap.changes.logins" :key="i">
@@ -53,6 +54,7 @@
 </span></pre>
           </div>
         </template>
+        <p v-if="snap.cause !== 'baseline' && !snap.changes.diffs" class="muted small">{{ t('cfgchg.diffs_before') }}</p>
         <h3>{{ t('cfgchg.files', { n: fileRows.length }) }}</h3>
         <DataTable id="cfgchg-files" :columns="fileCols" :rows="fileRows" row-key="path" :row-class="(r) => ({ hl: touched.has(r.path) })" :default-sort="{ key: 'path', dir: 1 }">
           <template #cell-path="{ row }"><span class="mono breakall">{{ safeText(row.path, 400) }}</span></template>

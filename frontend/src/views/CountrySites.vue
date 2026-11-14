@@ -30,11 +30,17 @@
         </form>
       </section>
 
-      <label class="check inline-field onlylim"><input v-model="onlyLimited" type="checkbox"> {{ t('csites.only_limited') }}</label>
+      <p v-if="focus" class="alert info">{{ t('csites.focus', { host: focus }) }}
+        <RouterLink class="gapl" to="/countries">{{ t('csites.show_all') }}</RouterLink></p>
+      <label v-else class="check inline-field onlylim"><input v-model="onlyLimited" type="checkbox"> {{ t('csites.only_limited') }}</label>
       <DataTable id="country-sites" :columns="cols" :rows="shown" row-key="host" :page-size="50">
         <template #cell-host="{ row }">
           <div class="mono"><b>{{ row.host }}</b></div>
           <div v-if="row.names.length > 1" class="sub mono">{{ row.names.filter((n) => n.toLowerCase() !== row.host).join(' ') }}</div>
+        </template>
+        <template #cell-reach="{ row }">
+          <span class="badge" :class="REACH_CLS[row.reach] || 'b-logged'" :title="row.reach_by || t('vhosts.reach_hint')">{{ t('vhosts.reach.' + (row.reach || 'open')) }}</span>
+          <div v-if="row.outside_7d != null" class="sub">{{ t('vhosts.outside_7d', { n: fmtNum(row.outside_7d) }) }}</div>
         </template>
         <template #cell-limit="{ row }">
           <div v-for="c in row.countries" :key="'r' + c.item_id" class="limit">
@@ -115,7 +121,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { get, post } from '../api.js'
 import { t, lang } from '../i18n.js'
 import { hasRole, refreshPending } from '../store.js'
@@ -127,6 +133,7 @@ import DataTable from '../components/DataTable.vue'
 import TruncText from '../components/TruncText.vue'
 
 const router = useRouter()
+const route = useRoute()
 const data = ref(null)
 const loading = ref(false)
 const error = ref(null)
@@ -142,13 +149,18 @@ const canPropose = computed(() => hasRole('operator'))
 const regionNames = computed(() => { try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null } })
 function countryName(c) { try { return (c && c !== '??' && regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
 
+const REACH_CLS = { internal: 'b-ok', country: 'b-int', limited: 'b-int', restricted: 'b-logged', open: 'b-warn' }
 const limitedCount = computed(() => (data.value ? data.value.sites.filter((s) => s.countries.length).length : 0))
-const shown = computed(() => (data.value ? data.value.sites.filter((s) => !onlyLimited.value || s.countries.length || s.country_changes.length) : []))
+// ?host=: one site (from the sites page), with every name of its server block
+const focus = computed(() => (typeof route.query.host === 'string' ? route.query.host.trim().toLowerCase().slice(0, 253) : ''))
+const shown = computed(() => (data.value ? data.value.sites.filter((s) => (focus.value ? s.host === focus.value || s.names.some((n) => n.toLowerCase() === focus.value)
+  : !onlyLimited.value || s.countries.length || s.country_changes.length)) : []))
 function limitText(s) {
   return s.countries.map((c) => t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) + ' ' + c.countries.map((x) => x + ' ' + countryName(x)).join(' ')).join('; ') || t('csites.none')
 }
 const cols = computed(() => [
   { key: 'host', label: t('csites.col.site'), required: true, value: (s) => s.host, text: (s) => s.names.join(' ') },
+  { key: 'reach', label: t('vhosts.reach'), nowrap: true, value: (s) => t('vhosts.reach.' + (s.reach || 'open')) },
   { key: 'limit', label: t('csites.col.limit'), value: (s) => (s.countries.length ? 0 : 1) + ' ' + limitText(s), text: limitText },
   { key: 'recent', label: t('csites.col.recent'), num: true, value: (s) => (s.recent ? s.recent.refused : -1) },
   { key: 'notes', label: t('csites.col.notes'), value: (s) => (s.waf_off ? 2 : 0) + s.bypass.length,

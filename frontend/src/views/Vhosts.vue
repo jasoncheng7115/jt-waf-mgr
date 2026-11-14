@@ -10,7 +10,7 @@
       <div v-for="(w, i) in warnings" :key="i">{{ safeText(w, 500) }}</div>
     </div>
     <section v-if="items.length" class="card">
-      <p class="muted small">{{ t('vhosts.summary', { total: items.length, on: count('on'), block: count('block'), off: count('off') }) }}</p>
+      <p class="muted small">{{ t('vhosts.summary2', { total: items.length, on: count('on'), block: count('block'), off: count('off'), redirect: count('redirect') }) }}</p>
       <div class="chartgrid">
         <div><h3 class="charthead">{{ t('chart.waf_modes') }}</h3><SegBar :parts="modeParts" :label="t('chart.waf_modes')" /></div>
       </div>
@@ -31,34 +31,27 @@
         <div class="sub mono" :title="safeText(row.file, 500)">{{ shortFile(row.file) }}:{{ row.line }} · {{ (row.listen || []).map((l) => safeText(l, 40)).join(', ') }}</div>
       </template>
       <template #cell-waf="{ row }">
-        <span class="badge" :class="wafCls(row.waf)">{{ t('waf.' + (row.waf || 'unknown')) }}</span>
+        <span v-if="row.waf === 'off' && row.redirect_only" class="badge b-logged" :title="t('waf.redirect_hint')">{{ t('waf.redirect') }}</span>
+        <span v-else class="badge" :class="wafCls(row.waf)">{{ t('waf.' + (row.waf || 'unknown')) }}</span>
         <div v-if="row.inline_rule_ids && row.inline_rule_ids.length" class="sub mono">
           {{ t('vhosts.inline_rules') }}: <RouterLink v-for="id in row.inline_rule_ids" :key="id" :to="'/rules/' + id" class="idlink">{{ id }}</RouterLink>
         </div>
       </template>
+      <!-- one line: what the country rules of this site allow or block; the details and the actions are on the
+           country-limits page (this table is about the nginx configuration) -->
       <template #cell-countries="{ row }">
-        <div class="cocell">
-        <div v-for="c in row.countries || []" :key="'r' + c.item_id" class="corow">
-          <span class="badge" :class="!c.enabled ? 'b-logged' : c.mode === 'allow' ? 'b-ok' : 'b-blocked'">{{ t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) }}</span>
-          <span v-for="cc in c.countries" :key="cc" class="mono cocode" :title="countryName(cc)">{{ cc }}</span>
-          <span v-if="!c.enabled" class="muted small">{{ t('managed.disabled') }}</span>
-          <RouterLink v-if="c.rule_id" :to="'/rules/' + c.rule_id" class="idlink mono small">{{ c.rule_id }}</RouterLink>
-          <RouterLink v-if="canPropose" class="btn small ghost" :to="{ path: '/changes/new', query: { item: c.item_id } }"><Icon name="edit" />{{ t('managed.modify') }}</RouterLink>
-        </div>
-        <div v-for="c in row.country_changes || []" :key="'c' + c.change_id + '-' + (c.item_id || '')" class="corow">
-          <RouterLink :to="'/changes/' + c.change_id" class="badge b-warn">{{ t('vhosts.country_pending', { id: c.change_id }) }}</RouterLink>
-          <span class="small muted">{{ t('op.' + (c.op || 'add')) }}</span>
-          <span v-for="cc in c.countries" :key="cc" class="mono cocode" :title="countryName(cc)">{{ cc }}</span>
-        </div>
-        <!-- a country rule is a ModSecurity rule: it does nothing where ModSecurity is off -->
-        <p v-if="row.waf === 'off' && (row.countries || []).length" class="small warn">{{ t('vhosts.country_waf_off_rule') }}</p>
-        <p v-else-if="row.waf !== 'off' && (row.countries || []).length && (row.bypass || []).length" class="small warn">
-          {{ t('vhosts.country_bypass', { n: row.bypass.length }) }}</p>
-        <span v-if="row.waf === 'off' && !(row.countries || []).length" class="muted small">{{ t('vhosts.country_waf_off') }}</span>
-        <RouterLink v-else-if="canPropose && countryHost(row) && !(row.countries || []).length" class="btn small ghost"
-                    :to="{ path: '/changes/new', query: { kind: 'country', host: countryHost(row) } }"><Icon name="add" />{{ t('vhosts.country_add') }}</RouterLink>
-        <span v-else-if="!(row.countries || []).length && !(row.country_changes || []).length" class="muted">—</span>
-        </div>
+        <RouterLink v-if="(row.countries || []).length" class="cosum" :to="{ path: '/countries', query: { host: countryHost(row) } }"
+                    :title="t('vhosts.country_open')">
+          <span v-for="c in row.countries" :key="c.item_id" :class="{ off: !c.enabled }">
+            <span class="badge" :class="!c.enabled ? 'b-logged' : c.mode === 'allow' ? 'b-ok' : 'b-blocked'">{{ t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) }}</span>
+            <span class="mono">{{ c.countries.join(' ') }}</span>
+          </span>
+        </RouterLink>
+        <span v-else class="muted">—</span>
+      </template>
+      <template #cell-reach="{ row }">
+        <span class="badge" :class="REACH_CLS[row.reach] || 'b-logged'" :title="row.reach_by ? safeText(row.reach_by, 300) : t('vhosts.reach_hint')">{{ t('vhosts.reach.' + (row.reach || 'open')) }}</span>
+        <div v-if="row.outside_7d != null && !row.redirect_only" class="sub" :class="{ warn: row.reach === 'internal' && row.outside_7d > 0 }">{{ t('vhosts.outside_7d', { n: fmtNum(row.outside_7d) }) }}</div>
       </template>
       <template #cell-bypass="{ row }">
         <div v-for="b in row.bypass || []" :key="b.file + b.line" class="mono" :title="safeText(b.file, 500) + ':' + b.line"><TruncText :text="b.location" :max="120" mono /></div>
@@ -77,9 +70,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { get } from '../api.js'
-import { t, lang } from '../i18n.js'
-import { safeText } from '../util.js'
-import { hasRole } from '../store.js'
+import { t } from '../i18n.js'
+import { safeText, fmtNum } from '../util.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import TruncText from '../components/TruncText.vue'
@@ -97,8 +89,10 @@ const byHost = ref([])        // /overview?range=7d by_host: the 15 busiest site
 const cols = computed(() => [
   { key: 'server_names', label: t('vhosts.server_names'), required: true, value: (v) => (v.server_names || [])[0] || '~',
     text: (v) => (v.server_names || []).join(' ') + ' ' + (v.file || '') + ' ' + (v.listen || []).join(' ') },
-  { key: 'waf', label: t('vhosts.waf'), nowrap: true, value: (v) => t('waf.' + (v.waf || 'unknown')),
-    text: (v) => t('waf.' + (v.waf || 'unknown')) + ' ' + (v.inline_rule_ids || []).join(' ') },
+  { key: 'waf', label: t('vhosts.waf'), nowrap: true, value: (v) => (v.waf === 'off' && v.redirect_only ? t('waf.redirect') : t('waf.' + (v.waf || 'unknown'))),
+    text: (v) => (v.waf === 'off' && v.redirect_only ? t('waf.redirect') : t('waf.' + (v.waf || 'unknown'))) + ' ' + (v.inline_rule_ids || []).join(' ') },
+  { key: 'reach', label: t('vhosts.reach'), nowrap: true, value: (v) => t('vhosts.reach.' + (v.reach || 'open')),
+    text: (v) => t('vhosts.reach.' + (v.reach || 'open')) + ' ' + (v.reach_by || '') },
   { key: 'countries', label: t('vhosts.countries'), value: (v) => (v.countries || []).length,
     text: (v) => (v.countries || []).concat(v.country_changes || []).map((c) => t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) + ' ' + (c.countries || []).join(' ')).join(' ') },
   { key: 'bypass', label: t('vhosts.bypass'), value: (v) => (v.bypass || []).length, text: (v) => (v.bypass || []).map((b) => b.location).join(' ') },
@@ -108,15 +102,14 @@ const cols = computed(() => [
   { key: 'upstreams', label: t('vhosts.upstreams'), value: (v) => (v.upstreams || []).join(' ') },
 ])
 
-const canPropose = computed(() => hasRole('operator'))
-// country names in the interface language from the browser (as on the new change page)
-const regionNames = computed(() => { try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null } })
-function countryName(c) { try { return (regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
 // the site a new country rule is for: the first plain name of the server block (not "_" or a regular expression)
 function countryHost(v) {
   return (v.server_names || []).find((n) => n && n !== '_' && !n.startsWith('~') && /^(\*\.)?[a-z0-9.-]+$/i.test(n)) || ''
 }
-function count(w) { return items.value.filter((v) => v.waf === w).length }
+// internal only: green; limited to countries or addresses: blue; a check not understood: grey; open: amber
+const REACH_CLS = { internal: 'b-ok', country: 'b-int', limited: 'b-int', restricted: 'b-logged', open: 'b-warn' }
+// a block that only redirects (http to https) is not counted as unprotected: there is nothing in it to protect
+function count(w) { return items.value.filter((v) => (w === 'redirect' ? v.waf === 'off' && v.redirect_only : v.waf === w && !(w === 'off' && v.redirect_only))).length }
 function wafCls(w) { return w === 'block' ? 'b-blocked' : w === 'on' ? 'b-ok' : w === 'off' ? 'b-warn' : 'b-int' }
 function shortFile(p) {
   const s = String(p || '')
@@ -128,6 +121,7 @@ const modeParts = computed(() => [
   { key: 'block', label: t('waf.block'), value: count('block'), tone: 's1' },
   { key: 'on', label: t('waf.on'), value: count('on'), tone: 's2' },
   { key: 'off', label: t('waf.off'), value: count('off'), tone: 'warning' },
+  { key: 'redirect', label: t('waf.redirect'), value: count('redirect'), tone: 'muted' },
   { key: 'unknown', label: t('waf.unknown'), value: items.value.filter((v) => !['block', 'on', 'off'].includes(v.waf)).length, tone: 'muted' },
 ])
 const outcomeSeries = computed(() => [
@@ -154,12 +148,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.cocell { min-width: 230px; }
-.cocell .warn { margin: 2px 0 0; }
-.corow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
-.cocode { font-size: 12px; }
-</style>
-
-<style scoped>
+.cosum { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; white-space: nowrap; text-decoration: none; color: inherit; }
+.cosum > span { display: inline-flex; gap: 4px; align-items: center; }
+.cosum .off { opacity: .6; }
+.cosum:hover .mono { text-decoration: underline; }
 .badge .icon { margin-right: 3px; vertical-align: -0.25em; }
 </style>

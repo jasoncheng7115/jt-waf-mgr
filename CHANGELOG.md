@@ -2,6 +2,21 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.31 (2026-11-14)
+
+- Sites page: the country-limits column is one line per site (what its country rules allow or block) linking to
+  that site on the country-limits page; the buttons, the changes on their way and the notes are on that page only.
+  The country-limits page opens one site with `?host=`.
+- Who can reach a site (Sites and Country limits pages): internal only, some countries, some addresses, a source
+  check that is not understood, or inside and outside, from nginx's own checks for the whole server block (geo and
+  map variables resolved), with the outside requests of the last 7 days. A name that only internal DNS knows is not
+  protected by that alone: anyone who reaches the server can ask for it.
+- A server block that only redirects (http to https) shows "redirect only" instead of "WAF off", and is counted
+  apart.
+- Configuration changed outside jt-waf-mgr: a change recorded before 0.4.30 shows the logins looked up in the host's
+  authentication log when its page is opened, and says why what changed in the files is not shown.
+- Top bar: theme, language, account and log out are the same height, and the account has a frame like the buttons.
+
 ## 0.4.30 (2026-11-14)
 
 - Security: a rule limited to one site (a country limit, a block or an exclusion for a host) did not match the site's

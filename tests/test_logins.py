@@ -121,6 +121,24 @@ class TestOutsideChange(unittest.TestCase):
         self.assertNotIn(b'secret-', b''.join(zlib.decompress(bytes(r[0])) for r in self.app.db.q('SELECT body FROM config_contents')))
         self.assertTrue(raw)
 
+    def test_an_older_outside_change_looks_the_logins_up_when_opened(self):
+        with open(self.f, 'w') as fh:
+            fh.write('a\n')
+        self.mon.check_config()
+        with open(self.f, 'w') as fh:
+            fh.write('b\n')
+        self.mon.check_config()
+        sid = self.mon.config_changes()[0][0]['id']
+        row = self.app.db.one('SELECT changes FROM config_snapshots WHERE id=?', (sid,))
+        old = {k: v for k, v in json.loads(row['changes']).items() if k in ('added', 'removed', 'changed')}
+        self.app.db.x('UPDATE config_snapshots SET changes=? WHERE id=?', (json.dumps(old), sid))     # as 0.4.29 stored it
+        with open(self.auth, 'w') as fh:
+            fh.write('%s host1 sshd[9]: Accepted publickey for ops from 192.0.2.31 port 5 ssh2: %s\n' % (stamp(time.time() - 5), KEY))
+        snap = self.mon.config_snapshot(sid)
+        self.assertTrue(snap['changes']['logins_live'])
+        self.assertEqual([s['user'] for s in snap['changes']['logins']], ['ops'])
+        self.assertNotIn('diffs', snap['changes'])
+
     def test_no_login_and_a_version_not_stored(self):
         with open(self.f, 'wb') as fh:
             fh.write(b'\x00binary')
