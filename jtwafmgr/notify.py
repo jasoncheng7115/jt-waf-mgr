@@ -61,6 +61,7 @@ EVENTS = {
     'change.rejected': ('changes', 'info', False),
     'change.rollback_requested': ('changes', 'warning', True),
     'report.daily': ('system', 'info', True),
+    'report.review': ('analysis', 'info', True),
     'analyst.proposals': ('analysis', 'info', True),
     'analyst.failed': ('analysis', 'warning', True),
     'backup.failed': ('system', 'critical', True),
@@ -107,6 +108,25 @@ TEXT = {
         'f.top_hosts': '事件最多的站台',
         'f.top_rules': '命中最多的規則',
         'f.open_alerts': '待處理警示',
+        'report.review': 'WAF 定期檢討（{window}）',
+        'rv.ok': '沒有誤封鎖的跡象。',
+        'rv.attention': '有 {n} 項要看一下。',
+        'f.rv_events': '事件',
+        'f.rv_counts': '{events}（封鎖 {blocked}、只記錄 {logged}）',
+        'f.rv_suspects': '可能誤封鎖',
+        'f.rv_score_only': '只靠分數封鎖',
+        'f.rv_internal_new': '新的內部命中',
+        'f.rv_not_refused': '外部攻擊未被封鎖',
+        'f.rv_done': '本輪自動處理',
+        'f.rv_done_v': '套用 {applied} 筆變更、新封鎖 IP {blocks} 個、分析提案 {proposals} 筆',
+        'f.rv_waiting': '等人處理',
+        'f.rv_waiting_v': '警示 {alerts}、待核准變更 {approvals}',
+        'f.rv_focus': '重點站台 {host}',
+        'f.rv_focus_v': '事件 {events}（封鎖 {blocked}）、外部攻擊未封鎖 {open}、登入路徑 {login}、請求 {requests}、429 {s429}',
+        'f.rv_focus_rest': '其他重點站台',
+        'f.rv_focus_rest_v': '{n} 個,沒有異常',
+        'f.rv_repeat': '反覆登入的外部來源',
+        'f.rv_groups': '{n} 組',
         'f.applied': '已套用的變更',
         'f.proposed': '事件分析提案',
         'f.vs': '前 24 小時',
@@ -158,6 +178,25 @@ TEXT = {
         'f.top_hosts': 'Busiest sites',
         'f.top_rules': 'Most matched rules',
         'f.open_alerts': 'Open alerts',
+        'report.review': 'WAF review ({window})',
+        'rv.ok': 'No sign of anyone blocked by mistake.',
+        'rv.attention': '{n} thing(s) to look at.',
+        'f.rv_events': 'Events',
+        'f.rv_counts': '{events} (blocked {blocked}, logged {logged})',
+        'f.rv_suspects': 'Possibly blocked by mistake',
+        'f.rv_score_only': 'Blocked by the score alone',
+        'f.rv_internal_new': 'New internal hits',
+        'f.rv_not_refused': 'Outside attacks not refused',
+        'f.rv_done': 'Done automatically',
+        'f.rv_done_v': '{applied} change(s) applied, {blocks} IP(s) blocked, {proposals} analysis proposal(s)',
+        'f.rv_waiting': 'Waiting for a person',
+        'f.rv_waiting_v': 'alerts {alerts}, changes to approve {approvals}',
+        'f.rv_focus': 'Focus site {host}',
+        'f.rv_focus_v': 'events {events} (blocked {blocked}), outside attacks not refused {open}, login paths {login}, requests {requests}, 429 {s429}',
+        'f.rv_focus_rest': 'Other focus sites',
+        'f.rv_focus_rest_v': '{n}, nothing to look at',
+        'f.rv_repeat': 'Outside sources logging in again and again',
+        'f.rv_groups': '{n} group(s)',
         'f.applied': 'Changes applied',
         'f.proposed': 'Analysis proposals',
         'f.vs': 'previous 24 h',
@@ -210,6 +249,25 @@ TEXT = {
         'f.top_hosts': 'イベントの多いサイト',
         'f.top_rules': '一致の多いルール',
         'f.open_alerts': '対応待ちアラート',
+        'report.review': 'WAF 定期レビュー（{window}）',
+        'rv.ok': '誤ブロックの兆候はありません。',
+        'rv.attention': '確認が必要な項目が {n} 件あります。',
+        'f.rv_events': 'イベント',
+        'f.rv_counts': '{events}（ブロック {blocked}、記録のみ {logged}）',
+        'f.rv_suspects': '誤ブロックの可能性',
+        'f.rv_score_only': 'スコアのみでブロック',
+        'f.rv_internal_new': '新しい内部の一致',
+        'f.rv_not_refused': '拒否されなかった外部攻撃',
+        'f.rv_done': '自動で処理',
+        'f.rv_done_v': '変更の適用 {applied} 件、IP ブロック {blocks} 件、分析の提案 {proposals} 件',
+        'f.rv_waiting': '人の対応待ち',
+        'f.rv_waiting_v': 'アラート {alerts}、承認待ちの変更 {approvals}',
+        'f.rv_focus': '重点サイト {host}',
+        'f.rv_focus_v': 'イベント {events}（ブロック {blocked}）、拒否されなかった外部攻撃 {open}、ログインパス {login}、リクエスト {requests}、429 {s429}',
+        'f.rv_focus_rest': 'ほかの重点サイト',
+        'f.rv_focus_rest_v': '{n} 件、異常なし',
+        'f.rv_repeat': 'ログインを繰り返す外部の送信元',
+        'f.rv_groups': '{n} グループ',
         'f.applied': '適用した変更',
         'f.proposed': 'イベント分析の提案',
         'f.vs': '直前 24 時間',
@@ -525,6 +583,44 @@ def render(db, cfg, event, d):
         if d.get('open_alerts'):
             sev = 'warning'
         path = '/'
+    elif event == 'report.review':
+        a, b = str(d.get('since') or ''), str(d.get('until') or '')
+        kw['window'] = '%s–%s' % (a[5:16].replace('T', ' '), b[11:16]) if len(a) >= 16 and len(b) >= 16 else '-'
+        attention = int(d.get('possible_false_blocks') or 0) + int(d.get('internal_new') or 0) + sum(
+            1 for f in d.get('focus') or [] if f.get('outside_not_refused') or f.get('repeated_login') or f.get('s429'))
+        text = _t(lang, 'rv.attention', n=attention) if attention else L('rv.ok')
+        facts.append((L('f.rv_events'), _t(lang, 'f.rv_counts', events=_int(d.get('events')) or 0,
+                                           blocked=_int(d.get('blocked')) or 0, logged=_int(d.get('logged')) or 0)))
+        if d.get('suspects'):
+            facts.append((L('f.rv_suspects'), '; '.join('%s %s %s ×%s' % (x.get('host'), x.get('method'), x.get('path'), x.get('n'))
+                                                        for x in d['suspects'][:3])))
+        facts.append((L('f.rv_score_only'), _t(lang, 'f.rv_groups', n=_int(d.get('score_only_groups')) or 0)))
+        if d.get('internal_new'):
+            facts.append((L('f.rv_internal_new'), _t(lang, 'f.rv_groups', n=_int(d.get('internal_new')))))
+        if d.get('not_refused'):
+            facts.append((L('f.rv_not_refused'), '; '.join('%s %s ×%s' % (x.get('host'), x.get('path'), x.get('n'))
+                                                           for x in d['not_refused'][:3])))
+        # the first focus site every time (the one that matters most), the others only when something needs a look
+        focus = d.get('focus') or []
+        shown = [f for i, f in enumerate(focus)
+                 if i == 0 or f.get('outside_not_refused') or f.get('repeated_login') or f.get('s429')][:6]
+        for f in shown:
+            facts.append((_t(lang, 'f.rv_focus', host=_v(f.get('host'), 80)), _t(
+                lang, 'f.rv_focus_v', events=_int(f.get('events')) or 0, blocked=_int(f.get('blocked')) or 0,
+                open=_int(f.get('outside_not_refused')) or 0, login=_int(f.get('login_events')) or 0,
+                requests=_int(f.get('requests')) or 0, s429=_int(f.get('s429')) or 0)))
+            if f.get('repeated_login'):
+                facts.append((L('f.rv_repeat'), ', '.join('%s ×%s' % (ip, n) for ip, n in f['repeated_login'][:3])))
+        if len(focus) > len(shown):
+            facts.append((L('f.rv_focus_rest'), _t(lang, 'f.rv_focus_rest_v', n=len(focus) - len(shown))))
+        facts.append((L('f.rv_done'), _t(lang, 'f.rv_done_v', applied=_int(d.get('applied')) or 0,
+                                         blocks=_int(d.get('ip_blocks')) or 0, proposals=_int(d.get('proposals')) or 0)))
+        facts.append((L('f.rv_waiting'), _t(lang, 'f.rv_waiting_v', alerts=_int(d.get('open_alerts')) or 0,
+                                            approvals=_int(d.get('awaiting_approval')) or 0)))
+        if attention:
+            sev = 'warning'
+        rid = _int(d.get('review_id'))
+        path = '/reviews/%d' % rid if rid else '/reviews'
     elif event == 'alert.reminder':
         kw['open'] = _int(d.get('open')) or 0
         for it in (d.get('items') or [])[:5]:
@@ -571,6 +667,13 @@ SAMPLES = {
     'report.daily': {'day': '2026-01-01', 'events': 1240, 'prev_events': 1180, 'blocked': 310, 'prev_blocked': 295,
                      'logged': 930, 'prev_logged': 885, 'sources': 212, 'top_hosts': [['app.example.com', 640]],
                      'top_rules': [['930120', 120]], 'open_alerts': 1, 'applied': 2, 'proposed': 3},
+    'report.review': {'since': '2026-01-01T09:00:00+00:00', 'until': '2026-01-01T12:00:00+00:00', 'events': 420, 'blocked': 96,
+                      'logged': 324, 'possible_false_blocks': 1, 'score_only_groups': 4, 'internal_new': 0,
+                      'suspects': [{'host': 'shop.example.com', 'method': 'POST', 'path': '/api/notes', 'n': 3}],
+                      'not_refused': [{'host': 'app.example.com', 'path': '/cgi-bin/test.cgi', 'n': 2}],
+                      'focus': [{'host': 'sso.example.com', 'events': 5, 'blocked': 2, 'outside_not_refused': 0, 'login_events': 1,
+                                 'requests': 1800, 's429': 0, 'repeated_login': []}],
+                      'applied': 1, 'ip_blocks': 2, 'proposals': 1, 'open_alerts': 0, 'awaiting_approval': 1, 'review_id': 12},
     'analyst.proposals': {'run_id': 14, 'proposals': [21, 22]},
     'analyst.failed': {'run_id': 15, 'error': 'unreachable: timed out'},
     'backup.failed': {'file': '/var/backups/jt-waf-mgr/jt-waf-mgr-20260101-030000.db', 'error': 'No space left on device'},
@@ -1053,6 +1156,12 @@ def run(app, log=print, limit=200):
                 continue
             st = process(app, r, broken)
             counts[st] = counts.get(st, 0) + 1
+    try:      # the periodic WAF review (stored even when notifications are off; sent below with the report)
+        from . import review
+        review.run_due(app)
+        review.purge(app)
+    except Exception as e:
+        log('notify: review failed: %s: %s' % (type(e).__name__, util.clip(str(e), 200)))
     try:      # after what was due went out: the counting never delays an urgent message
         if cfg['notify']['enabled'] and daily_report(app):
             for r in db.q("SELECT * FROM notifications WHERE status='pending' AND event='report.daily' AND next_at<=?", (util.now(),)):

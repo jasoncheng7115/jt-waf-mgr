@@ -160,6 +160,13 @@ DEFAULTS = {
         'hour': 3,
         'keep_days': 14,
     },
+    'review': {
+        # the periodic WAF review (review.py): every interval_hours (1, 2, 3, 4, 6, 8, 12 or 24; slots start at
+        # midnight, local time), stored and sent through the notification channels (event report.review)
+        'enabled': True,
+        'interval_hours': 3,
+        'keep_days': 90,
+    },
     'dns': {
         # DNS check (dnscheck.py, jt-waf-mgr-dns.service): which site names the internal and the external DNS servers
         # know (addresses, optional :port); and the PTR names of outside addresses (with a forward check). The web
@@ -443,6 +450,11 @@ class Config:
             raise ConfigError('notify.language: ' + ', '.join(LANGUAGES))
         if nt['smtp_tls'] not in ('none', 'starttls', 'tls'):
             raise ConfigError('notify.smtp_tls: none, starttls or tls')
+        rv = data['review']
+        if rv['interval_hours'] not in (1, 2, 3, 4, 6, 8, 12, 24):
+            raise ConfigError('review.interval_hours: 1, 2, 3, 4, 6, 8, 12 or 24')
+        if not 1 <= rv['keep_days'] <= 3650:
+            raise ConfigError('review.keep_days: 1-3650')
         if not -1 <= nt['report_hour'] <= 23:
             raise ConfigError('notify.report_hour: -1 (none) or 0-23')
         if not 1 <= nt['smtp_port'] <= 65535 or not 1 <= nt['max_per_hour'] <= 1000 or not 0 <= nt['remind_hours'] <= 720:

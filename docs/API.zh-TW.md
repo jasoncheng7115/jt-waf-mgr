@@ -408,6 +408,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" 'https://waf.example.com/api/v1/rules
 - **`GET /lookups/ip/{ip}`**：jt-waf-mgr 最近 7 天與 30 天從這個位址看到的事件，以及 PTR 名稱（`ptr`：名稱與是否正反解
   一致；DNS 程序還在查時是 `{"pending": true}`）。
 - **`GET /lookups/ip/{ip}/card`**：頁面上滑鼠停留時顯示的精簡版（位置、PTR、是否封鎖中、最近 7 天）。
+- **`GET /reviews`**、**`GET /reviews/{id}`**（scope `events:read`）：WAF 定期檢討（每 `review.interval_hours` 小時）：數量、只靠分數封鎖的請求（依站台與路徑分組，可能誤封鎖的排前面）、新的內部命中、沒被封鎖的外部攻擊、自動處理了什麼、每個重點站台一行。不含請求內容與查詢字串。`POST /reviews/run`（approver，網頁登入）：立即檢討最近一段時間。
 - **`GET /dns`**（scope `rules:read`）：DNS 檢查結果，每個站名在各台內部、外部 DNS 的回答。
 - **`GET /geoip/{ip}`**：只回 GeoIP 結果（沒有安裝 GeoIP 資料庫時 `available: false`）。
 

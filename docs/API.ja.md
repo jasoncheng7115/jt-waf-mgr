@@ -435,6 +435,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" 'https://waf.example.com/api/v1/rules
 - **`GET /lookups/ip/{ip}`**：jt-waf-mgr がそのアドレスについて直近 7 日と 30 日に見たもの。PTR 名（`ptr`：名前と正引きで
   一致するか。DNS ジョブが調べている間は `{"pending": true}`）も返します。
 - **`GET /lookups/ip/{ip}/card`**：ページでポインターを置いたときの簡易版（場所、PTR、ブロック中か、直近 7 日）。
+- **`GET /reviews`**、**`GET /reviews/{id}`**（スコープ `events:read`）：WAF 定期レビュー（`review.interval_hours` ごと）：件数、スコアのみでブロックしたリクエスト（サイトとパスでまとめ、誤ブロックの可能性を先頭に）、新しい内部の一致、拒否されなかった外部攻撃、自動処理の内容、重点サイトごとの 1 行。リクエストの内容とクエリ文字列は含みません。`POST /reviews/run`（approver、Web ログイン）：直近の期間を今すぐレビュー。
 - **`GET /dns`**（スコープ `rules:read`）：DNS チェックの結果。サイト名ごとに各内部・外部サーバーの応答。
 - **`GET /geoip/{ip}`**：GeoIP の結果だけ（GeoIP データベースがないときは `available: false`）。
 

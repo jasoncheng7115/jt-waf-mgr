@@ -36,16 +36,28 @@
       <!-- OWASP CRS versions: what is in use, the newest release, a downloaded and verified one -->
       <section v-if="upd" class="card crsupd">
         <h2><Icon name="download" /> {{ t('crsupd.title') }}</h2>
-        <dl class="kv">
-          <dt>{{ t('crsupd.in_use') }}</dt><dd><b>{{ upd.location ? upd.location.version || '—' : t('crsupd.none') }}</b>
-            <div v-if="upd.location" class="mono small muted breakall">{{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"> → {{ safeText(upd.location.target, 200) }}</template></div></dd>
-          <template v-if="upd.versions.length"><dt>{{ t('crsupd.on_disk') }}</dt><dd class="mono">{{ upd.versions.join(', ') }}</dd></template>
-          <dt>{{ t('crsupd.managed') }}</dt><dd>
+        <div class="crshead">
+          <div class="crsver">
+            <span class="muted small">{{ t('crsupd.in_use') }}</span>
+            <b class="v">{{ upd.location ? upd.location.version || '—' : t('crsupd.none') }}</b>
+            <span v-if="st.state" class="badge" :class="STATE_CLS[st.state] || 'b-logged'">{{ tOr('crsupd.state.' + st.state, st.state) }}</span>
+          </div>
+          <div class="crscheck">
+            <span class="muted small">{{ t('crsupd.checked') }} · {{ st.checked_at ? fmtMinute(st.checked_at) : t('crsupd.never_checked') }}</span>
+            <button v-if="isAdmin" type="button" class="btn small" :disabled="busy || !upd.manage" @click="checkNow"><Icon name="refresh" />{{ t('crsupd.check_now') }}</button>
+          </div>
+        </div>
+        <p v-if="checkMsg" class="muted small" role="status">{{ checkMsg }}</p>
+        <dl class="kv crskv">
+          <template v-if="upd.location"><dt>{{ t('crsupd.location') }}</dt>
+            <dd class="mono small breakall">{{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"><span class="muted"> → </span>{{ safeText(upd.location.target, 200) }}</template></dd></template>
+          <template v-if="upd.versions.length"><dt>{{ t('crsupd.on_disk') }}</dt>
+            <dd class="chips"><span v-for="v in upd.versions" :key="v" class="chip mono" :class="{ cur: upd.location && v === upd.location.version }">{{ v }}<span v-if="upd.location && v === upd.location.version" class="muted small gapl">{{ t('crsupd.current') }}</span></span></dd></template>
+          <dt class="sw">{{ t('crsupd.managed') }}</dt><dd>
             <label v-if="isAdmin" class="switch"><input type="checkbox" :checked="upd.manage" :disabled="busy" @change="setManage($event.target.checked)">
               <span class="knob" aria-hidden="true"></span><span>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span></label>
             <span v-else>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span>
             <div class="muted small">{{ t('crsupd.managed_hint', { n: upd.wait_days }) }}</div></dd>
-          <template v-if="st.checked_at"><dt>{{ t('crsupd.checked') }}</dt><dd>{{ fmtMinute(st.checked_at) }} · <span class="badge" :class="STATE_CLS[st.state] || 'b-logged'">{{ tOr('crsupd.state.' + st.state, st.state) }}</span></dd></template>
           <template v-if="st.candidate"><dt>{{ t('crsupd.newest') }}</dt><dd>{{ st.candidate.version }}<div class="muted small">{{ t('crsupd.published', { at: fmtMinute(st.candidate.published_at), ready: fmtMinute(st.candidate.ready_at) }) }}</div></dd></template>
           <template v-if="st.staged"><dt>{{ t('crsupd.staged') }}</dt><dd><b>{{ st.staged.version }}</b><div class="muted small">{{ t('crsupd.staged_hint', { at: fmtMinute(st.staged.verified_at), n: st.staged.files }) }}</div></dd></template>
           <template v-if="st.newer_major"><dt>{{ t('crsupd.major') }}</dt><dd>{{ t('crsupd.major_hint', { v: st.newer_major }) }}</dd></template>
@@ -67,10 +79,6 @@
         <div v-if="proposed" class="alert success" role="status">{{ t('crsupd.proposed', { id: proposed }) }}
           <RouterLink :to="'/changes/' + proposed">{{ t('toggle.open_change') }}</RouterLink></div>
         <ErrorBox :error="updError" />
-        <div v-if="isAdmin" class="actions">
-          <button type="button" class="btn small" :disabled="busy || !upd.manage" @click="checkNow"><Icon name="refresh" />{{ t('crsupd.check_now') }}</button>
-          <span v-if="checkMsg" class="muted small" role="status">{{ checkMsg }}</span>
-        </div>
       </section>
       <section v-if="families.length" class="card">
         <h2><Icon name="shield" /> {{ t('crs.rules_by_family') }}</h2>
@@ -227,6 +235,15 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.crsupd .kv dd > div { margin-top: 2px; }
+.crsupd .kv dd > div { margin-top: 4px; }
+.crshead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.crsver { display: flex; align-items: center; gap: 10px; }
+.crsver .v { font-size: 22px; font-variant-numeric: tabular-nums; }
+.crscheck { display: flex; align-items: center; gap: 12px; }
+.crskv { row-gap: 12px; align-items: start; }
+.crskv dt.sw { padding-top: 2px; }
+.crskv dd.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.crskv .chip { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.crskv .chip.cur { border-color: var(--accent); }
 .wafeffective { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); background: var(--panel-2); color: var(--text); }
 </style>

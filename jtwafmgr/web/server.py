@@ -166,6 +166,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # nginx keeps the access log; the audit table keeps the actions
 
+    def finish(self):
+        try:
+            super().finish()
+        finally:
+            self.server.app.db.release()      # one connection per request thread, closed when the thread is done
+
     def do_GET(self):
         self._dispatch()
 

@@ -62,7 +62,7 @@ async function setLang(page, lang) {
 }
 
 const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/countries', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
-  '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
+  '/versions', '/config-changes', '/reviews', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
   '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/traffic', '/blocks', '/nope'];
 
 const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9', '/traffic', '/countries'];
@@ -188,6 +188,31 @@ async function audit(page, where) {
     ok(/\d/.test(v), 'datepicker shows a value: ' + v.trim());
     await page.screenshot({ path: SHOTS + '/events-after-date.png' });
   } else problems.push('events: no datepicker');
+  // outside configuration changes: "files" opens right under its row, not at the end of the page
+  await page.goto(base + '/config-changes', { waitUntil: 'networkidle' });
+  const fbtn = page.locator('#cfgchg-list tbody tr button, .datatable tbody tr button').filter({ has: page.locator('svg') }).first();
+  if (await fbtn.count()) {
+    await fbtn.click();
+    const placed = await page.evaluate(() => {
+      const ex = document.querySelector('tr.dt-expand');
+      return !!(ex && ex.previousElementSibling && ex.previousElementSibling.classList.contains('dt-open'));
+    });
+    ok(placed, 'config changes: files open under their row');
+  }
+  // periodic WAF review: review now, then the review page shows its parts
+  await page.goto(base + '/reviews', { waitUntil: 'networkidle' });
+  const rvBtn = page.locator('.pagehead button.primary');
+  if (await rvBtn.count()) {
+    await rvBtn.click();
+    await page.waitForURL(/\/reviews\/\d+/, { timeout: 10000 }).catch(() => {});
+    await page.locator('.rvtiles .rvtile').first().waitFor({ timeout: 10000 }).catch(() => {});
+    ok(/\/reviews\/\d+/.test(page.url()), 'review now opens the new review');
+    ok(await page.locator('.rvtiles .rvtile').count() >= 4, 'review shows its tiles');
+  } else problems.push('reviews: no review-now button');
+  // system check: the background parts are all there
+  await page.goto(base + '/admin/system', { waitUntil: 'networkidle' });
+  const sysText = await page.locator('main').innerText();
+  for (const k of ['DNS', 'CRS']) ok(sysText.includes(k), 'system check lists ' + k);
   // Guide: click an architecture node
   await page.goto(base + '/guide', { waitUntil: 'networkidle' });
   await page.locator('.arch-node').nth(5).click();

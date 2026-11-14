@@ -104,6 +104,7 @@ class NotifyBase(unittest.TestCase):
         # the daily report goes out from notify.report_hour (8 by default) on: off here, or every test run after
         # 8 o'clock would see one more message; the report tests set the hour themselves
         self.app.cfg.data['notify']['report_hour'] = -1
+        self.app.cfg.data['review']['enabled'] = False       # likewise the periodic review (tests/test_review.py)
         self.hook.seen.clear()
         self.smtp.mails.clear()
         self.hook.reply = lambda path: (200, b'{"ok": true}', None)

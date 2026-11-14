@@ -2,6 +2,27 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.35 (2026-11-14)
+
+- New logo: a square split by an inspection gap, with the request held at the gap (no shield; readable at 16 px).
+- Periodic WAF review (Events > WAF reviews; every 3 hours by default, Settings > Periodic WAF review): requests
+  blocked by the CRS score alone grouped by site and path, with possible false blocks (an internal user, or no attack
+  type) first; new internal hits; outside attacks that were only logged; what was done automatically (event analysis,
+  changes, IP blocks); what waits for a person; one line per focus site (events, login paths, answers 429, a source
+  logging in again and again). Stored, and sent through the notification channels (event "Periodic WAF review": the
+  first focus site every time, the others only when something needs a look). Read-only; never request content or
+  query strings. API `GET /reviews`, `GET /reviews/{id}`, `POST /reviews/run`.
+- System check: twelve more items -- ModSecurity and CRS settings, background jobs (every timer and path unit
+  enabled), CRS updates, event analysis, IP blocks, country lists, the DNS check, health check URLs, changes waiting
+  or stuck, API tokens expiring or unused, request counts, and whether the audit log is rotated.
+- Outside configuration changes: "Files" opens right under its row instead of at the end of the page (tables can
+  now open a row in place).
+- CRS page: the version card has a summary line (version, state, last check, check now) and a tidier list.
+- Overview: the custom range buttons have the same height as the date fields; event list: the method and the path
+  are aligned.
+- Ubuntu 26.04 (Python 3.14): installed and tested; each request thread now closes its database connection, and a
+  deprecated call was fixed.
+
 ## 0.4.34 (2026-11-14)
 
 - The DNS job's folder defaults to "dns" next to the database (`[dns] dir` still overrides it), and the web service

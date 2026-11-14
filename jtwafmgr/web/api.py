@@ -1011,6 +1011,34 @@ def dns_check(app, req):
     return json_response(202, app.dns.status())
 
 
+def reviews(app, req):
+    from .. import review
+    return json_response(200, {'items': review.listing(app.db, _limit(req, 50, 500), _int_param(req, 'before')),
+                               'enabled': bool(app.cfg['review']['enabled']),
+                               'interval_hours': app.cfg['review']['interval_hours'],
+                               'focus_sites': app.cfg['waf'].get('focus_sites') or []})
+
+
+def review_get(app, req):
+    from .. import review
+    try:
+        rid = int(req.params['id'])
+    except ValueError:
+        raise ApiError(404, 'not_found')
+    r = review.get(app.db, rid)
+    if not r:
+        raise ApiError(404, 'not_found')
+    return json_response(200, r)
+
+
+def review_run(app, req):
+    """Review the last interval now (read-only on the events; stored and sent like a scheduled one)."""
+    from .. import review
+    rid, _ = review.run(app, 'manual')
+    app.audit.log('review.run', req.user['username'], src_ip=req.client_ip, review_id=rid)
+    return json_response(201, review.get(app.db, rid))
+
+
 def _rule_label(app, rule_id, out):
     """What a rule id means: its message and attack family (for charts that would otherwise show bare numbers)."""
     try:
@@ -1233,6 +1261,9 @@ def register(router):
     R('GET', V + '/lookups/ip/{ip}', lookup_ip, viewer('lookups:read'))
     R('GET', V + '/lookups/ip/{ip}/card', ip_card, viewer('lookups:read'))
     R('GET', V + '/dns', dns_status, viewer('rules:read'))
+    R('GET', V + '/reviews', reviews, viewer('events:read'))
+    R('GET', V + '/reviews/{id}', review_get, viewer('events:read'))
+    R('POST', V + '/reviews/run', review_run, ('role', 'approver', None))
     R('POST', V + '/dns/check', dns_check, ('role', 'admin', None))
     R('GET', V + '/users', users, admin)
     R('POST', V + '/users', user_create, admin)

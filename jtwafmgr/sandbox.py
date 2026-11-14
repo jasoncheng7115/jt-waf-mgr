@@ -362,7 +362,7 @@ http {
             # path blocks must survive encoding / case / slash tricks (LESSONS 14)
             if blocks and t.get('expect') == 403 and t.get('source') == 'external':
                 p, _, q = t['path'].partition('?')
-                variants = {p.upper(), p.replace('/', '//', 1), re.sub(r'[a-z]', lambda x: '%%%02x' % ord(x.group(0)), p, 1)}
+                variants = {p.upper(), p.replace('/', '//', 1), re.sub(r'[a-z]', lambda x: '%%%02x' % ord(x.group(0)), p, count=1)}
                 for v in sorted(variants - {p}):
                     cases.append(dict(t, path=v + ('?' + q if q else ''), origin='variant'))
                 # the same request from inside: let through by an external-only block, refused by one that

@@ -199,6 +199,7 @@ is also how `included` is detected.
   an admin (403 `admin_required`). `POST /blocks` also takes `"ttl": "permanent"` from an admin in the interface, never
   from a token. Each block has `permanent` (its `expires_at` is then null) and, in the list, `geo`.
 - Events: `redirected` (logged, a 3xx answer, a confident-block or country rule matched); `GET /events?outcome=redirected`.
+- `GET /api/v1/reviews` (viewer, `events:read`; `limit`, `before`) → `{"items": [summary + id, created_at, trigger], "enabled", "interval_hours", "focus_sites"}`; `GET /api/v1/reviews/{id}` → the whole review (`score_only`, `internal`, `outside_not_refused`, `confident_by_rule`, `analysis`, `changes`, `ip_blocks`, `focus`, `level`, ...); `POST /api/v1/reviews/run` (approver) → 201, the new review (audit `review.run`). Notification event `report.review`.
 - `GET /api/v1/dns` (viewer, `rules:read`) → `{"enabled", "ptr", "internal_servers", "external_servers", "ptr_servers",
   "check_hours", "checked_at", "ran_at", "requested", "wildcards": {zone: {server: [addr]}}, "names": {name: {"class":
   internal_only|public|wildcard|not_found|error, "public_private", "internal": {server: {"rcode", "addrs", "cname"} |

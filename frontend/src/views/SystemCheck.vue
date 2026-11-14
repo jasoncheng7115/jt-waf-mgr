@@ -133,7 +133,7 @@ import SegBar from '../components/charts/SegBar.vue'
 import HBars from '../components/charts/HBars.vue'
 
 const BADGE = { ok: 'b-ok', warn: 'b-warn', fail: 'b-blocked', info: 'b-logged' }
-const TIME_KEYS = ['checked_at', 'last_at', 'last_read', 'last_error', 'last_outside_at', 'last_run', 'generated_at']
+const TIME_KEYS = ['checked_at', 'last_at', 'last_read', 'last_error', 'last_outside_at', 'last_run', 'generated_at', 'last_hour']
 const ORDER = { fail: 0, warn: 1, ok: 2, info: 3 }
 // shown by ChainResult instead of the generic list
 const HIDE = { audit_chain: ['ok', 'reason', 'bad_id', 'anchor_problems', 'last_anchor', 'checked_at'] }
@@ -262,7 +262,7 @@ function shownDetails(it) {
 function isHash(v) { return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v) }
 function boolClass(key, k, v) {
   // true is good for most flags; for these, true means a problem
-  const bad = ['drift', 'ca_file_unreadable', 'unencrypted_remote']
+  const bad = ['drift', 'ca_file_unreadable', 'unencrypted_remote', 'stale']
   const good = bad.includes(k) ? !v : v
   return good ? 'b-ok' : 'b-warn'
 }

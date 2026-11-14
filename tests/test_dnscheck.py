@@ -23,12 +23,21 @@ class FakeDns:
 
     def __init__(self, table, wildcard=None, truncate=False, silent=False):
         self.table, self.wildcard, self.truncate, self.silent = table, wildcard, truncate, silent
-        self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udp.bind(('127.0.0.1', 0))
-        self.port = self.udp.getsockname()[1]
-        self.tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.tcp.bind(('127.0.0.1', self.port))
+        # UDP and TCP on the same port: the free UDP port picked may be taken for TCP, so try again
+        for _ in range(50):
+            self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.udp.bind(('127.0.0.1', 0))
+            self.port = self.udp.getsockname()[1]
+            self.tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                self.tcp.bind(('127.0.0.1', self.port))
+                break
+            except OSError:
+                self.tcp.close()
+                self.udp.close()
+        else:
+            raise OSError('no port free for both UDP and TCP')
         self.tcp.listen(5)
         self.stop = False
         self.questions = []

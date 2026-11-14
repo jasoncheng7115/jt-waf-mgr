@@ -548,7 +548,9 @@ class TestMonitor(unittest.TestCase):
 
     def test_system_check_and_controls(self):
         keys = {i['key'] for i in system_check(self.app)}
-        for k in ('program_integrity', 'audit_chain', 'time_sync', 'backup', 'database', 'accounts', 'apply'):
+        for k in ('program_integrity', 'audit_chain', 'time_sync', 'backup', 'database', 'accounts', 'apply',
+                  'modsecurity', 'crs', 'analyst', 'blocks', 'countries', 'dns', 'health', 'changes', 'tokens', 'traffic',
+                  'logrotate'):
             self.assertIn(k, keys)
         rep = controls(self.app)
         ids = {c['id'] for c in rep['controls']}

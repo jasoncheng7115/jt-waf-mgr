@@ -347,6 +347,21 @@ SCHEMA = [
         created_at REAL NOT NULL
     );
     """,
+    # 11: the periodic WAF reviews (review.py): counts and grouped site / path / rule lists, never request content
+    """
+    CREATE TABLE reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_id TEXT NOT NULL,
+        created_at REAL NOT NULL,
+        since REAL NOT NULL,
+        until REAL NOT NULL,
+        level TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        details TEXT NOT NULL
+    );
+    CREATE INDEX reviews_created ON reviews(created_at);
+    """,
 ]
 
 
@@ -393,6 +408,17 @@ class Database:
                 except OSError:
                     pass
         return c
+
+    def release(self):
+        """Close this thread's connection (a request thread that ends would otherwise leave it to the garbage
+        collector, which Python 3.13+ reports as an unclosed database)."""
+        c = getattr(self._local, 'conn', None)
+        if c is not None:
+            self._local.conn = None
+            try:
+                c.close()
+            except sqlite3.Error:
+                pass
 
     def q(self, sql, args=()):
         return self.conn().execute(sql, args).fetchall()

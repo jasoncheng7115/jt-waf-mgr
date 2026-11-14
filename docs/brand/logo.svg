@@ -4,20 +4,14 @@
     .tag { fill: #5e6878; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 12.5px; letter-spacing: 0.4px; }
     @media (prefers-color-scheme: dark) { .word { fill: #e3e7ee; } .tag { fill: #98a2b3; } }
   </style>
-  <defs>
-    <linearGradient id="jtwaf-shield-w" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3a86e6"/>
-      <stop offset="1" stop-color="#1a4c9c"/>
-    </linearGradient>
-  </defs>
   <g transform="translate(4 4)">
-    <path d="M32 3 L55 11 V29.5 C55 44.5 45.6 55.2 32 61 C18.4 55.2 9 44.5 9 29.5 V11 Z" fill="url(#jtwaf-shield-w)"/>
-    <g stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none">
-      <path d="M16.5 22 H29.5 M16.5 32 H27 M16.5 42 H29.5"/>
-      <path d="M41.5 22 H48 M41.5 42 H48"/>
-    </g>
-    <rect x="33.5" y="15" width="4.5" height="34" rx="2.25" fill="#ffffff"/>
-    <circle cx="28.6" cy="32" r="3.6" fill="#ff8a5c"/>
+  <defs>
+    <linearGradient id="jtwaf-wl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f8cf0"/><stop offset="1" stop-color="#173f8a"/></linearGradient>
+    <linearGradient id="jtwaf-wr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa0f5"/><stop offset="1" stop-color="#2459b8"/></linearGradient>
+  </defs>
+  <path d="M16 4 H29 V60 H16 A12 12 0 0 1 4 48 V16 A12 12 0 0 1 16 4 Z" fill="url(#jtwaf-wl)"/>
+  <path d="M35 4 H48 A12 12 0 0 1 60 16 V48 A12 12 0 0 1 48 60 H35 Z" fill="url(#jtwaf-wr)"/>
+  <circle cx="32" cy="32" r="8" fill="#ff8a4c" stroke="#ffffff" stroke-width="3"/>
   </g>
   <text class="word" x="76" y="44">jt-waf-mgr</text>
   <text class="tag" x="78" y="62">nginx · ModSecurity · OWASP CRS</text>

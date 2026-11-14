@@ -169,5 +169,10 @@ for kind, sev, ded, det, ago in (
     aid = alerts.raise_alert(app.db, app.audit, 'analyst' if kind.startswith('attack') else ('traffic' if kind.startswith('traffic') else 'system'),
                              kind, sev, ded, det, link='/alerts')
     app.db.x('UPDATE alerts SET created_at=?, last_seen=? WHERE dedup=?', (now - ago, now - ago, ded))
+# a day of periodic reviews (synthetic events above; stored only, nothing sent)
+from jtwafmgr import review  # noqa: E402
+for k in range(8, 0, -1):
+    rid, _ = review.run(app, 'schedule', now - k * 3 * 3600 + 60, notify=False)
+    app.db.x('UPDATE reviews SET created_at=? WHERE id=?', (now - k * 3 * 3600 + 60, rid))
 json.dump(sec, open(R + '/totp.json', 'w'))
 print('events', app.db.one('SELECT COUNT(*) n FROM events')['n'])

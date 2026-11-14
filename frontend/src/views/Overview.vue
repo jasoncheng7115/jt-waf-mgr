@@ -43,8 +43,8 @@
       <div class="field"><label for="ov-until">{{ t('filter.until') }}</label>
         <DatePicker id="ov-until" v-model="cust.until" mode="datetime" :presets="untilPresets" /></div>
       <div class="actions">
-        <button type="button" class="btn primary small" @click="applyCustom"><Icon name="check" />{{ t('overview.range_apply') }}</button>
-        <button type="button" class="btn ghost small" @click="showCustom = false"><Icon name="cancel" />{{ t('common.cancel') }}</button>
+        <button type="button" class="btn primary" @click="applyCustom"><Icon name="check" />{{ t('overview.range_apply') }}</button>
+        <button type="button" class="btn" @click="showCustom = false"><Icon name="cancel" />{{ t('common.cancel') }}</button>
       </div>
       <p v-if="custError" class="alert warn small">{{ custError }}</p>
       <p class="muted small">{{ t('overview.range_custom_hint', { days: 31 }) }}</p>
@@ -390,6 +390,9 @@ onUnmounted(() => clearInterval(timer))
 <style scoped>
 .custompanel { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 0 0 12px; }
 .custompanel .field { margin: 0; }
+/* the buttons stand on the same line as the two date fields, at the same height */
+.custompanel :deep(.dp-btn), .custompanel > .actions .btn { height: 36px; box-sizing: border-box; }
+.custompanel > .actions .btn { padding: 0 14px; font-size: 14px; }
 .custompanel p { flex-basis: 100%; margin: 0; }
 .brushhint { margin: 4px 0 0; display: flex; gap: 5px; align-items: center; }
 .fhint { display: inline-flex; align-items: center; gap: 4px; }

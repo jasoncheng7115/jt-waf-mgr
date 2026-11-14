@@ -436,6 +436,7 @@ Scope `lookups:read`.
 - **`GET /lookups/ip/{ip}`**: what jt-waf-mgr has seen from one address in the last 7 and 30 days, with its PTR name
   (`ptr`: the name and whether it leads back to the address; `{"pending": true}` while the DNS job looks it up).
 - **`GET /lookups/ip/{ip}/card`**: the short form the pages show on hover (where, PTR, blocked, the last 7 days).
+- **`GET /reviews`**, **`GET /reviews/{id}`** (scope `events:read`): the periodic WAF reviews (every `review.interval_hours`): counts, requests blocked by the score alone grouped by site and path (possible false blocks first), new internal hits, outside attacks not refused, what was done automatically, one line per focus site. Never request content or query strings. `POST /reviews/run` (approver, web session): review the last interval now.
 - **`GET /dns`** (scope `rules:read`): the DNS check: per site name what each internal and external server answered.
 - **`GET /geoip/{ip}`**: the GeoIP answer only (`available: false` when no GeoIP database is installed).
 

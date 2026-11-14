@@ -64,13 +64,17 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(r, i) in pageRows" :key="keyOf(r, i)" :class="[rowClass ? rowClass(r) : null, { clickable: clickable }]"
+          <template v-for="(r, i) in pageRows" :key="keyOf(r, i)">
+          <tr :class="[rowClass ? rowClass(r) : null, { clickable: clickable, 'dt-open': isExpanded(r, i) }]"
               :tabindex="clickable ? 0 : null" @click="clickable && $emit('row-click', r, $event)"
               @keydown.enter="clickable && $emit('row-click', r, $event)">
             <td v-for="c in visibleCols" :key="c.key" :class="[c.align, c.class, { nowrap: c.nowrap }]">
               <slot :name="'cell-' + c.key" :row="r" :value="valueOf(c, r)">{{ plain(valueOf(c, r)) }}</slot>
             </td>
           </tr>
+          <!-- the expanded row's details, right under it (not at the end of the page, where nobody looks) -->
+          <tr v-if="isExpanded(r, i)" class="dt-expand"><td :colspan="visibleCols.length || 1"><slot name="expand" :row="r" /></td></tr>
+          </template>
           <tr v-if="!pageRows.length"><td :colspan="visibleCols.length || 1" class="empty">{{ rows.length ? t('table.no_match') : (empty || t('common.no_data')) }}</td></tr>
         </tbody>
       </table>
@@ -113,8 +117,10 @@ const props = defineProps({
   empty: { type: String, default: '' },
   toolbar: { type: Boolean, default: true },
   clickable: Boolean,
+  expanded: { type: [String, Number], default: null },   // row key whose #expand slot shows under it
 })
 const emit = defineEmits(['row-click', 'more'])
+function isExpanded(r, i) { return props.expanded !== null && props.expanded !== undefined && keyOf(r, i) === props.expanded }
 
 const STORE = 'jtwaf.table.' + props.id
 function load() {

@@ -119,6 +119,7 @@ const navGroups = computed(() => [
   { key: 'events', label: t('nav.g_events'), icon: 'list', badge: alertCount.open || 0, badgeTitle: t('nav.open_alerts'), items: [
     { to: '/events', label: t('nav.events_list'), icon: 'list' },
     { to: '/alerts', label: t('nav.alerts'), icon: 'bell', badge: alertCount.open || 0, badgeTitle: t('nav.open_alerts') },
+    { to: '/reviews', label: t('nav.reviews'), icon: 'report' },
     ...(isApprover.value ? [{ to: '/analysis', label: t('nav.analysis'), icon: 'timer' }] : []),
     { to: '/lookup', label: t('nav.lookup'), icon: 'search' },
     { to: '/traffic', label: t('nav.traffic'), icon: 'chart' },

@@ -271,7 +271,7 @@ table.grid td.empty, .empty { color: var(--muted); text-align: center; padding: 
 .events .c-host { min-width: 120px; }
 .events .c-host { max-width: 220px; }
 .events .c-rules { max-width: 260px; }
-.reqlink { display: flex; gap: 6px; min-width: 0; color: var(--text); }
+.reqlink { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text); }
 .reqlink:hover .trunc { text-decoration: underline; }
 .sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .localrule td { background: var(--warn-bg); }
@@ -458,6 +458,10 @@ pre.diff .dh { color: var(--muted); font-weight: 600; }
 .btn.tiny { padding: 0 5px; font-size: 12px; line-height: 1.5; }
 tr.crit td { background: var(--blocked-bg); }
 tr.hl td { background: var(--warn-bg); }
+/* a row opened in place (DataTable expanded): the details sit right under it, joined to it */
+table.grid tr.dt-open td { border-bottom-color: transparent; }
+table.grid tr.dt-expand > td { padding: 4px 14px 14px; background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+table.grid tbody tr.dt-expand:hover td { background: var(--panel-2); }
 .exportdone { display: flex; flex-direction: column; gap: 4px; }
 .checkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; margin-bottom: 14px;
   align-items: stretch; }       /* open cards in a row are as tall as the tallest; a folded one keeps its own height */

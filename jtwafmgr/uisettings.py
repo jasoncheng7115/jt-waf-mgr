@@ -93,6 +93,9 @@ EDITABLE = {
     'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
     'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
     'countries.enabled': ('bool', {}),
+    'review.enabled': ('bool', {}),
+    'review.interval_hours': ('int', {'min': 1, 'max': 24}),        # 1, 2, 3, 4, 6, 8, 12 or 24 (config check)
+    'review.keep_days': ('int', {'min': 1, 'max': 3650}),
     'dns.enabled': ('bool', {}),
     'dns.internal_servers': ('list', {'server': True, 'max_items': 10}),
     'dns.external_servers': ('list', {'server': True, 'max_items': 10}),

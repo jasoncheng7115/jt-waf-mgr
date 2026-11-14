@@ -75,7 +75,7 @@
       </section>
       <RowTimeline v-model:window="win" :title="t('timeline.cfgchg')" :rows="items" ts-key="ts" :series="tlSeries" />
       <DataTable :has-more="!!cursor" :loading-more="loading" @more="load(false)" id="cfgchg-list" :columns="cols" :rows="shownItems" :default-sort="{ key: 'id', dir: -1 }" :empty="t('cfgchg.none')"
-                 :row-class="(c) => ({ hl: open === c.id })">
+                 :row-class="(c) => ({ hl: open === c.id })" :expanded="open">
         <template #cell-id="{ row }"><RouterLink class="mono" :to="'/config-changes/' + row.id">{{ row.id }}</RouterLink></template>
         <template #cell-ts="{ row }">{{ fmtMinute(row.ts) }}</template>
         <template #cell-cause="{ row }"><span class="badge" :class="CAUSE[row.cause] || 'b-logged'">{{ tOr('cfgchg.cause.' + row.cause, row.cause) }}</span></template>
@@ -84,14 +84,10 @@
                   :aria-pressed="open === row.id ? 'true' : 'false'" @click="open = open === row.id ? null : row.id">
             <Icon :name="open === row.id ? 'hide' : 'show'" />{{ open === row.id ? t('cfgchg.hide_paths') : t('cfgchg.show_paths') }}</button>
         </template>
+        <template #expand="{ row }">
+          <div class="cfgexpand"><ChangedPaths :changes="row.changes" /></div>
+        </template>
       </DataTable>
-      <section v-if="openItem" class="card">
-        <div class="cardhead">
-          <h2><Icon name="history" /> #{{ openItem.id }} · {{ fmtMinute(openItem.ts) }}</h2>
-          <button class="btn small ghost" type="button" @click="open = null"><Icon name="close" />{{ t('common.dismiss') }}</button>
-        </div>
-        <ChangedPaths :changes="openItem.changes" />
-      </section>
     </template>
   </div>
 </template>
@@ -172,7 +168,6 @@ const cols = computed(() => [
   { key: 'changed', label: t('cfgchg.changed'), align: 'num', value: (c) => n(c, 'changed') },
   { key: 'paths', label: t('cfgchg.path'), sortable: false, text: (c) => ['added', 'removed', 'changed'].flatMap((k) => (c.changes || {})[k] || []).join(' ') },
 ])
-const openItem = computed(() => items.value.find((c) => c.id === open.value) || null)
 const causeSeries = computed(() => CAUSES.map((k) => ({ key: k, label: tOr('cfgchg.cause.' + k, k), tone: CAUSE_TONE[k] })))
 const causeParts = computed(() => CAUSES.map((k) => ({ key: k, label: tOr('cfgchg.cause.' + k, k), value: items.value.filter((c) => c.cause === k).length, tone: CAUSE_TONE[k] })))
 // Snapshots per day (local date) over the loaded rows, newest first, at most 14 days that had changes.

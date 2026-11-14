@@ -647,12 +647,194 @@ def system_check(app):
     out.append(_item('accounts', 'warn' if no_totp or stale_temp or admins == 0 else 'ok', active=len(rows),
                      admins=admins, without_totp=no_totp, locked=locked, temporary_password_unused=stale_temp))
 
+    for fn in (_check_modsecurity, _check_jobs, _check_crs, _check_analyst, _check_blocks, _check_countries, _check_dns,
+               _check_health, _check_changes, _check_tokens, _check_traffic, _check_logrotate):
+        try:
+            it = fn(app)
+        except Exception as e:      # noqa: BLE001 -- one check failing to run is a warning, the others still run
+            it = _item(fn.__name__[7:], 'warn', error='%s: %s' % (type(e).__name__, util.clip(str(e), 200)))
+        if it:
+            out.append(it)
+
     sc = cfg['server']
     host, _ = cfg.listen
     good = sc['secure_cookies'] and host in ('127.0.0.1', '::1', 'localhost')
     out.append(_item('web', 'ok' if good else 'warn', secure_cookies=sc['secure_cookies'], listen=sc['listen'],
                      session_idle_minutes=sc['session_idle_minutes'], session_max_hours=sc['session_max_hours']))
     return out
+
+
+# --- the background parts and what they depend on ------------------------------------------------------------
+
+# the timers and path units install.sh enables (the apply program's path unit is armed separately: see "apply");
+# a unit missing from its .wants folder never runs
+UNITS = tuple(('jt-waf-mgr-%s.%s' % (job, kind), 'timers.target' if kind == 'timer' else 'multi-user.target')
+              for job in ('geoip', 'analyst', 'notify', 'crs', 'countries', 'dns') for kind in ('timer', 'path'))
+SYSTEMD_DIRS = ('/etc/systemd/system', '/usr/lib/systemd/system', '/lib/systemd/system')
+
+
+def _installed(app):
+    return os.path.exists(os.path.join(SYSTEMD_DIRS[0], 'jt-waf-mgr.service'))
+
+
+def _age(ts):
+    """Seconds since an ISO time or an epoch; None if unknown."""
+    if not ts:
+        return None
+    try:
+        t = float(ts) if isinstance(ts, (int, float)) else util.parse_iso(ts)
+    except (TypeError, ValueError):
+        return None
+    return time.time() - t if t else None
+
+
+def _check_modsecurity(app):
+    _, m = app.site.load()
+    c = m.crs_status()
+    w = c.get('warnings') or []
+    audit = c.get('audit') or {}
+    return _item('modsecurity', 'warn' if w or not c.get('version') else 'ok', engine_mode=c.get('engine_mode'),
+                 crs_version=c.get('version'), rule_count=c.get('rule_count'), paranoia_level=c.get('paranoia_level'),
+                 inbound_threshold=c.get('inbound_threshold'), request_body_access=c.get('request_body_access'),
+                 audit_format=audit.get('format'), audit_engine=audit.get('engine'), warnings=w)
+
+
+def _check_jobs(app):
+    if not _installed(app):
+        return None
+    missing = [u for u, target in UNITS
+               if any(os.path.exists(os.path.join(d, u)) for d in SYSTEMD_DIRS)
+               and not os.path.exists(os.path.join(SYSTEMD_DIRS[0], target + '.wants', u))]
+    return _item('jobs', 'warn' if missing else 'ok', checked=len(UNITS), not_enabled=missing)
+
+
+def _check_crs(app):
+    from . import crsupdate
+    st = crsupdate.read_status(app.cfg)
+    manage = bool(app.cfg['crs']['manage'])
+    ext = crsupdate.external_updater()
+    if not manage:
+        return _item('crs', 'info', manage=False, external_updater=ext)
+    age = _age(st.get('checked_at'))
+    stale = age is None or age > 3 * 86400
+    bad = st.get('state') == 'error' or stale or ext
+    return _item('crs', 'warn' if bad else 'ok', manage=True, state=st.get('state'), checked_at=st.get('checked_at'),
+                 error=st.get('error'), external_updater=ext,
+                 newest=(st.get('candidate') or {}).get('version'), staged=(st.get('staged') or {}).get('version'),
+                 newer_major=st.get('newer_major'))
+
+
+def _check_analyst(app):
+    from . import analyst
+    st = analyst.status(app)
+    if not st['enabled']:
+        return _item('analyst', 'info', enabled=False)
+    last = st.get('last_run') or {}
+    age = _age(last.get('finished_at') or last.get('started_at'))
+    late = age is None or age > max(3 * st['interval_minutes'] * 60, 6 * 3600)
+    failed = bool(last.get('error'))
+    return _item('analyst', 'warn' if not st['ready'] or late or failed else 'ok', enabled=True, mode=st['mode'],
+                 reason=st.get('not_ready_reason') or st.get('llm_not_ready_reason'), model=st.get('model'),
+                 last_run=last.get('finished_at') or last.get('started_at'), error=last.get('error'),
+                 interval_minutes=st['interval_minutes'])
+
+
+def _check_blocks(app):
+    st = app.blocks.status()
+    if not st['enabled']:
+        return _item('blocks', 'info', enabled=False)
+    active = app.db.one("SELECT COUNT(*) FROM ip_blocks WHERE state='active' AND expires_at>?", (util.now(),))[0]
+    cap = st['limits'].get('max_active')
+    near = bool(active and cap and active >= 0.8 * cap)
+    ok = st['included'] and st['in_sync'] and st['applied'].get('ok') is not False
+    return _item('blocks', 'ok' if ok and not near else 'warn', enabled=True, included=st['included'],
+                 in_sync=st['in_sync'], active=active, max_active=cap, last_at=st['applied'].get('at'),
+                 uncovered=len(st['uncovered']))
+
+
+def _check_countries(app):
+    st = app.countries.status()
+    if not st['enabled']:
+        return _item('countries', 'info', enabled=False)
+    bad = st['stale'] or st['last_ok'] is False or st['applied'].get('ok') is False or not st['generated_at']
+    return _item('countries', 'warn' if bad else 'ok', enabled=True, generated_at=st['generated_at'], stale=st['stale'],
+                 last_run=st['last_run'], last_ok=st['last_ok'], errors=st['last_errors'] or None,
+                 sets=len(st['sets'] or []), last_at=st['applied'].get('at'))
+
+
+def _check_dns(app):
+    st = app.dns.status()
+    if not st['enabled']:
+        return _item('dns', 'info', enabled=False, ptr=st['ptr'])
+    names = st.get('names') or {}
+    errors = sorted(n for n, r in names.items() if r.get('class') == 'error')
+    internal_only = sorted(n for n, r in names.items() if r.get('class') == 'internal_only')
+    age = _age(st.get('ran_at') or st.get('checked_at'))
+    late = age is None or age > (st['check_hours'] * 2 + 1) * 3600
+    need_both = not st['internal_servers'] or not st['external_servers']
+    return _item('dns', 'warn' if late or errors or need_both else 'ok', enabled=True,
+                 internal_servers=st['internal_servers'], external_servers=st['external_servers'],
+                 checked_at=st.get('checked_at'), names=len(names), internal_only=internal_only, errors=errors,
+                 wildcards=sorted(st.get('wildcards') or {}), ptr=st['ptr'], ptr_cached=st.get('ptr_cached'))
+
+
+def _check_health(app):
+    urls = app.workflow.managed.setting('health.urls') or []
+    adopted = app.workflow.managed.adopted()
+    return _item('health', 'warn' if adopted and not urls else ('ok' if urls else 'info'), urls=len(urls),
+                 adopted=adopted)
+
+
+def _check_changes(app):
+    t = util.now()
+    waiting = app.db.q("SELECT id FROM changes WHERE state='pending_approval' AND updated_at<? ORDER BY id",
+                       (t - 3 * 86400,))
+    stuck = app.db.q("SELECT id FROM changes WHERE state IN ('checking', 'approved', 'applying') AND updated_at<? ORDER BY id",
+                     (t - 3600,))
+    return _item('changes', 'warn' if waiting or stuck else 'ok', waiting_over_3_days=[r['id'] for r in waiting][:50],
+                 stuck=[r['id'] for r in stuck][:50])
+
+
+def _check_tokens(app):
+    t = util.now()
+    rows = app.db.q('SELECT name, expires_at, last_used_at FROM tokens WHERE revoked=0')
+    live = [r for r in rows if not r['expires_at'] or r['expires_at'] > t]
+    soon = sorted(r['name'] for r in live if r['expires_at'] and r['expires_at'] < t + 30 * 86400)
+    unused = sorted(r['name'] for r in live if not r['last_used_at'] or r['last_used_at'] < t - 90 * 86400)
+    return _item('tokens', 'warn' if soon else 'ok', active=len(live), expiring_30_days=soon, unused_90_days=unused)
+
+
+def _check_traffic(app):
+    tr = app.cfg['traffic']
+    if not tr['enabled']:
+        return _item('traffic', 'info', enabled=False)
+    files = [f for pat in tr['logs'] for f in glob.glob(pat)]
+    unreadable = [f for f in files if not os.access(f, os.R_OK)]
+    r = app.db.one('SELECT MAX(hour) FROM traffic_hourly')
+    last = r[0] if r and r[0] else None
+    late = last is None or time.time() - last > 6 * 3600
+    return _item('traffic', 'warn' if not files or unreadable or late else 'ok', enabled=True, files=len(files),
+                 unreadable=unreadable[:20], last_hour=util.iso(last) if last else None)
+
+
+def _check_logrotate(app):
+    """The ModSecurity audit log grows without end unless something rotates it."""
+    log = app.cfg['paths']['audit_log']
+    found = None
+    for f in sorted(glob.glob('/etc/logrotate.d/*')) + ['/etc/logrotate.conf']:
+        try:
+            with open(f, encoding='utf-8', errors='replace') as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        if log in text or os.path.dirname(log) + '/*' in text:
+            found = f
+            break
+    try:
+        size = os.path.getsize(log)
+    except OSError:
+        size = None
+    return _item('logrotate', 'ok' if found else 'warn', audit_log=log, rotated_by=found, size=size)
 
 
 # --- compliance controls ----------------------------------------------------------------------------
