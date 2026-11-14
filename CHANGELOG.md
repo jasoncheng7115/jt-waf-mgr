@@ -2,6 +2,15 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.29 (2026-11-14)
+
+- Country blocks: every sandbox request from outside now comes from an address that the country rules of its own site
+  let through. Before, a change's regression samples all came from the country that change allows, so a Japan+Taiwan
+  rule failed on the samples of a Taiwan-only site. Any change failed on the samples of a site with a country limit,
+  because the usual test address is in no country. Tests written for a change get the same address, so a test that
+  expects 403 is refused by the rule it tests, not by the country limit. A regression sample of a site that no outside
+  address can reach is left out. CRS switches are compared the same way.
+
 ## 0.4.28 (2026-11-14)
 
 - Country blocks: the sandbox's regression samples come from an address of an allowed country (the usual external test

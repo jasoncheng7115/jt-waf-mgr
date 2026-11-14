@@ -353,7 +353,7 @@ http {
                 return False
         return False
 
-    def cases_for(self, r, user_tests, samples):
+    def cases_for(self, r, user_tests, samples, items=None):
         cases = []
         blocks = self._blocks(r)
         sources = {(b.get('source') or 'external') for b in blocks}
@@ -371,19 +371,82 @@ http {
                     cases.append(dict(t, source='internal', expect=200, origin='internal-same'))
                 elif sources == {'all'}:
                     cases.append(dict(t, source='internal', expect=403, origin='internal-same'))
-        # a country rule refuses the sandbox's usual external address (it is in no country): the regression samples
-        # then come from an address the rule lets through (its own "passes" test), so they test the rule's other effects
-        pass_ip = None
-        if self._has_country(r):
-            pass_ip = next((t['src_ip'] for t in user_tests if t.get('src_ip') and t.get('expect') == 200
-                            and t.get('source', 'external') == 'external'), None)
         if r['direction'] == 'tighten' or r['kind'] in ('raw', 'bundle'):
-            for s in samples:
-                cases.append(dict({'host': s['host'], 'method': s['method'], 'path': s['path'], 'source': 'external',
-                                   'expect': 'not403', 'origin': 'regression'}, **({'src_ip': pass_ip} if pass_ip else {})))
-        return cases
+            for x in samples:
+                cases.append({'host': x['host'], 'method': x['method'], 'path': x['path'], 'source': 'external',
+                              'expect': 'not403', 'origin': 'regression'})
+        # a country rule of the change (its own "passes" test names an address of an allowed country): preferred
+        # wherever that country passes
+        prefer = None
+        if self._has_country(r):
+            prefer = next((t['src_ip'] for t in user_tests if t.get('src_ip') and t.get('expect') == 200
+                           and t.get('source', 'external') == 'external'), None)
+        return self.country_sources(cases, items, prefer)
 
-    def run_change(self, r, files, user_tests, managed, samples=None):
+    def country_sources(self, cases, items, prefer=None):
+        """The source address of each outside request, for sites with country rules in `items` (the rules in
+        effect for the run). A site limited to some countries refuses the usual sandbox address (it is in no
+        country) and every other country: the request then comes from an address that every country rule of its
+        site lets through, so a test or a regression sample checks what it is meant to check, not the country
+        limit. A regression sample of a site no outside address can reach is left out. Requests that name their
+        own address keep it."""
+        rules = []
+        for it in items or []:
+            if it.get('kind') != 'country' or it.get('deleted') or not it.get('enabled', 1):
+                continue
+            spec = it.get('spec')
+            try:
+                spec = json.loads(spec) if isinstance(spec, str) else (spec or {})
+            except ValueError:
+                continue
+            if spec.get('mode') in ('allow', 'deny'):
+                rules.append(spec)
+        if not rules:
+            return cases
+        want = {}
+        for c in cases:
+            h = c.get('host') or ''
+            if c.get('source', 'external') != 'external' or c.get('src_ip') or h in want:
+                continue
+            allow, deny = None, set()
+            for spec in rules:
+                if not _host_match(spec.get('host'), h):
+                    continue
+                cc = set(spec.get('countries') or [])
+                if spec['mode'] == 'allow':
+                    allow = cc if allow is None else allow & cc
+                else:
+                    deny |= cc
+            # deny rules only: the usual address is in no country and passes them
+            want[h] = None if allow is None else sorted(allow - deny)
+        need = sorted({cc for v in want.values() if v for cc in v})
+        if not any(v is not None for v in want.values()):
+            return cases
+        from .countries import Lookup
+        lk = Lookup(self.cfg['countries']['dir'], need) if need else None
+        pref_cc = lk.country(prefer) if (lk and prefer) else None
+        addr = {}
+        for h, ccs in want.items():
+            if ccs is None:
+                continue
+            addr[h] = ''                            # closed to every outside address
+            for cc in ([pref_cc] if pref_cc in ccs else []) + [x for x in ('TW', 'JP', 'US', 'DE') if x in ccs] + ccs:
+                ip = prefer if cc == pref_cc else lk.sample(cc)
+                if ip:
+                    addr[h] = ip
+                    break
+        out = []
+        for c in cases:
+            h = c.get('host') or ''
+            if c.get('source', 'external') != 'external' or c.get('src_ip') or h not in addr:
+                out.append(c)
+            elif addr[h]:
+                out.append(dict(c, src_ip=addr[h]))
+            elif c.get('origin') != 'regression':
+                out.append(c)                       # a test: refused by the country limit, as the site is
+        return out
+
+    def run_change(self, r, files, user_tests, managed, samples=None, items=None):
         adds = r['op'] == 'add' and r['kind'] == 'confident_block' or r['op'] == 'bundle' and any(
             b['op'] == 'add' and b['kind'] == 'confident_block' for b in json.loads(r['spec']).get('ops', []))
         if r['op'] == 'bundle':
@@ -396,7 +459,7 @@ http {
                             'message': 'rule %s: no external test expecting 403 that it matches' % b.get('rule_id')}
         if adds and not any(t.get('expect') == 403 for t in user_tests):
             return {'ok': False, 'error': 'test_required', 'message': 'a confident block needs at least one test case expecting 403'}
-        cases = self.cases_for(r, user_tests, samples or [])
+        cases = self.cases_for(r, user_tests, samples or [], items)
         if not cases:
             cases = [{'host': 'sandbox.invalid', 'path': '/', 'source': 'external', 'expect': 'not403', 'origin': 'smoke'}]
         try:
@@ -456,6 +519,23 @@ http {
                 diffs.append({'request': _case_view(c), 'before': [a['status'], a['rules']], 'after': [b['status'], b['rules']]})
         blocked = sum(1 for a in old if a['status'] == 403)
         return {'ok': not diffs, 'requests': len(requests), 'blocked_before': blocked, 'differences': diffs[:50]}
+
+
+def _host_match(host, h):
+    """Whether a rule's host scope ({'mode': 'any'|'exact'|'regex', 'value'}) covers request host h (rulegen's
+    condition in Python). A pattern Python cannot read counts as covering it."""
+    host = host or {}
+    mode, v = host.get('mode', 'any'), (host.get('value') or '').strip().lower()
+    h = (h or '').strip().lower()
+    if mode == 'any' or not mode:
+        return True
+    if mode == 'exact':
+        pat = re.escape(v).replace('\\*', '[^.]+') if v.startswith('*.') else re.escape(v)
+        return re.fullmatch(pat + r'(?::[0-9]+)?', h) is not None
+    try:
+        return re.search(v, h) is not None
+    except re.error:
+        return True
 
 
 def _test_hits(spec, t):

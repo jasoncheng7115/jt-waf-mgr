@@ -316,6 +316,25 @@ class TestWorkflow(unittest.TestCase):
         self.wf.collect_results()
         self.assertTrue(self.app.db.one("SELECT 1 FROM alerts WHERE dedup='countries_apply_failed'"))
 
+    def test_checks_give_the_sandbox_the_resulting_rules(self):
+        self.app.cfg.data['countries']['enabled'] = True
+        stage(self.app.cfg['countries']['dir'])
+        seen = {}
+
+        class Stub:
+            def available(self):
+                return True
+
+            def run_change(self, r, files, tests, managed, samples=None, items=None):
+                seen['items'] = items
+                return {'ok': True, 'cases': 0, 'failed': 0, 'results': []}
+        self.wf.sandbox = Stub()
+        cid = self.wf.propose('add', 'country', self.spec, 'only Taiwan', 'appr')
+        self.wf.run_checks(cid)
+        got = [json.loads(i['spec']) if isinstance(i['spec'], str) else i['spec']
+               for i in seen['items'] if i['kind'] == 'country' and not i.get('deleted')]
+        self.assertEqual([(g['host']['value'], g['countries']) for g in got], [('app.example.com', ['TW'])])
+
     def test_impact_from_the_access_logs(self):
         self.app.cfg.data['countries']['enabled'] = True
         stage(self.app.cfg['countries']['dir'])
@@ -343,22 +362,55 @@ class TestWorkflow(unittest.TestCase):
 
 
 class TestSandbox(unittest.TestCase):
-    def test_regression_samples_come_from_an_allowed_country(self):
+    def test_requests_come_from_a_country_their_site_lets_through(self):
         env = TempEnv()
         self.addCleanup(env.cleanup)
+        stage(env.cfg['countries']['dir'])
         app = App(env.cfg)
         self.addCleanup(app.stop)
-        from jtwafmgr.sandbox import Sandbox
+        from jtwafmgr.sandbox import Sandbox, _host_match
         sb = Sandbox(app.cfg, app.site)
-        tests = [{'host': 'a.example.com', 'path': '/', 'source': 'external', 'src_ip': '198.51.100.1', 'expect': 200},
-                 {'host': 'a.example.com', 'path': '/', 'source': 'external', 'src_ip': '203.0.113.1', 'expect': 403}]
-        samples = [{'host': 'a.example.com', 'method': 'GET', 'path': '/app.js'}]
+
+        def rule(host, mode, ccs, **kw):
+            return dict({'kind': 'country', 'spec': json.dumps({'host': {'mode': 'exact', 'value': host}, 'mode': mode,
+                                                                 'countries': ccs})}, **kw)
+        items = [rule('a.example.com', 'allow', ['TW']), rule('b.example.com', 'allow', ['JP', 'TW']),
+                 rule('c.example.com', 'deny', ['US']), rule('d.example.com', 'allow', ['TW']),
+                 rule('d.example.com', 'deny', ['TW']), rule('e.example.com', 'allow', ['US'], deleted=1),
+                 {'kind': 'confident_block', 'spec': '{}'}]
+        # the change: b's rule (JP+TW), whose own tests pass from Japan and are refused from the US
+        tests = [{'host': 'b.example.com', 'path': '/', 'source': 'external', 'src_ip': '192.0.2.1', 'expect': 200},
+                 {'host': 'b.example.com', 'path': '/', 'source': 'external', 'src_ip': '203.0.113.1', 'expect': 403},
+                 {'host': 'a.example.com', 'path': '/x', 'source': 'external', 'expect': 200},
+                 {'host': 'a.example.com', 'path': '/x', 'source': 'internal', 'expect': 200},
+                 {'host': 'd.example.com', 'path': '/', 'source': 'external', 'expect': 403}]
+        samples = [{'host': h, 'method': 'GET', 'path': '/app.js'} for h in
+                   ('a.example.com', 'b.example.com', 'c.example.com', 'd.example.com', 'e.example.com', 'f.example.com')]
         r = {'op': 'add', 'kind': 'country', 'direction': 'tighten', 'spec': '{}'}
-        reg = [c for c in sb.cases_for(r, tests, samples) if c['origin'] == 'regression']
-        self.assertEqual([c.get('src_ip') for c in reg], ['198.51.100.1'])
+        cases = sb.cases_for(r, tests, samples, items)
+        reg = {c['host']: c.get('src_ip') for c in cases if c['origin'] == 'regression'}
+        # a: Taiwan only -> a Taiwanese address, even though the change itself passes Japan (the #59 case)
+        self.assertEqual(reg['a.example.com'], '198.51.100.1')
+        self.assertEqual(reg['b.example.com'], '192.0.2.1')          # the change's own address where it passes
+        self.assertIsNone(reg['c.example.com'])                      # deny only: the usual address is in no country
+        self.assertNotIn('d.example.com', reg)                       # no outside address passes: sample left out
+        self.assertIsNone(reg['e.example.com'])                      # a deleted rule does not count
+        self.assertIsNone(reg['f.example.com'])
+        tst = [c for c in cases if c['origin'] == 'test']
+        self.assertEqual([c.get('src_ip') for c in tst], ['192.0.2.1', '203.0.113.1', '198.51.100.1', None, None])
+        # any other change: the same per-site addresses for its regression samples
         r = {'op': 'add', 'kind': 'confident_block', 'direction': 'tighten', 'spec': '{}'}
-        reg = [c for c in sb.cases_for(r, tests, samples) if c['origin'] == 'regression']
-        self.assertEqual([c.get('src_ip') for c in reg], [None])       # other changes: the usual external address
+        reg = {c['host']: c.get('src_ip') for c in sb.cases_for(r, [], samples, items) if c['origin'] == 'regression'}
+        self.assertEqual((reg['a.example.com'], reg['b.example.com'], reg['c.example.com']),
+                         ('198.51.100.1', '198.51.100.1', None))
+        # no country rules: nothing changes
+        self.assertEqual(sb.country_sources([dict(tests[2])], [{'kind': 'raw', 'spec': '{}'}]), [tests[2]])
+        self.assertTrue(_host_match({'mode': 'exact', 'value': 'a.example.com'}, 'A.example.com:443'))
+        self.assertFalse(_host_match({'mode': 'exact', 'value': 'a.example.com'}, 'xa.example.com'))
+        self.assertTrue(_host_match({'mode': 'exact', 'value': '*.example.com'}, 'w.example.com'))
+        self.assertFalse(_host_match({'mode': 'exact', 'value': '*.example.com'}, 'a.b.example.com'))
+        self.assertTrue(_host_match({'mode': 'regex', 'value': r'^(a|b)\.example\.com$'}, 'b.example.com'))
+        self.assertTrue(_host_match({'mode': 'any'}, 'z.example.com'))
 
     def test_candidate_lists_built_inside_the_sandbox(self):
         env = TempEnv()

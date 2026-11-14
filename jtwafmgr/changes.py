@@ -622,9 +622,9 @@ class Workflow:
         if self.sandbox is not None and self.sandbox.available():
             try:
                 if spec['mode'] == 'first_install':
-                    sb = self.sandbox.run_crs_first(spec['main_conf'], spec['anchor'], new_dir, self.equivalence_requests())
+                    sb = self.sandbox.run_crs_first(spec['main_conf'], spec['anchor'], new_dir, self._crs_requests())
                 else:
-                    sb = self.sandbox.run_crs_compare(spec['crs_path'], new_dir, self.equivalence_requests())
+                    sb = self.sandbox.run_crs_compare(spec['crs_path'], new_dir, self._crs_requests())
             except Exception as e:      # noqa: BLE001
                 traceback.print_exc()
                 sb = {'ok': False, 'error': 'sandbox_error: %s' % type(e).__name__}
@@ -725,6 +725,12 @@ class Workflow:
         return items, Managed.render(items, version), touched
 
     # --- checks ---------------------------------------------------------------------------
+    def _crs_requests(self):
+        """The requests a CRS switch is compared with, each from an address the site's country rules let through
+        (a request every country limit refuses would look the same under both CRS versions)."""
+        reqs = self.equivalence_requests()
+        return self.sandbox.country_sources(reqs, self.managed.items()) if self.sandbox is not None else reqs
+
     def run_checks(self, cid):
         r = self.get(cid)
         if r['state'] != 'checking':
@@ -775,7 +781,8 @@ class Workflow:
                 if r['op'] == 'adopt':
                     sb = self.sandbox.run_equivalence(files, self.managed, self.equivalence_requests())
                 else:
-                    sb = self.sandbox.run_change(r, files, json.loads(r['tests'] or '[]'), self.managed, self.samples())
+                    sb = self.sandbox.run_change(r, files, json.loads(r['tests'] or '[]'), self.managed, self.samples(),
+                                                 items)
             except Exception as e:
                 traceback.print_exc()
                 sb = {'ok': False, 'error': 'sandbox_error: %s' % type(e).__name__}
