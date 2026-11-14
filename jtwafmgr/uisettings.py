@@ -93,6 +93,12 @@ EDITABLE = {
     'syslog.format': ('choice', {'choices': ('rfc3164', 'rfc5424')}),
     'syslog.facility': ('choice', {'choices': tuple(FACILITIES)}),
     'countries.enabled': ('bool', {}),
+    'dns.enabled': ('bool', {}),
+    'dns.internal_servers': ('list', {'server': True, 'max_items': 10}),
+    'dns.external_servers': ('list', {'server': True, 'max_items': 10}),
+    'dns.check_hours': ('int', {'min': 1, 'max': 168}),
+    'dns.ptr': ('bool', {}),
+    'dns.ptr_servers': ('list', {'server': True, 'max_items': 10}),
     'blocks.enabled': ('bool', {}),
     'blocks.protected': ('list', {'cidr': True, 'max_items': 200}),
     'blocks.max_active': ('int', {'min': 1, 'max': 20000}),
@@ -187,6 +193,12 @@ def _validate(key, value):
                 raise SettingError('invalid_value', key=key, item=v[:80])
             if x.get('re') and not re.fullmatch(x['re'], v):
                 raise SettingError('invalid_value', key=key, item=v[:80])
+            if x.get('server'):                     # a DNS server: an address, optionally :port
+                from .dnscheck import parse_server
+                try:
+                    parse_server(v)
+                except (ValueError, TypeError):
+                    raise SettingError('invalid_value', key=key, item=v[:80])
             if x.get('cidr'):
                 import ipaddress
                 try:

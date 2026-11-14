@@ -117,6 +117,7 @@ const GROUPS = [
   { key: 'n_nextcloud', icon: 'chat', channel: 'nextcloud', keys: ['notify.nextcloud_enabled', 'notify.nextcloud_url', 'notify.nextcloud_token', 'notify.nextcloud_secret'] },
   { key: 'n_webhook', icon: 'link', channel: 'webhook', keys: ['notify.webhook_enabled', 'notify.webhook_url', 'notify.webhook_secret', 'notify.webhook_token'] },
   { key: 'countries', icon: 'globe', keys: ['countries.enabled'] },
+  { key: 'dns', icon: 'network', keys: ['dns.enabled', 'dns.internal_servers', 'dns.external_servers', 'dns.check_hours', 'dns.ptr', 'dns.ptr_servers'] },
   { key: 'blocks', icon: 'lock', keys: ['blocks.enabled', 'blocks.protected', 'blocks.max_active', 'blocks.max_per_token', 'blocks.token_per_hour', 'blocks.default_ttl', 'blocks.api_max_ttl', 'blocks.ui_max_ttl', 'blocks.reload_seconds', 'blocks.auto_recon', 'blocks.auto_recon_paths', 'blocks.auto_recon_minutes', 'blocks.auto_recon_ttl', 'blocks.auto_recon_per_hour'] },
   { key: 'traffic', icon: 'chart', keys: ['traffic.enabled', 'traffic.logs', 'traffic.keep_days', 'traffic.alert', 'traffic.spike_factor', 'traffic.min_requests', 'traffic.error_percent'] },
   { key: 'network', icon: 'network', keys: ['managed.imported_author', 'waf.focus_sites', 'network.known_scanners', 'evidence.catch_all_hosts', 'integrity.automation_paths'] },

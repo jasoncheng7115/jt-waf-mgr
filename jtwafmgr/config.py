@@ -160,6 +160,18 @@ DEFAULTS = {
         'hour': 3,
         'keep_days': 14,
     },
+    'dns': {
+        # DNS check (dnscheck.py, jt-waf-mgr-dns.service): which site names the internal and the external DNS servers
+        # know (addresses, optional :port); and the PTR names of outside addresses (with a forward check). The web
+        # service never asks DNS itself.
+        'enabled': False,
+        'dir': '',                    # empty: the "dns" folder next to the database (/var/lib/jt-waf-mgr/dns)
+        'internal_servers': [],
+        'external_servers': [],
+        'check_hours': 24,
+        'ptr': True,                  # look up the PTR of outside addresses (their zone's owner can see the question)
+        'ptr_servers': [],            # empty: the internal servers, else the host's resolvers
+    },
     'countries': {
         # per-site country blocks (countries.py, rulegen kind "country"): lists from the five regional registries,
         # downloaded by jt-waf-mgr-countries.service into dir, written for ModSecurity into rules_dir by the root apply
@@ -341,6 +353,18 @@ class Config:
             raise ConfigError('syslog.more: up to 7 more destinations')
         if data['managed'].get('imported_author', 'site') not in ('site', 'jason_tools'):
             raise ConfigError('managed.imported_author: site or jason_tools')
+        dn = data['dns']
+        from .dnscheck import parse_server
+        for k in ('internal_servers', 'external_servers', 'ptr_servers'):
+            if not isinstance(dn[k], list) or len(dn[k]) > 10:
+                raise ConfigError('dns.%s: up to 10 addresses' % k)
+            for x in dn[k]:
+                try:
+                    parse_server(x)
+                except (ValueError, TypeError):
+                    raise ConfigError('dns.%s: %r is not an address (optional :port)' % (k, x))
+        if not isinstance(dn['check_hours'], int) or not 1 <= dn['check_hours'] <= 168:
+            raise ConfigError('dns.check_hours: 1-168')
         co = data['countries']
         if not (isinstance(co['rules_dir'], str) and re.fullmatch(r'/[\w./-]{1,200}', co['rules_dir'])
                 and '..' not in co['rules_dir'].split('/') and co['rules_dir'].rstrip('/') != ''):

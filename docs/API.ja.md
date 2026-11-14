@@ -432,7 +432,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" 'https://waf.example.com/api/v1/rules
 
 スコープ `lookups:read` が必要です。
 
-- **`GET /lookups/ip/{ip}`**：jt-waf-mgr がそのアドレスについて直近 7 日と 30 日に見たもの。
+- **`GET /lookups/ip/{ip}`**：jt-waf-mgr がそのアドレスについて直近 7 日と 30 日に見たもの。PTR 名（`ptr`：名前と正引きで
+  一致するか。DNS ジョブが調べている間は `{"pending": true}`）も返します。
+- **`GET /lookups/ip/{ip}/card`**：ページでポインターを置いたときの簡易版（場所、PTR、ブロック中か、直近 7 日）。
+- **`GET /dns`**（スコープ `rules:read`）：DNS チェックの結果。サイト名ごとに各内部・外部サーバーの応答。
 - **`GET /geoip/{ip}`**：GeoIP の結果だけ（GeoIP データベースがないときは `available: false`）。
 
 ```sh

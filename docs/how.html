@@ -35,6 +35,12 @@ nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6p
 nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
 @media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }
 @media (max-width: 1140px) { nav.links a { padding: 5px 5px; font-size: 12.5px; } }
+.gh-btn { display: inline-flex; align-items: center; gap: 6px; flex: none; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.gh-btn:hover { border-color: var(--blue); color: var(--blue); text-decoration: none; }
+.gh-btn svg { width: 16px; height: 16px; }
+.home-top { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--blue); font-size: 13.5px; font-weight: 600; padding: 5px 10px; border: 1px solid #cfe0f7; background: #eef4fd; border-radius: 10px; white-space: nowrap; }
+.home-top:hover { text-decoration: none; border-color: var(--blue); }
+@media (max-width: 760px) { .gh-btn span { display: none; } }
 .lang { position: relative; flex: none; }
 .lang-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
 .lang-btn:hover, .lang-btn[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
@@ -162,11 +168,13 @@ body.zm-on { overflow: hidden; }
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" id="home-brand" href="index.html"><img src="logo-mark.svg" alt="">jt-waf-mgr</a>
+  <a class="home-top" id="home-top" href="index.html">&#8592; <span data-t="nav_home"></span></a>
   <nav class="links">
     <a href="#arch" data-t="nav_arch"></a><a href="#events" data-t="nav_events"></a><a href="#changes" data-t="nav_changes"></a>
     <a href="#analysis" data-t="nav_ai"></a><a href="#crs" data-t="nav_crs"></a><a href="#blocks" data-t="nav_blocks"></a>
     <a href="#notify" data-t="nav_notify"></a><a href="#integrity" data-t="nav_integrity"></a><a href="#bounds" data-t="nav_bounds"></a>
   </nav>
+  <a class="gh-btn" href="https://github.com/jasoncheng7115/jt-waf-mgr" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
   <div class="lang">
     <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu" aria-label="Language">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
@@ -529,7 +537,7 @@ body.zm-on { overflow: hidden; }
 <script>
 const T = {
  en: {
-  nav_arch: 'Architecture', nav_events: 'Events', nav_changes: 'Changes', nav_ai: 'Analysis', nav_crs: 'CRS', nav_blocks: 'IP blocks',
+  nav_home: 'Home', nav_arch: 'Architecture', nav_events: 'Events', nav_changes: 'Changes', nav_ai: 'Analysis', nav_crs: 'CRS', nav_blocks: 'IP blocks',
   nav_notify: 'Notifications', nav_integrity: 'Integrity', nav_bounds: 'Boundaries',
   h1: 'How jt-waf-mgr works',
   lead: 'The parts of jt-waf-mgr, the processes they run in, where the data goes, and the path a rule change takes from a proposal to production. Everything here describes what the code does.',
@@ -769,7 +777,7 @@ const T = {
   more: 'More detail:', sec_policy: 'Security policy', comp_doc: 'Compliance mapping', api_doc: 'API manual',
  },
  'zh-TW': {
-  nav_arch: '架構', nav_events: '事件', nav_changes: '變更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP 封鎖',
+  nav_home: '回首頁', nav_arch: '架構', nav_events: '事件', nav_changes: '變更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP 封鎖',
   nav_notify: '通知', nav_integrity: '完整性', nav_bounds: '安全邊界',
   h1: 'jt-waf-mgr 運作架構',
   lead: 'jt-waf-mgr 由哪些部分組成、各在哪個程序裡執行、資料往哪裡去，以及一筆規則變更從提出到上線的完整路徑。這裡寫的都是程式實際的行為。',
@@ -1009,7 +1017,7 @@ const T = {
   more: '更多細節：', sec_policy: '安全政策', comp_doc: '合規對照', api_doc: 'API 介接手冊',
  },
  ja: {
-  nav_arch: '構成', nav_events: 'イベント', nav_changes: '変更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP ブロック',
+  nav_home: 'ホームへ', nav_arch: '構成', nav_events: 'イベント', nav_changes: '変更', nav_ai: '分析', nav_crs: 'CRS', nav_blocks: 'IP ブロック',
   nav_notify: '通知', nav_integrity: '完全性', nav_bounds: '境界',
   h1: 'jt-waf-mgr の仕組み',
   lead: 'jt-waf-mgr を構成する部品、それぞれが動くプロセス、データの流れ、そしてルール変更が提案から本番反映まで通る道筋。ここに書いてあるのはすべてプログラムが実際に行うことです。',
@@ -1270,7 +1278,7 @@ function apply(lang) {
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = d[el.dataset.t] || T.en[el.dataset.t] || ''
   for (const b of document.querySelectorAll('#lang-menu button')) b.setAttribute('aria-checked', b.dataset.lang === lang ? 'true' : 'false')
   document.getElementById('lang-cur').textContent = { en: 'EN', 'zh-TW': '繁中', ja: '日本語' }[lang]
-  for (const id of ['home-brand', 'home-btn']) document.getElementById(id).href = 'index.html?lang=' + lang
+  for (const id of ['home-brand', 'home-btn', 'home-top']) document.getElementById(id).href = 'index.html?lang=' + lang
   const sfx = { 'zh-TW': '.zh-TW', ja: '.ja' }[lang] || ''
   const gh = 'https://github.com/jasoncheng7115/jt-waf-mgr/blob/main/'
   for (const id of ['sec-doc', 'sec-foot']) document.getElementById(id).href = gh + 'SECURITY' + ({ 'zh-TW': '_zh-TW', ja: '_ja' }[lang] || '') + '.md'

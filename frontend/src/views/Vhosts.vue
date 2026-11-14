@@ -49,6 +49,14 @@
         </RouterLink>
         <span v-else class="muted">—</span>
       </template>
+      <template #cell-dns="{ row }">
+        <template v-if="row.dns">
+          <span class="badge" :class="row.dns.class === 'internal_only' && row.reach === 'open' ? 'b-blocked' : DNS_CLS[row.dns.class] || 'b-logged'"
+                :title="row.dns.class === 'internal_only' && row.reach === 'open' ? t('dns.risk') : null">{{ t('dns.class.' + row.dns.class) }}</span>
+          <div v-if="row.dns.public_private" class="sub warn">{{ t('dns.public_private') }}</div>
+        </template>
+        <span v-else class="muted">—</span>
+      </template>
       <template #cell-reach="{ row }">
         <span class="badge" :class="REACH_CLS[row.reach] || 'b-logged'" :title="row.reach_by ? safeText(row.reach_by, 300) : t('vhosts.reach_hint')">{{ t('vhosts.reach.' + (row.reach || 'open')) }}</span>
         <div v-if="row.outside_7d != null && !row.redirect_only" class="sub" :class="{ warn: row.reach === 'internal' && row.outside_7d > 0 }">{{ t('vhosts.outside_7d', { n: fmtNum(row.outside_7d) }) }}</div>
@@ -91,6 +99,7 @@ const cols = computed(() => [
     text: (v) => (v.server_names || []).join(' ') + ' ' + (v.file || '') + ' ' + (v.listen || []).join(' ') },
   { key: 'waf', label: t('vhosts.waf'), nowrap: true, value: (v) => (v.waf === 'off' && v.redirect_only ? t('waf.redirect') : t('waf.' + (v.waf || 'unknown'))),
     text: (v) => (v.waf === 'off' && v.redirect_only ? t('waf.redirect') : t('waf.' + (v.waf || 'unknown'))) + ' ' + (v.inline_rule_ids || []).join(' ') },
+  { key: 'dns', label: t('dns.col.dns'), nowrap: true, value: (v) => (v.dns ? t('dns.class.' + v.dns.class) : '') },
   { key: 'reach', label: t('vhosts.reach'), nowrap: true, value: (v) => t('vhosts.reach.' + (v.reach || 'open')),
     text: (v) => t('vhosts.reach.' + (v.reach || 'open')) + ' ' + (v.reach_by || '') },
   { key: 'countries', label: t('vhosts.countries'), value: (v) => (v.countries || []).length,
@@ -107,6 +116,8 @@ function countryHost(v) {
   return (v.server_names || []).find((n) => n && n !== '_' && !n.startsWith('~') && /^(\*\.)?[a-z0-9.-]+$/i.test(n)) || ''
 }
 // internal only: green; limited to countries or addresses: blue; a check not understood: grey; open: amber
+// what the DNS check found: internal DNS only (hidden, amber; red when nginx lets outside sources in), public, ...
+const DNS_CLS = { internal_only: 'b-warn', public: 'b-int', wildcard: 'b-logged', not_found: 'b-logged', error: 'b-blocked' }
 const REACH_CLS = { internal: 'b-ok', country: 'b-int', limited: 'b-int', restricted: 'b-logged', open: 'b-warn' }
 // a block that only redirects (http to https) is not counted as unprotected: there is nothing in it to protect
 function count(w) { return items.value.filter((v) => (w === 'redirect' ? v.waf === 'off' && v.redirect_only : v.waf === w && !(w === 'off' && v.redirect_only))).length }

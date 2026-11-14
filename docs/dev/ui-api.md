@@ -199,6 +199,14 @@ is also how `included` is detected.
   an admin (403 `admin_required`). `POST /blocks` also takes `"ttl": "permanent"` from an admin in the interface, never
   from a token. Each block has `permanent` (its `expires_at` is then null) and, in the list, `geo`.
 - Events: `redirected` (logged, a 3xx answer, a confident-block or country rule matched); `GET /events?outcome=redirected`.
+- `GET /api/v1/dns` (viewer, `rules:read`) → `{"enabled", "ptr", "internal_servers", "external_servers", "ptr_servers",
+  "check_hours", "checked_at", "ran_at", "requested", "wildcards": {zone: {server: [addr]}}, "names": {name: {"class":
+  internal_only|public|wildcard|not_found|error, "public_private", "internal": {server: {"rcode", "addrs", "cname"} |
+  {"error"}}, "external": {...}}}, "ptr_cached"}`; `POST /api/v1/dns/check` (admin) → 202, leaves `update.request`.
+- `GET /api/v1/lookups/ip/{ip}/card` (viewer, `lookups:read`) → `{"ip", "origin", "geo", "ptr": null | {"pending": true} |
+  {"name", "confirmed", "error", "at"}, "d7": {"events", "blocked", "last"}, "hosts": [...], "blocked": [{"until",
+  "permanent", "source"}]}`; an outside address not looked up yet is queued for the DNS job. `GET /lookups/ip/{ip}` has
+  `ptr` too; `/vhosts` and `/countries/sites` have `dns` (`{"class", "public_private"}` or null).
 - `GET /traffic` has `previous`: the totals of the same length of time just before (null when nothing was counted).
 
 Country blocks (0.4.27; countries.py, rulegen kind `country`):

@@ -38,6 +38,14 @@
           <div class="mono"><b>{{ row.host }}</b></div>
           <div v-if="row.names.length > 1" class="sub mono">{{ row.names.filter((n) => n.toLowerCase() !== row.host).join(' ') }}</div>
         </template>
+        <template #cell-dns="{ row }">
+          <template v-if="row.dns">
+            <span class="badge" :class="row.dns.class === 'internal_only' && row.reach === 'open' ? 'b-blocked' : DNS_CLS[row.dns.class] || 'b-logged'"
+                  :title="row.dns.class === 'internal_only' && row.reach === 'open' ? t('dns.risk') : null">{{ t('dns.class.' + row.dns.class) }}</span>
+            <div v-if="row.dns.public_private" class="sub warn">{{ t('dns.public_private') }}</div>
+          </template>
+          <span v-else class="muted">—</span>
+        </template>
         <template #cell-reach="{ row }">
           <span class="badge" :class="REACH_CLS[row.reach] || 'b-logged'" :title="row.reach_by || t('vhosts.reach_hint')">{{ t('vhosts.reach.' + (row.reach || 'open')) }}</span>
           <div v-if="row.outside_7d != null" class="sub">{{ t('vhosts.outside_7d', { n: fmtNum(row.outside_7d) }) }}</div>
@@ -147,6 +155,8 @@ const canPropose = computed(() => hasRole('operator'))
 const regionNames = computed(() => { try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null } })
 function countryName(c) { try { return (c && c !== '??' && regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
 
+// what the DNS check found: internal DNS only (hidden, amber; red when nginx lets outside sources in), public, ...
+const DNS_CLS = { internal_only: 'b-warn', public: 'b-int', wildcard: 'b-logged', not_found: 'b-logged', error: 'b-blocked' }
 const REACH_CLS = { internal: 'b-ok', country: 'b-int', limited: 'b-int', restricted: 'b-logged', open: 'b-warn' }
 const limitedCount = computed(() => (data.value ? data.value.sites.filter((s) => s.countries.length).length : 0))
 // ?host=: one site (from the sites page), with every name of its server block
@@ -159,6 +169,7 @@ function limitText(s) {
 const cols = computed(() => [
   { key: 'host', label: t('csites.col.site'), required: true, value: (s) => s.host, text: (s) => s.names.join(' ') },
   { key: 'reach', label: t('vhosts.reach'), nowrap: true, value: (s) => t('vhosts.reach.' + (s.reach || 'open')) },
+  { key: 'dns', label: t('dns.col.dns'), nowrap: true, value: (v) => (v.dns ? t('dns.class.' + v.dns.class) : '') },
   { key: 'limit', label: t('csites.col.limit'), value: (s) => (s.countries.length ? 0 : 1) + ' ' + limitText(s), text: limitText },
   { key: 'recent', label: t('csites.col.recent'), num: true, value: (s) => (s.recent ? s.recent.refused : -1) },
   { key: 'notes', label: t('csites.col.notes'), value: (s) => (s.waf_off ? 2 : 0) + s.bypass.length,

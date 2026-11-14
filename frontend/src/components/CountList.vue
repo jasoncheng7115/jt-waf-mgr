@@ -22,6 +22,7 @@ const props = defineProps({
   pickable: Boolean,
   openLabel: { type: String, default: '' },
   activeKey: { type: [String, Number], default: null },
+  ipKeys: Boolean,          // the keys are addresses: the address card shows on hover
 })
 const emit = defineEmits(['pick'])
 const series = computed(() => [
@@ -36,6 +37,7 @@ const bars = computed(() => (props.items || []).map((it) => ({
   sub: [it.origin ? t('origin.' + it.origin) : '', geoText(it.geo), it.msg || ''].filter(Boolean).join(' · ') || null,
   active: props.activeKey != null && String(props.activeKey) === String(it.key),
   item: it,
+  ip: props.ipKeys ? String(it.key) : null,
 })))
 function clip(s, n) { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s }
 function geoText(g) {

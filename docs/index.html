@@ -35,6 +35,12 @@ nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6p
 nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
 @media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }
 @media (max-width: 1140px) { nav.links a { padding: 5px 5px; font-size: 12.5px; } }
+.gh-btn { display: inline-flex; align-items: center; gap: 6px; flex: none; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.gh-btn:hover { border-color: var(--blue); color: var(--blue); text-decoration: none; }
+.gh-btn svg { width: 16px; height: 16px; }
+.home-top { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--blue); font-size: 13.5px; font-weight: 600; padding: 5px 10px; border: 1px solid #cfe0f7; background: #eef4fd; border-radius: 10px; white-space: nowrap; }
+.home-top:hover { text-decoration: none; border-color: var(--blue); }
+@media (max-width: 760px) { .gh-btn span { display: none; } }
 .lang { position: relative; flex: none; }
 .lang-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
 .lang-btn:hover, .lang-btn[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
@@ -163,6 +169,9 @@ body.lb-on { overflow: hidden; }
 .guide-note { margin: -10px 0 22px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, #ff8a5c 10%, #fff); border: 1px solid color-mix(in srgb, #ff8a5c 35%, #fff); }
 .guide-note a { font-weight: 600; }
 p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59e0b; background: #fffbeb; border-radius: 6px; color: #78350f; font-size: 14.5px; }
+.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .grid.three { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -170,9 +179,10 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
   <a class="brand" href="#"><img src="logo-mark.svg" alt="">jt-waf-mgr</a>
   <nav class="links">
     <a href="#features" data-t="nav_features"></a><a href="#flow" data-t="nav_flow"></a><a href="#ai" data-t="nav_ai"></a><a href="#alerts" data-t="nav_alerts"></a>
-    <a href="#notify" data-t="nav_notify"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
+    <a href="#notify" data-t="nav_notify"></a><a href="#integrate" data-t="nav_integrate"></a><a href="#security" data-t="nav_security"></a><a href="#screens" data-t="nav_screens"></a>
     <a href="#install" data-t="nav_install"></a><a href="#specs" data-t="nav_specs"></a><a href="how.html" id="how-link" data-t="nav_how"></a>
   </nav>
+  <a class="gh-btn" href="https://github.com/jasoncheng7115/jt-waf-mgr" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
   <div class="lang">
     <button type="button" class="lang-btn" id="lang-btn" aria-haspopup="true" aria-expanded="false" aria-controls="lang-menu" aria-label="Language">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
@@ -189,7 +199,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.32</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.34</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -261,6 +271,18 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <div class="chips"><span class="chip">E-mail</span><span class="chip">Telegram</span><span class="chip">Microsoft Teams</span><span class="chip">Slack</span>
       <span class="chip">Discord</span><span class="chip">Zulip</span><span class="chip">Nextcloud Talk</span><span class="chip">Webhook (HMAC)</span></div>
     <ul class="ticks"><li data-t="n1"></li><li data-t="n2"></li><li data-t="n3"></li><li data-t="n4"></li></ul></div>
+</div></section>
+
+<section id="integrate"><div class="wrap">
+  <h2 data-t="ig_h"></h2><p class="sub" data-t="ig_sub"></p>
+  <div class="grid three">
+    <div class="card"><h3><span class="ic">◈</span><span data-t="ig1_h"></span></h3><p data-t="ig1"></p></div>
+    <div class="card"><h3><span class="ic">⇄</span><span data-t="ig2_h"></span></h3><p data-t="ig2"></p></div>
+    <div class="card"><h3><span class="ic">▤</span><span data-t="ig3_h"></span></h3><p data-t="ig3"></p></div>
+    <div class="card"><h3><span class="ic">≣</span><span data-t="ig4_h"></span></h3><p data-t="ig4"></p></div>
+    <div class="card"><h3><span class="ic">⊘</span><span data-t="ig5_h"></span></h3><p data-t="ig5"></p></div>
+    <div class="card"><h3><span class="ic">✉</span><span data-t="ig6_h"></span></h3><p data-t="ig6"></p></div>
+  </div>
 </div></section>
 
 <section id="security" class="alt"><div class="wrap">
@@ -378,12 +400,12 @@ const T = {
   sp_h: "What's inside, and who wrote it",
   sp_sub: "jt-waf-mgr manages a WAF built from well-known open-source parts. This is what each part is, where it comes from and what we wrote ourselves. The rule list in the interface shows the same for every single rule.",
   sp1_h: "WAF engine",
-  sp1_by: "Not ours · nginx (BSD-2-Clause), OWASP ModSecurity v3 and its nginx connector (Apache-2.0)",
+  sp1_by: "Upstream open source · nginx (BSD-2-Clause), OWASP ModSecurity v3 and its nginx connector (Apache-2.0)",
   sp1_1: "nginx: reverse proxy, TLS, HTTP/2, access rules. You install and configure it; jt-waf-mgr never writes its configuration (only the optional IP block list, which you include yourself).",
   sp1_2: "libmodsecurity v3: runs the rules on every request and writes the audit log.",
   sp1_3: "ModSecurity-nginx connector: loads ModSecurity into nginx.",
   sp2_h: "Detection rules",
-  sp2_by: "Not ours · OWASP CRS project (Apache-2.0)",
+  sp2_by: "Upstream open source · OWASP CRS project (Apache-2.0)",
   sp2_1: "OWASP CRS 4: about 700 rules for SQL injection, XSS, code execution, path traversal and protocol abuse, with anomaly scoring and paranoia levels.",
   sp2_2: "CRS plugins (WordPress, Nextcloud and others): exclusions for common applications, switched on per site.",
   sp2_3: "jt-waf-mgr downloads new CRS releases, checks the CRS signature, compares them in a sandbox and installs them only after a person approves.",
@@ -453,6 +475,14 @@ const T = {
   ai1: 'Candidates grouped by the path a rule sees; schema-constrained answers in batches', ai2: 'Blocks only as narrow anchored regexes, never matching common paths, regression samples or paths your own people use',
   ai3: 'False positives get the narrowest exclusion: one exact path, specific rules and request parts; approving it needs a one-time code', ai4: 'Alerts when an attack may have been answered or users are being blocked',
   ai5: 'A summary of every run: events analysed, time taken, verdicts, proposals and alerts',
+  nav_integrate: 'Integrations',
+  ig_h: 'Works with what you already run', ig_sub: 'Events, the audit trail and alerts leave in the formats your log and security tools read; other systems propose changes and block addresses through tokens limited to what they need.',
+  ig1_h: 'Wazuh', ig1: 'A decoder and rules for jt-waf-mgr\'s own records ship in deploy/wazuh (send the audit trail and events by syslog): Wazuh then watches the manager itself. An active response can call the IP block API.',
+  ig2_h: 'jt-wazuh-mgr', ig2: 'A separate Jason Tools project that manages Wazuh: it proposes WAF changes and temporary blocks with its own API token (never approves), and keeps the hourly threat view across systems.',
+  ig3_h: 'Graylog', ig3: 'GELF over UDP, TCP or TLS straight to a GELF input: every field (site, rule, outcome, source, country) arrives as its own field for streams, dashboards and alerts.',
+  ig4_h: 'Other SIEM and syslog', ig4: 'Up to 8 destinations, each with its own protocol (UDP, TCP, TLS), format (JSON, CEF, LEEF, GELF, key=value, RFC 3164 / 5424) and content (audit trail, events, alerts), with its own queue and a test button.',
+  ig5_h: 'fail2ban and scripts', ig5: 'A ready fail2ban action blocks and unblocks through the IP block API: a token per host, single addresses, up to 7 days; internal and protected networks can never be blocked.',
+  ig6_h: 'Chat and webhooks', ig6: 'E-mail, Telegram, Teams, Slack, Discord, Zulip, Nextcloud Talk and a generic webhook signed with HMAC-SHA256.',
   n_h: 'Hear about what needs a person', n_sub: 'The web service only queues messages; a separate sandboxed unit sends them, retries and reminds open alerts.',
   n1: 'A matrix of events and channels, messages in English, Traditional Chinese or Japanese with a link back', n2: 'Values from requests are never markup, links or mentions; secrets are write-only',
   n3: 'Generic webhook with an HMAC-SHA256 signature over timestamp and body',
@@ -530,12 +560,12 @@ const T = {
   sp_h: "規格與來源",
   sp_sub: "jt-waf-mgr 管理的是由知名開源元件組成的 WAF。下面列出每個部分是什麼、來自哪裡，以及哪些是我們自己寫的。介面的規則清單也會逐條標示撰寫者。",
   sp1_h: "WAF 引擎",
-  sp1_by: "不是我們寫的 · nginx（BSD-2-Clause）、OWASP ModSecurity v3 與 nginx 連接器（Apache-2.0）",
+  sp1_by: "上游開源專案 · nginx（BSD-2-Clause）、OWASP ModSecurity v3 與 nginx 連接器（Apache-2.0）",
   sp1_1: "nginx：反向代理、TLS、HTTP/2、存取限制。由你安裝與設定；jt-waf-mgr 不會寫入 nginx 設定（只有選用的 IP 封鎖清單檔，由你自己 include）。",
   sp1_2: "libmodsecurity v3：對每個請求執行規則，並寫出稽核記錄。",
   sp1_3: "ModSecurity-nginx 連接器：把 ModSecurity 載入 nginx。",
   sp2_h: "偵測規則",
-  sp2_by: "不是我們寫的 · OWASP CRS 專案（Apache-2.0）",
+  sp2_by: "上游開源專案 · OWASP CRS 專案（Apache-2.0）",
   sp2_1: "OWASP CRS 4：約 700 條規則，涵蓋 SQL 注入、XSS、程式碼執行、路徑穿越、協定濫用，採異常分數與偏執等級。",
   sp2_2: "CRS 外掛（WordPress、Nextcloud 等）：常見應用程式的排除，依站台啟用。",
   sp2_3: "jt-waf-mgr 下載新版 CRS、驗證 CRS 簽章、在沙箱比對，經人核准後才安裝。",
@@ -605,6 +635,14 @@ const T = {
   ai1: '依規則看到的路徑分組候選；分批送出、以 schema 限制回答格式', ai2: '封鎖只用錨定且很窄的正規表示式，不可符合常見路徑、回歸樣本或組織自己在用的路徑',
   ai3: '誤判只提出範圍最小的排除：單一精確路徑、特定規則與欄位；核准要一次性驗證碼', ai4: '攻擊可能沒被封鎖、使用者被誤判封鎖時發出警示',
   ai5: '每次執行都有摘要：分析事件數、耗時、判斷、提案與警示',
+  nav_integrate: '整合',
+  ig_h: '和你現有的系統一起運作', ig_sub: '事件、稽核記錄與警示用記錄與資安工具讀得懂的格式送出；其他系統透過只給必要權限的權杖提出變更、封鎖位址。',
+  ig1_h: 'Wazuh', ig1: 'deploy/wazuh 附有 jt-waf-mgr 自身記錄的 decoder 與規則（以 syslog 送出稽核記錄與事件），讓 Wazuh 也盯住管理工具本身；主動回應可以呼叫 IP 封鎖 API。',
+  ig2_h: 'jt-wazuh-mgr', ig2: 'Jason Tools 另一個管理 Wazuh 的專案：用自己的 API 權杖提出 WAF 變更與暫時封鎖（永遠不能核准），並負責跨系統的每小時威脅檢視。',
+  ig3_h: 'Graylog', ig3: '以 GELF（UDP、TCP 或 TLS）直接送到 GELF input：站台、規則、結果、來源、國家都是各自獨立的欄位，可直接做 stream、儀表板與警示。',
+  ig4_h: '其他 SIEM 與 syslog', ig4: '最多 8 個目的地，各自設定協定（UDP、TCP、TLS）、格式（JSON、CEF、LEEF、GELF、key=value、RFC 3164 / 5424）與內容（稽核記錄、事件、警示），各有獨立佇列與測試按鈕。',
+  ig5_h: 'fail2ban 與腳本', ig5: '附上現成的 fail2ban 動作，透過 IP 封鎖 API 封鎖與解除：每台主機一個權杖、只能單一位址、最長 7 天；內部網路與保護清單永遠不會被封鎖。',
+  ig6_h: '聊天與 webhook', ig6: 'E-mail、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk，以及 HMAC-SHA256 簽章的通用 webhook。',
   n_h: '需要有人處理時就通知你', n_sub: '網頁服務只把通知排入佇列，由獨立的受限程序發送、重試，並提醒待處理警示。',
   n1: '事件 × 管道矩陣；訊息可用英文、繁體中文或日文，附上回到頁面的連結', n2: '來自請求的內容永遠不會變成格式、連結或提及；金鑰只能寫入',
   n3: '通用 webhook 以 HMAC-SHA256 對時間戳與內容簽章',
@@ -682,12 +720,12 @@ const T = {
   sp_h: "構成と作成元",
   sp_sub: "jt-waf-mgr が管理するのは、よく知られたオープンソースの部品で構成された WAF です。各部品が何で、どこから来ていて、どこを私たちが書いたのかを示します。画面のルール一覧でも、ルールごとに作成元を表示します。",
   sp1_h: "WAF エンジン",
-  sp1_by: "私たちのものではありません · nginx（BSD-2-Clause）、OWASP ModSecurity v3 と nginx コネクタ（Apache-2.0）",
+  sp1_by: "上流のオープンソース · nginx（BSD-2-Clause）、OWASP ModSecurity v3 と nginx コネクタ（Apache-2.0）",
   sp1_1: "nginx：リバースプロキシ、TLS、HTTP/2、アクセス制限。インストールと設定はお客様が行い、jt-waf-mgr は nginx の設定を書きません（任意の IP ブロックリストだけで、include はお客様が行います）。",
   sp1_2: "libmodsecurity v3：すべてのリクエストにルールを適用し、監査ログを書きます。",
   sp1_3: "ModSecurity-nginx コネクタ：ModSecurity を nginx に読み込みます。",
   sp2_h: "検知ルール",
-  sp2_by: "私たちのものではありません · OWASP CRS プロジェクト（Apache-2.0）",
+  sp2_by: "上流のオープンソース · OWASP CRS プロジェクト（Apache-2.0）",
   sp2_1: "OWASP CRS 4：SQL インジェクション、XSS、コード実行、パストラバーサル、プロトコルの悪用に対する約 700 のルール。異常スコアとパラノイアレベル。",
   sp2_2: "CRS プラグイン（WordPress、Nextcloud など）：よく使われるアプリケーション向けの除外。サイトごとに有効化。",
   sp2_3: "jt-waf-mgr は新しい CRS をダウンロードし、CRS の署名を検証し、サンドボックスで比較して、人が承認してからインストールします。",
@@ -757,6 +795,14 @@ const T = {
   ai1: 'ルールが見るパスで候補をまとめ、スキーマで形式を制約した回答をバッチで取得', ai2: 'ブロックはアンカー付きの狭い正規表現のみ。一般的なパス、回帰サンプル、組織自身が使うパスには一致しない',
   ai3: '誤検知には最小の除外：一つの完全一致パスと特定のルール・項目のみ。承認にはワンタイムコードが必要', ai4: '攻撃が防がれていない可能性や利用者がブロックされているときにアラート',
   ai5: '実行ごとの要約：分析したイベント数、所要時間、判定、提案、アラート',
+  nav_integrate: '連携',
+  ig_h: 'いま使っているシステムと連携', ig_sub: 'イベント、監査記録、アラートをログ・セキュリティツールが読める形式で送ります。他のシステムは必要な権限だけのトークンで変更を提案し、アドレスをブロックします。',
+  ig1_h: 'Wazuh', ig1: 'jt-waf-mgr 自身の記録用のデコーダーとルールを deploy/wazuh に同梱（監査記録とイベントを syslog で送信）。Wazuh が管理ツール自体も監視します。アクティブレスポンスから IP ブロック API を呼べます。',
+  ig2_h: 'jt-wazuh-mgr', ig2: 'Wazuh を管理する Jason Tools の別プロジェクト。専用の API トークンで WAF の変更と一時ブロックを提案し（承認はできない）、システム横断の毎時の脅威確認を担います。',
+  ig3_h: 'Graylog', ig3: 'GELF（UDP、TCP、TLS）で GELF input に直接送信。サイト、ルール、結果、送信元、国がそれぞれ独立したフィールドになり、ストリーム、ダッシュボード、アラートにそのまま使えます。',
+  ig4_h: 'その他の SIEM と syslog', ig4: '最大 8 つの送信先に、それぞれのプロトコル（UDP、TCP、TLS）、形式（JSON、CEF、LEEF、GELF、key=value、RFC 3164 / 5424）、内容（監査記録、イベント、アラート）を設定。個別のキューとテスト送信付き。',
+  ig5_h: 'fail2ban とスクリプト', ig5: 'IP ブロック API でブロック・解除する fail2ban アクションを用意。ホストごとのトークン、単一アドレスのみ、最長 7 日。内部ネットワークと保護リストは決してブロックしません。',
+  ig6_h: 'チャットと webhook', ig6: 'メール、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk、HMAC-SHA256 署名付きの汎用 webhook。',
   n_h: '人の対応が必要なことを知らせる', n_sub: 'Web サービスはメッセージをキューに入れるだけ。送信・再送・対応待ちアラートの再通知は別の制限付きユニットが行います。',
   n1: 'イベント × チャネルのマトリクス。メッセージは英語・繁体字中国語・日本語で、ページへのリンク付き', n2: 'リクエスト由来の値が書式・リンク・メンションになることはなく、シークレットは書き込み専用',
   n3: '汎用 webhook はタイムスタンプと本文に対する HMAC-SHA256 署名付き',

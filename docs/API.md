@@ -433,7 +433,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" 'https://waf.example.com/api/v1/rules
 
 Scope `lookups:read`.
 
-- **`GET /lookups/ip/{ip}`**: what jt-waf-mgr has seen from one address in the last 7 and 30 days.
+- **`GET /lookups/ip/{ip}`**: what jt-waf-mgr has seen from one address in the last 7 and 30 days, with its PTR name
+  (`ptr`: the name and whether it leads back to the address; `{"pending": true}` while the DNS job looks it up).
+- **`GET /lookups/ip/{ip}/card`**: the short form the pages show on hover (where, PTR, blocked, the last 7 days).
+- **`GET /dns`** (scope `rules:read`): the DNS check: per site name what each internal and external server answered.
 - **`GET /geoip/{ip}`**: the GeoIP answer only (`available: false` when no GeoIP database is installed).
 
 ```sh

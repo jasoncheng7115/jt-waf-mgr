@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.32
+# jt-waf-mgr v0.4.34
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -57,8 +57,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   除外、確定ブロック）を図示。
 - **ルール**：各ルールの出所（OWASP CRS とバージョン、CRS プラグイン、取り込み時のインポート、人・API トークン・イベント分析
   による変更）、日ごとのヒット数、シンタックスハイライト。0.4.23 で「作成元」を追加（絞り込みと作成元ごとの件数付き）：
-  OWASP CRS、OWASP CRS プラグイン、サードパーティのプラグイン、ModSecurity 基本設定、Jason Tools（jt-waf-mgr がフォームから
-  生成するルールと Jason Tools のルールパック）、サイト独自（手書きのルール：取り込み時にインポートしたもの、raw ルール、
+  OWASP CRS、OWASP CRS プラグイン、サードパーティのプラグイン、ModSecurity 基本設定、jt-rules（jt-waf-mgr がフォームから
+  生成するルールと jt-rules のルールパック）、サイト独自（手書きのルール：取り込み時にインポートしたもの、raw ルール、
   nginx の vhost ファイル）。
 - **変更フロー**：単独の変更または一括（1 回の承認・1 バージョン・1 回の reload）、ルールファイルのアップロード、証拠、
   サンドボックス、ヘルスチェック URL、承認ルール（提案者は承認不可。シングル管理者モードで自分の緩和を承認するにはワンタイム
@@ -115,8 +115,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.32.tar.gz.sig jt-waf-mgr-0.4.32.tar.gz
-tar xzf jt-waf-mgr-0.4.32.tar.gz && cd jt-waf-mgr-0.4.32
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.34.tar.gz.sig jt-waf-mgr-0.4.34.tar.gz
+tar xzf jt-waf-mgr-0.4.34.tar.gz && cd jt-waf-mgr-0.4.34
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -302,6 +302,19 @@ nginx の設定には触れません。管理画面の vhost はご自身で削�
 - **遅いハードウェア**：「設定」で LLM のタイムアウトを延ばしてください（最大 900 秒）。
 
 AI は誤ることがあります。自動適用は強化（許可 → ブロック）だけで、緩和は必ず人が承認します。
+
+## 他システムとの連携
+
+- **Wazuh**：[deploy/wazuh](deploy/wazuh/README.md) に jt-waf-mgr 自身の記録用のデコーダーとルールを同梱（監査記録と
+  イベントを syslog で送信）。アクティブレスポンスから IP ブロック API を呼べます。
+- **jt-wazuh-mgr**（Wazuh を管理する Jason Tools の別プロジェクト）は専用の API トークンで WAF の変更と一時ブロックを
+  提案します。承認はできません。
+- **Graylog**：「設定 → ログ送信先」で GELF 形式を選び、UDP・TCP・TLS で GELF input へ。サイト、ルール、結果、送信元、
+  国がそれぞれ独立したフィールドになります。
+- **その他の SIEM**：最大 8 つの syslog 送信先に、それぞれプロトコル、形式（JSON、CEF、LEEF、GELF、key=value、
+  RFC 3164 / 5424）、内容（監査記録、イベント、アラート）を設定。
+- **fail2ban**：「ブロック中の IP」ページに API でブロック・解除するアクションがあります。
+- **チャットと webhook**：メール、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk、HMAC 署名付き webhook。
 
 ## 連携用 API
 

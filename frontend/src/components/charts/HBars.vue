@@ -7,7 +7,7 @@
   <div class="hbars" :class="{ 'hb-inl': inlineSub }">
     <div v-if="!items.length" class="empty small">{{ t('common.no_data') }}</div>
     <div v-for="it in items" :key="it.key" class="hb-row" :class="{ 'hb-on': pickable && it.active }">
-      <div class="hb-label" :class="{ mono: it.mono || mono }">
+      <div class="hb-label" :class="{ mono: it.mono || mono }" :data-ip="it.ip || null">
         <div v-if="pickable" class="hb-line">
           <button type="button" class="pickval hb-pick" :class="{ on: it.active }" :aria-pressed="it.active ? 'true' : 'false'"
                   :title="it.active ? t('filter.unpick') : t('filter.pick')" @click="pick(it)"><span class="pv-text">{{ clip(it.label) }}</span><Icon name="filter" class="pv-icon" /></button>

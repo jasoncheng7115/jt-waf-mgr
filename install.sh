@@ -146,6 +146,7 @@ if [ -z "$ROOT" ]; then
     install -d -m 750 -o jtwaf -g jtwaf "$VAR/geoip"
     install -d -m 750 -o jtwaf -g jtwaf "$VAR/crs"
     install -d -m 750 -o jtwaf -g jtwaf "$VAR/countries"
+    install -d -m 750 -o jtwaf -g jtwaf "$VAR/dns"
     # GeoIP license key: alone in its own file, readable by root and the jtwaf group only
     KEY="$ETC/maxmind-license.key"
     [ -e "$KEY" ] || { : > "$KEY"; }
@@ -168,7 +169,8 @@ for u in jt-waf-mgr.service jt-waf-mgr-apply.service jt-waf-mgr-apply.path \
          jt-waf-mgr-analyst.service jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.path \
          jt-waf-mgr-notify.service jt-waf-mgr-notify.timer jt-waf-mgr-notify.path \
          jt-waf-mgr-crs.service jt-waf-mgr-crs.timer jt-waf-mgr-crs.path \
-         jt-waf-mgr-countries.service jt-waf-mgr-countries.timer jt-waf-mgr-countries.path; do
+         jt-waf-mgr-countries.service jt-waf-mgr-countries.timer jt-waf-mgr-countries.path \
+         jt-waf-mgr-dns.service jt-waf-mgr-dns.timer jt-waf-mgr-dns.path; do
     cp "$SRC/deploy/$u" "$UNIT_DIR/$u"
     chmod 644 "$UNIT_DIR/$u"
 done
@@ -232,6 +234,9 @@ systemctl enable --now jt-waf-mgr-crs.timer jt-waf-mgr-crs.path >/dev/null
 # Country lists for per-site country blocks: a sandboxed one-shot download job (daily timer + "update now");
 # it downloads nothing until country blocks are switched on in Settings.
 systemctl enable --now jt-waf-mgr-countries.timer jt-waf-mgr-countries.path >/dev/null
+# DNS check of the site names and PTR names of outside addresses: a sandboxed one-shot job (15-minute timer + "check
+# now"); it asks the DNS servers about names only once servers are entered and the check is on in Settings.
+systemctl enable --now jt-waf-mgr-dns.timer jt-waf-mgr-dns.path >/dev/null
 # The apply program writes nginx configuration: it is armed only on request (--enable-apply),
 # normally right before the adoption step.
 if [ "$ENABLE_APPLY" = 1 ]; then

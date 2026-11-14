@@ -39,6 +39,8 @@ class App:
         self.blocks = Blocks(self)
         from .countries import Countries
         self.countries = Countries(self)
+        from .dnscheck import Dns
+        self.dns = Dns(self)
         from .compliance import Monitor
         self.monitor = Monitor(self)
         self._note_version()
@@ -105,6 +107,9 @@ class App:
         ct = threading.Thread(target=self.countries.run, args=(self.tailer._stop,), name='countries', daemon=True)
         ct.start()
         self._threads.append(ct)
+        dt = threading.Thread(target=self.dns.run, args=(self.tailer._stop,), name='dns', daemon=True)
+        dt.start()
+        self._threads.append(dt)
         from . import traffic
         tr = threading.Thread(target=traffic.run, args=(self, self.tailer._stop), name='traffic', daemon=True)
         tr.start()

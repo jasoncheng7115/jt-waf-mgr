@@ -673,5 +673,32 @@ class TestSandboxBuild(unittest.TestCase):
         self.assertEqual((out['ok'], out['failed']), (False, 2))
 
 
+    def test_regression_samples_judged_against_the_rules_in_place(self):
+        """A regression sample the configuration already refuses is not a regression of the change (jt-wazuh-mgr's
+        change 4 failed on six of those); one only the change refuses still fails it."""
+        from jtwafmgr.sandbox import Sandbox
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        app = App(env.cfg)
+        self.addCleanup(app.stop)
+        sb = Sandbox(app.cfg, app.site)
+        calls = []
+
+        def fake_run(replace, cases, *a, **k):
+            calls.append(bool(replace))
+            # candidate (replace given): /old and /new refused; the configuration in place refuses /old only
+            return [{'status': 403 if (c['path'] in ('/old', '/new') if replace else c['path'] == '/old') else 200,
+                     'rules': [10203, 949110], 'engine': 'On'} for c in cases]
+        sb.run = fake_run
+        sb.replacements = lambda files, managed: {'x': 'y'}
+        r = {'op': 'disable', 'kind': 'exclusion', 'direction': 'tighten', 'spec': '{}'}
+        samples = [{'host': 'a.example.com', 'method': 'GET', 'path': p} for p in ('/old', '/new', '/fine')]
+        out = sb.run_change(r, {}, [], app.workflow.managed, samples)
+        self.assertEqual((out['ok'], out['failed']), (False, 1))
+        self.assertEqual([x['path'] for x in out['results'] if not x['ok']], ['/new'])
+        self.assertEqual(calls, [True, False])                # the baseline ran once, for the refused samples only
+        out = sb.run_change(r, {}, [], app.workflow.managed, samples[:1] + samples[2:])
+        self.assertTrue(out['ok'], out)
+
 if __name__ == '__main__':
     unittest.main()

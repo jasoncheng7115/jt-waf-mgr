@@ -1,0 +1,9 @@
+[Unit]
+Description=jt-waf-mgr: run the DNS check when an admin (or a looked-at address) asks for it
+
+[Path]
+PathExists=/var/lib/jt-waf-mgr/dns/update.request
+Unit=jt-waf-mgr-dns.service
+
+[Install]
+WantedBy=multi-user.target

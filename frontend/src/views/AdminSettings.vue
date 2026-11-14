@@ -6,6 +6,7 @@
     <GeoipSettings @saved="load" />
     <UiSettings :groups="['llm', 'analyst', 'traffic', 'blocks', 'network']" @saved="load" />
     <CountrySettings @saved="load" />
+    <DnsSettings @saved="load" />
     <SyslogDestinations />
     <UiSettings :groups="['policy']" @saved="load" />
     <ErrorBox :error="error" />
@@ -39,6 +40,7 @@ import WorkflowSettings from '../components/WorkflowSettings.vue'
 import RegressionSamples from '../components/RegressionSamples.vue'
 import GeoipSettings from '../components/GeoipSettings.vue'
 import CountrySettings from '../components/CountrySettings.vue'
+import DnsSettings from '../components/DnsSettings.vue'
 import UiSettings from '../components/UiSettings.vue'
 import SyslogDestinations from '../components/SyslogDestinations.vue'
 import HBars from '../components/charts/HBars.vue'
@@ -48,7 +50,7 @@ const KNOWN = ['internal_networks', 'focus_sites', 'sensitive_fields', 'id_range
 const s = ref(null)
 const error = ref(null)
 // set in the cards above (web interface): not repeated in this read-only list
-const IN_UI = ['focus_sites', 'known_scanners', 'account_policy', 'geoip', 'countries', 'compliance_level', 'syslog']
+const IN_UI = ['focus_sites', 'known_scanners', 'account_policy', 'geoip', 'countries', 'dns', 'compliance_level', 'syslog']
 const keys = computed(() => {
   if (!s.value) return []
   const extra = Object.keys(s.value).filter((k) => !KNOWN.includes(k) && !IN_UI.includes(k)).sort()

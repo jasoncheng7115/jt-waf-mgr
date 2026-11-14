@@ -405,7 +405,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" 'https://waf.example.com/api/v1/rules
 
 需要 scope `lookups:read`。
 
-- **`GET /lookups/ip/{ip}`**：jt-waf-mgr 最近 7 天與 30 天從這個位址看到的事件。
+- **`GET /lookups/ip/{ip}`**：jt-waf-mgr 最近 7 天與 30 天從這個位址看到的事件，以及 PTR 名稱（`ptr`：名稱與是否正反解
+  一致；DNS 程序還在查時是 `{"pending": true}`）。
+- **`GET /lookups/ip/{ip}/card`**：頁面上滑鼠停留時顯示的精簡版（位置、PTR、是否封鎖中、最近 7 天）。
+- **`GET /dns`**（scope `rules:read`）：DNS 檢查結果，每個站名在各台內部、外部 DNS 的回答。
 - **`GET /geoip/{ip}`**：只回 GeoIP 結果（沒有安裝 GeoIP 資料庫時 `available: false`）。
 
 ```sh

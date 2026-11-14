@@ -6,6 +6,7 @@ import { get, setUnauthenticatedHandler, setSetupRequiredHandler } from './api.j
 import { setLang } from './i18n.js'
 import './theme.js'
 import { installTooltips } from './tooltip.js'
+import { installIpCards } from './ipcard.js'
 import './style.css'
 
 setUnauthenticatedHandler(() => {
@@ -37,6 +38,7 @@ async function boot() {
   app.use(router)
   app.mount('#app')
   installTooltips()
+  installIpCards()
 }
 
 boot()

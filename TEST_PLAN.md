@@ -93,6 +93,11 @@ short form used while releasing; this document says what each gate covers, how i
   stored events are corrected once).
 - Who can reach a server block (`tests/test_reach.py`): geo and map variables, `=` and `!=`, allow / deny all, the
   narrowest of several checks, location checks not counted, redirect-only blocks.
+- DNS check and PTR names (`tests/test_dnscheck.py`, against fake DNS servers): answers, NXDOMAIN, a CNAME, TCP when
+  the answer is cut, silence, a forged answer, each class (internal DNS only, public, wildcard, not found, no answer),
+  a public answer with an internal address, PTR with the forward check, the job (when due, "check now", the cache, bad
+  names and internal addresses dropped), the address card, settings refusing names for servers. Regression samples are
+  judged against the rules in place (`tests/test_p2.py`).
 - Outside configuration changes (`tests/test_logins.py`): the authentication log (sshd logins, session ends, sudo and
   su, rotated file, ISO and syslog time stamps, missing files), the masked file contents (no secret stored), the
   difference per file, the alert naming the files and the logins.

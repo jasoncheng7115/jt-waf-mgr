@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.32
+# jt-waf-mgr v0.4.34
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -55,7 +55,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 - **WAF 判斷流程**：依目前的實際設定畫出一個請求在這些站台上怎麼被判定（各站台引擎、計分、門檻、排除、確定封鎖）。
 - **規則**：每條規則標示來源（OWASP CRS 與版本、CRS 外掛、納管時匯入、人員 / API 權杖 / 事件分析提出的變更）、每日命中、
   語法高亮。0.4.23 新增「撰寫者」，可篩選並顯示各撰寫者的規則數：OWASP CRS、OWASP CRS 外掛、第三方外掛、ModSecurity
-  基本設定、Jason Tools（jt-waf-mgr 依表單產生的規則與 Jason Tools 規則包）、站台自寫（手寫的規則：納管時匯入、原始規則、
+  基本設定、jt-rules（jt-waf-mgr 依表單產生的規則與 jt-rules 規則包）、站台自寫（手寫的規則：納管時匯入、原始規則、
   nginx vhost 檔）。
 - **變更流程**：單筆變更或合成一筆（一次核准、一個版本、一次 reload）、上傳規則檔、證據、沙箱、健康檢查網址、核准規則
   （提出者不能核准；單人模式核准自己的放寬要重新輸入一次性驗證碼）、嚴格條件下的自動收緊、退回。
@@ -101,8 +101,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.32.tar.gz.sig jt-waf-mgr-0.4.32.tar.gz
-tar xzf jt-waf-mgr-0.4.32.tar.gz && cd jt-waf-mgr-0.4.32
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.34.tar.gz.sig jt-waf-mgr-0.4.34.tar.gz
+tar xzf jt-waf-mgr-0.4.34.tar.gz && cd jt-waf-mgr-0.4.34
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -276,6 +276,18 @@ sudo ./uninstall.sh --purge   # 連同 /var/lib/jt-waf-mgr、/etc/jt-waf-mgr 與
 - **硬體較慢時**：在「設定」把 LLM 逾時調高（最多 900 秒）。
 
 AI 可能判斷錯誤。自動套用只會收緊（允許 → 封鎖）；放寬一律要人核准。
+
+## 與其他系統整合
+
+- **Wazuh**：[deploy/wazuh](deploy/wazuh/README.md) 附有 jt-waf-mgr 自身記錄的 decoder 與規則（以 syslog 送出稽核記錄與
+  事件）；主動回應可以呼叫 IP 封鎖 API。
+- **jt-wazuh-mgr**（Jason Tools 另一個管理 Wazuh 的專案）用自己的 API 權杖提出 WAF 變更與暫時封鎖，永遠不能核准。
+- **Graylog**：「設定 → 外送記錄」選 GELF 格式，以 UDP、TCP 或 TLS 送到 GELF input；站台、規則、結果、來源、國家都是
+  各自獨立的欄位。
+- **其他 SIEM**：最多 8 個 syslog 目的地，各自設定協定、格式（JSON、CEF、LEEF、GELF、key=value、RFC 3164 / 5424）
+  與內容（稽核記錄、事件、警示）。
+- **fail2ban**：「封鎖中的 IP」頁附有透過 API 封鎖與解除的現成動作。
+- **聊天與 webhook**：E-mail、Telegram、Teams、Slack、Discord、Zulip、Nextcloud Talk，以及 HMAC 簽章的 webhook。
 
 ## 介接 API
 

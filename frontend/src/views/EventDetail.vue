@@ -18,7 +18,7 @@
           <dt>{{ t('event.time') }}</dt><dd>{{ fmtTime(ev.ts) }}</dd>
           <dt>{{ t('event.status') }}</dt><dd class="mono">{{ ev.status }}</dd>
           <dt>{{ t('event.source') }}</dt>
-          <dd><span class="mono">{{ safeText(ev.src_ip, 45) }}</span><template v-if="ev.client_port">:<span class="mono">{{ ev.client_port }}</span></template> <OriginBadge :origin="ev.origin" /> <GeoTag :geo="ev.src_geo" full /></dd>
+          <dd><span class="mono" :data-ip="ev.src_ip">{{ safeText(ev.src_ip, 45) }}</span><template v-if="ev.client_port">:<span class="mono">{{ ev.client_port }}</span></template> <OriginBadge :origin="ev.origin" /> <GeoTag :geo="ev.src_geo" full /></dd>
           <dt>{{ t('event.host') }}</dt><dd class="mono breakall">{{ safeText(ev.host, 255) }}<template v-if="ev.server_port">:{{ ev.server_port }}</template></dd>
           <dt>{{ t('event.decided_by') }}</dt><dd>{{ ev.decided_by ? t('decided.' + ev.decided_by) : '—' }}</dd>
           <dt>{{ t('event.engine') }}</dt><dd class="mono">{{ safeText(ev.engine, 40) || '—' }}</dd>

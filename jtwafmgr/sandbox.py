@@ -484,6 +484,14 @@ http {
             cases = [{'host': 'sandbox.invalid', 'path': '/', 'source': 'external', 'expect': 'not403', 'origin': 'smoke'}]
         try:
             res = self.run(self.replacements(files, managed), cases)
+            # a regression sample the rules in place already refuse is no regression of this change: run those samples
+            # through the configuration as it is now and judge only what the change itself alters
+            reg = [i for i, (c, r) in enumerate(zip(cases, res)) if c.get('origin') == 'regression' and r['status'] == 403]
+            if reg:
+                base = self.run({}, [cases[i] for i in reg])
+                for i, b in zip(reg, base):
+                    if b['status'] == 403:
+                        cases[i] = dict(cases[i], baseline_refused=True)
         except SandboxError as e:
             return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
         return evaluate(cases, res, self.cfg)
@@ -576,6 +584,8 @@ def evaluate(cases, res, cfg):
         for rid in c.get('present_rules') or []:
             if rid not in r['rules']:
                 good, note = False, 'rule %d did not match' % rid
+        if exp == 'not403' and c.get('baseline_refused') and st == 403:
+            good, note = True, 'already refused by the rules in place'
         ok = ok and good
         out.append(dict(_case_view(c), expect=exp, status=st, rules=r['rules'][:30], ok=good, note=note))
     return {'ok': ok, 'cases': len(out), 'failed': sum(1 for x in out if not x['ok']),

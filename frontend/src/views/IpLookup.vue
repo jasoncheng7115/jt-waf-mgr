@@ -15,6 +15,11 @@
       <section class="card">
         <h2 class="mono"><Icon name="globe" /> {{ safeText(data.ip, 45) }} <OriginBadge :origin="data.origin" /> <GeoTag :geo="data.geo" full />
           <span v-if="data.blocked_now" class="badge b-blocked">{{ t('lookup.blocked_now') }}</span></h2>
+        <p v-if="data.ptr" class="ptrline small"><span class="muted">{{ t('ipcard.ptr') }}</span>
+          <span v-if="data.ptr.pending" class="muted gapl">{{ t('ipcard.ptr_pending') }}</span>
+          <template v-else-if="data.ptr.name"><span class="mono gapl">{{ safeText(data.ptr.name, 255) }}</span>
+            <span class="gapl" :class="data.ptr.confirmed ? 'ok' : 'warn'">{{ data.ptr.confirmed ? t('ipcard.ptr_confirmed') : t('ipcard.ptr_unconfirmed') }}</span></template>
+          <span v-else class="muted gapl">{{ data.ptr.error ? t('ipcard.ptr_error') : t('ipcard.ptr_none') }}</span></p>
         <div class="tiles">
           <div class="tile"><div class="tl">{{ t('lookup.d7_events') }}</div><div class="tv">{{ fmtNum(data.d7.events) }}</div><div class="ts">{{ t('outcome.blocked') }} {{ fmtNum(data.d7.blocked) }}</div></div>
           <div class="tile"><div class="tl">{{ t('lookup.d30_events') }}</div><div class="tv">{{ fmtNum(data.d30.events) }}</div><div class="ts">{{ t('outcome.blocked') }} {{ fmtNum(data.d30.blocked) }}</div></div>

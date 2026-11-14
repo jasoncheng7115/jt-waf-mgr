@@ -10,7 +10,7 @@ PURGE=0
 [ "${1:-}" = "--purge" ] && PURGE=1
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 
-for u in jt-waf-mgr-countries.path jt-waf-mgr-countries.timer jt-waf-mgr-countries.service jt-waf-mgr-notify.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.service jt-waf-mgr-analyst.path jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.service jt-waf-mgr-geoip.path jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.service jt-waf-mgr-apply.path jt-waf-mgr-apply.service jt-waf-mgr.service; do
+for u in jt-waf-mgr-dns.path jt-waf-mgr-dns.timer jt-waf-mgr-dns.service jt-waf-mgr-countries.path jt-waf-mgr-countries.timer jt-waf-mgr-countries.service jt-waf-mgr-notify.path jt-waf-mgr-notify.timer jt-waf-mgr-notify.service jt-waf-mgr-analyst.path jt-waf-mgr-analyst.timer jt-waf-mgr-analyst.service jt-waf-mgr-geoip.path jt-waf-mgr-geoip.timer jt-waf-mgr-geoip.service jt-waf-mgr-apply.path jt-waf-mgr-apply.service jt-waf-mgr.service; do
     systemctl disable --now "$u" 2>/dev/null || true
     rm -f "/etc/systemd/system/$u"
 done

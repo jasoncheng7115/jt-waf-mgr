@@ -22,10 +22,10 @@
     </template>
     <template #cell-src_ip="{ row }"><span class="srcline">
       <template v-if="filterable">
-        <button type="button" class="pickval mono" :title="t('filter.pick')" @click="emit('filter', 'src_ip', row.src_ip)"><span class="pv-text">{{ safeText(row.src_ip, 45) }}</span><Icon name="filter" class="pv-icon" /></button>
+        <button type="button" class="pickval mono" :title="t('filter.pick')" :data-ip="row.src_ip" @click="emit('filter', 'src_ip', row.src_ip)"><span class="pv-text">{{ safeText(row.src_ip, 45) }}</span><Icon name="filter" class="pv-icon" /></button>
         <RouterLink :to="'/lookup/' + encodeURIComponent(row.src_ip)" class="openlink" :title="t('filter.open_lookup')" :aria-label="t('filter.open_lookup') + ': ' + safeText(row.src_ip, 45)"><Icon name="external" /></RouterLink>
       </template>
-      <RouterLink v-else :to="'/lookup/' + encodeURIComponent(row.src_ip)" class="mono">{{ safeText(row.src_ip, 45) }}</RouterLink>
+      <RouterLink v-else :to="'/lookup/' + encodeURIComponent(row.src_ip)" class="mono" :data-ip="row.src_ip">{{ safeText(row.src_ip, 45) }}</RouterLink>
       <GeoTag :geo="row.src_geo" compact />
       <button v-if="filterable" type="button" class="pickval" :title="t('filter.pick')" @click="emit('filter', 'origin', row.origin || 'external')"><OriginBadge :origin="row.origin" /><Icon name="filter" class="pv-icon" /></button>
       <OriginBadge v-else :origin="row.origin" />

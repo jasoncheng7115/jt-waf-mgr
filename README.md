@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.32
+# jt-waf-mgr v0.4.34
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -62,7 +62,7 @@ something you can read, and every change into a workflow you can trust:
 - **Rules**: every rule with where it comes from (OWASP CRS and its version, a CRS plugin, imported at adoption, a
   change by a person, an API token or the event analysis), hits per day, syntax-highlighted text. New in 0.4.23: who
   wrote each rule, with a filter and per-author counts: OWASP CRS, an OWASP CRS plugin, a third-party plugin,
-  ModSecurity base settings, Jason Tools (rules jt-waf-mgr generates from a form, and the Jason Tools rule pack) or
+  ModSecurity base settings, jt-rules (rules jt-waf-mgr generates from a form, and the jt-rules pack) or
   this site (hand-written: imported at adoption, raw rules, nginx vhost files).
 - **Change workflow**: single changes or one bundle (one approval, one version, one reload), upload of rule files,
   evidence, sandbox, health URLs, approval rules (the proposer cannot approve; single-admin mode with a fresh one-time
@@ -124,8 +124,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.32.tar.gz.sig jt-waf-mgr-0.4.32.tar.gz
-tar xzf jt-waf-mgr-0.4.32.tar.gz && cd jt-waf-mgr-0.4.32
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.34.tar.gz.sig jt-waf-mgr-0.4.34.tar.gz
+tar xzf jt-waf-mgr-0.4.34.tar.gz && cd jt-waf-mgr-0.4.34
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password
@@ -321,6 +321,19 @@ The analysis always runs on your own, self-hosted LLM server.
 - **Slow hardware**: raise the LLM timeout in Settings (up to 900 s).
 
 The AI may be wrong. Automatic application only ever tightens (allow → block); loosening always needs a person.
+
+## Integrations
+
+- **Wazuh**: a decoder and rules for jt-waf-mgr's own records are in [deploy/wazuh](deploy/wazuh/README.md) (send the
+  audit trail and events by syslog); an active response can call the IP block API.
+- **jt-wazuh-mgr** (a separate Jason Tools project that manages Wazuh) proposes WAF changes and temporary blocks with
+  its own API token; it never approves.
+- **Graylog**: Settings → log destinations → format GELF over UDP, TCP or TLS to a GELF input; site, rule, outcome,
+  source and country arrive as separate fields.
+- **Other SIEM**: up to 8 syslog destinations, each with its own protocol, format (JSON, CEF, LEEF, GELF, key=value,
+  RFC 3164 / 5424) and content (audit trail, events, alerts).
+- **fail2ban**: the IP blocks page shows a ready action that blocks and unblocks through the API.
+- **Chat and webhooks**: e-mail, Telegram, Teams, Slack, Discord, Zulip, Nextcloud Talk, an HMAC-signed webhook.
 
 ## API for integrations
 

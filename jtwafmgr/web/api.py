@@ -801,7 +801,22 @@ def vhosts(app, req):
     ext = _outside_requests(app)
     for s in items:
         s['outside_7d'] = sum(ext.get(x.lower(), 0) for x in s['server_names'] if x and x != '_') if ext is not None else None
+        s['dns'] = _dns_of(app, s['server_names'])
     return json_response(200, {'items': items, 'warnings': m.warnings + n.errors + m.errors})
+
+
+def _dns_of(app, names):
+    """What the DNS check found for a site's names: the widest of them ('public' over 'internal_only'), None when the
+    check is off or has not run."""
+    dns = getattr(app, 'dns', None)
+    if not dns or not app.cfg['dns']['enabled']:
+        return None
+    found = [i for i in (dns.name_info(n) for n in names or [] if n and n != '_') if i]
+    if not found:
+        return None
+    order = ['public', 'wildcard', 'internal_only', 'not_found', 'error']
+    best = min(found, key=lambda i: order.index(i['class']) if i['class'] in order else 9)
+    return {'class': best['class'], 'public_private': any(i.get('public_private') for i in found)}
 
 
 def _outside_requests(app, days=7):
@@ -941,7 +956,59 @@ def lookup_ip(app, req):
         'hosts': [{'key': r['k'], 'events': r['n']} for r in hosts],
         'rules': [_rule_label(app, r['k'], {'key': str(r['k']), 'events': r['n']}) for r in rules_],
         'blocked_now': bool(app.blocks.blocked(ip)) if getattr(app, 'blocks', None) else False,
-        'blocks': app.blocks.blocked(ip) if getattr(app, 'blocks', None) else []})
+        'blocks': app.blocks.blocked(ip) if getattr(app, 'blocks', None) else [],
+        'ptr': _ptr(app, ip)})
+
+
+def _ptr(app, ip):
+    """The PTR name the DNS job found for an outside address ({'name', 'confirmed', 'at'}), or {'pending': True} after
+    asking the job to look it up; None for an internal address or with PTR lookups off."""
+    dns = getattr(app, 'dns', None)
+    if not dns or not app.cfg['dns']['ptr'] or util.ip_in(ip, app.cfg.internal_networks):
+        return None
+    from ..dnscheck import is_internal
+    if is_internal(ip):
+        return None
+    r = dns.ptr(ip)
+    if r is None:
+        dns.want_ptr(ip)
+        return {'pending': True}
+    return {'name': r.get('name'), 'confirmed': r.get('confirmed'), 'error': r.get('error'), 'at': util.iso(r['at']) if r.get('at') else None}
+
+
+def ip_card(app, req):
+    """What the pages show when the pointer is over an address: where it is, its PTR name, whether it is blocked, and
+    what it did in the last 7 days. Quick: counts only, no event list."""
+    ip = req.params['ip']
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise ApiError(400, 'bad_request', 'not an IP address')
+    t = util.now()
+    d7 = app.db.one("SELECT COUNT(*) n, SUM(outcome='blocked') b, MAX(ts) l FROM events WHERE src_ip=? AND ts>=?", (ip, t - 7 * 86400))
+    hosts = app.db.q('SELECT host k, COUNT(*) n FROM events WHERE src_ip=? AND ts>=? GROUP BY host ORDER BY n DESC LIMIT 4',
+                     (ip, t - 7 * 86400))
+    blocks = app.blocks.blocked(ip) if getattr(app, 'blocks', None) else []
+    return json_response(200, {
+        'ip': ip, 'origin': 'internal' if util.ip_in(ip, app.cfg.internal_networks) else 'external', 'geo': geo(ip),
+        'ptr': _ptr(app, ip), 'd7': {'events': d7['n'] or 0, 'blocked': d7['b'] or 0, 'last': util.iso(d7['l']) if d7['l'] else None},
+        'hosts': [{'key': r['k'], 'events': r['n']} for r in hosts],
+        'blocked': [{'until': b['expires_at'], 'permanent': b.get('permanent'), 'source': b['source']} for b in blocks]})
+
+
+def dns_status(app, req):
+    """The DNS check: servers, when it last ran, and per site name what each server answered."""
+    return json_response(200, app.dns.status())
+
+
+def dns_check(app, req):
+    """Like the country lists: the web service never asks DNS; it leaves a request for the DNS job."""
+    try:
+        app.dns.request()
+    except OSError as e:
+        raise ApiError(500, 'dns_request_failed', 'could not queue the check', error=e.strerror)
+    app.audit.log('dns.check_requested', req.user['username'], src_ip=req.client_ip)
+    return json_response(202, app.dns.status())
 
 
 def _rule_label(app, rule_id, out):
@@ -1106,6 +1173,7 @@ def settings(app, req):
                                                      'disk_min_free_mb')},
         'geoip': {k: c['geoip'][k] for k in ('enabled', 'editions', 'update_days')},
         'countries': {k: c['countries'][k] for k in ('enabled', 'update_hours', 'max_age_days')},
+        'dns': {k: c['dns'][k] for k in ('enabled', 'internal_servers', 'external_servers', 'check_hours', 'ptr', 'ptr_servers')},
         'compliance_level': c['compliance']['level'],
         'paths': _paths(app),
     })
@@ -1163,6 +1231,9 @@ def register(router):
     R('POST', V + '/crs/updates/propose', crs_propose, ('role', 'approver', None))
     R('GET', V + '/waf/model', waf_model, viewer('rules:read'))
     R('GET', V + '/lookups/ip/{ip}', lookup_ip, viewer('lookups:read'))
+    R('GET', V + '/lookups/ip/{ip}/card', ip_card, viewer('lookups:read'))
+    R('GET', V + '/dns', dns_status, viewer('rules:read'))
+    R('POST', V + '/dns/check', dns_check, ('role', 'admin', None))
     R('GET', V + '/users', users, admin)
     R('POST', V + '/users', user_create, admin)
     R('PATCH', V + '/users/{username}', user_patch, admin)
@@ -1778,6 +1849,7 @@ def country_sites(app, req):
         widest = min(serving, key=lambda b: order.index(b['reach']) if b['reach'] in order else 0)
         site['reach'], site['reach_by'] = widest['reach'], widest['reach_by']
         site['outside_7d'] = sum(ext.get(x.lower(), 0) for x in site['names']) if ext is not None else None
+        site['dns'] = _dns_of(app, site['names'])
         # a rule names one site; a server block with several names is limited only where a rule names it
         mine = [r for r in rules if r['item_id'] in {c['item_id'] for c in site['countries']}]
         plain = [x.lower() for x in site['names'] if x and x != '_' and not x.startswith('~')]

@@ -28,6 +28,12 @@ apply_state = "$W/apply-state"
 access_logs = ["$W/access.log"]
 [traffic]
 logs = ["$W/traffic/*access.log"]
+[dns]
+enabled = true
+dir = "$W/dns"
+internal_servers = ["192.0.2.53"]
+external_servers = ["198.51.100.53"]
+
 [countries]
 enabled = true
 dir = "$W/countries"

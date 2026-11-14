@@ -1,0 +1,11 @@
+[Unit]
+Description=jt-waf-mgr: DNS check of the site names (when due) and PTR names of new outside addresses, every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

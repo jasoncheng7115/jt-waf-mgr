@@ -272,6 +272,23 @@ async function audit(page, where) {
   ok((await page.locator('#jt-tip:not([hidden])').count()) === 1 && (await tipped.getAttribute('title')) === null
      && ((await page.locator('#jt-tip').innerText()) || '').trim().length > 0, 'tooltips: the site\'s own, no native title left');
   await page.keyboard.press('Escape');
+  // the address card: the pointer resting on an address shows where it is, its PTR name and what it did
+  await page.goto(base + '/lookup/203.0.113.9', { waitUntil: 'networkidle' });
+  ok((await page.locator('.ptrline', { hasText: 'scanner9.example.net' }).count()) === 1, 'IP lookup: the PTR name, checked forward');
+  await page.goto(base + '/events', { waitUntil: 'networkidle' });
+  const ipEl = page.locator('.datatable tbody [data-ip]:visible').first();
+  await ipEl.scrollIntoViewIfNeeded();
+  const ipText = ((await ipEl.getAttribute('data-ip')) || '').split('/')[0];
+  await page.mouse.move(2, 2);
+  await ipEl.hover();
+  await page.waitForSelector('#jt-ipcard:not([hidden]) .ic-row', { timeout: 8000 }).catch(() => {});
+  const cardText = await page.locator('#jt-ipcard').innerText({ timeout: 2000 }).catch(() => '');
+  ok(ipText && cardText.includes(ipText), 'address card on hover (' + ipText + ')');
+  await page.mouse.move(2, 2);
+  // the DNS check card in Settings: what each server answered
+  await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
+  await page.waitForSelector('#dns-names tbody tr, .dnstable tbody tr', { timeout: 5000 }).catch(() => {});
+  ok((await page.locator('.dnstable tbody tr').count()) === 4, 'settings: the DNS check results per name');
   // country blocks: the form lists the staged countries, the preview builds the rule, Settings shows the lists
   await page.goto(base + '/changes/new?kind=country', { waitUntil: 'networkidle' });
   await page.locator('.card.form .field.grow input.mono').first().fill('shop.example.com');
@@ -291,9 +308,14 @@ async function audit(page, where) {
      && /只允許\s*JP TW/.test(await sumLink.innerText()) && (await vRow('static.example.com').locator('a.cosum').count()) === 0
      && (await page.locator('.datatable tbody a', { hasText: '新增限制' }).count()) === 0,
      'sites: a one-line country summary linking to the country-limits page, no buttons');
-  ok((await vRow('intra.example.com').locator('.badge', { hasText: '僅內部' }).count()) === 1
-     && (await vRow('app.example.com').locator('.badge', { hasText: '內外皆可' }).count()) === 1,
+  ok((await vRow('intra.example.com').locator('.badge', { hasText: /^僅內部$/ }).count()) === 1
+     && (await vRow('app.example.com').locator('.badge', { hasText: /^內外皆可$/ }).count()) === 1,
      'sites: who can reach each block, from nginx\'s own checks');
+  // DNS: a name only internal DNS knows on a site nginx lets anyone into is the risk, in red
+  const dnsBadge = vRow('app.example.com').locator('.badge', { hasText: '僅內部 DNS' });
+  ok((await dnsBadge.count()) === 1 && /b-blocked/.test(await dnsBadge.getAttribute('class')) &&
+     (await vRow('static.example.com').locator('.badge', { hasText: '外部 DNS 查得到' }).count()) === 1,
+     'sites: what DNS knows of each name, the hidden-but-open one in red');
   await sumLink.click();
   await page.waitForFunction(() => location.pathname === '/countries' && document.querySelectorAll('.datatable tbody tr').length === 1, null, { timeout: 8000 }).catch(() => {});
   ok(/\/countries\?host=app\.example\.com/.test(page.url()) && (await page.locator('.datatable tbody tr').count()) === 1,

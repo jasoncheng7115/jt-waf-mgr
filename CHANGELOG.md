@@ -2,6 +2,28 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.34 (2026-11-14)
+
+- The DNS job's folder defaults to "dns" next to the database (`[dns] dir` still overrides it), and the web service
+  writes there only when the database's folder exists: a test with a temporary database (the release checks run the
+  tests as root on the server) can no longer write into the system's folder, as one did with documentation addresses.
+
+## 0.4.33 (2026-11-14)
+
+- DNS check (Settings): enter internal and external DNS servers (several of each); a separate restricted job
+  (jt-waf-mgr-dns, every 15 minutes, "check now") asks each of them about every site name nginx serves, detects a
+  wildcard record, and the Sites and Country limits pages show what DNS knows of each site. A name only internal DNS
+  knows on a site nginx lets anyone into is shown in red: hiding a name keeps no one out.
+- PTR names: the same job looks up the PTR name of outside addresses (recent events, blocks, any address the pointer
+  rests on) and checks it forward. The card shown when the pointer rests on an address (events, the overview, blocks,
+  event details) gives its PTR name, where it is, whether it is blocked and what it did in the last 7 days.
+- The sandbox runs regression samples the change refuses through the configuration in place too: a sample the rules
+  in place already refuse no longer fails a change.
+- The author shown for rules this system generates is "jt-rules" (the API value is still `jason_tools`).
+- Project site and README: integrations (Wazuh, jt-wazuh-mgr, Graylog, other SIEM, fail2ban, chat and webhooks); a
+  GitHub link in the top bar; "Home" on the architecture page; "Upstream open source" for the parts other projects
+  write.
+
 ## 0.4.32 (2026-11-14)
 
 - IP blocks: an approver can extend an active block (a new end counted from now, up to the interface maximum, with a

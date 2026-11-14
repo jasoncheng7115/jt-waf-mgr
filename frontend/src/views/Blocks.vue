@@ -47,7 +47,7 @@
           <Icon :name="STATE_ICON[s]" />{{ t('blocks.state.' + s) }}</button>
       </div>
       <DataTable id="blocks" :columns="cols" :rows="data.items" :row-key="(r) => r.id" :page-size="50">
-        <template #cell-ip="{ row }"><span class="ipcell"><RouterLink class="mono" :to="'/lookup/' + encodeURIComponent(row.ip.split('/')[0])">{{ safeText(row.ip, 64) }}</RouterLink>
+        <template #cell-ip="{ row }"><span class="ipcell"><RouterLink class="mono" :data-ip="row.ip" :to="'/lookup/' + encodeURIComponent(row.ip.split('/')[0])">{{ safeText(row.ip, 64) }}</RouterLink>
           <GeoTag :geo="row.geo" compact /></span></template>
         <template #cell-source="{ row }"><span class="mono small">{{ safeText(row.source, 64) }}</span>
           <div class="sub">{{ safeText(row.created_by, 64) }} · {{ row.via === 'token' ? t('blocks.via_token') : row.via === 'system' ? t('blocks.via_system') : t('blocks.via_ui') }}</div></template>

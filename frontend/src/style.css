@@ -989,3 +989,19 @@ a.tile.tilelink:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba
 .chipcheck:hover { background: var(--panel-2); }
 .chipcheck.on { border-color: var(--accent); background: var(--accent-bg, var(--panel-2)); color: var(--accent); font-weight: 600; }
 .chipcheck:focus-within, .chipcheck:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* the address card (ipcard.js): shown where the pointer rests on an address */
+.jt-ipcard { position: absolute; z-index: 999; width: min(360px, calc(100vw - 12px)); padding: 10px 12px; border-radius: 10px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); box-shadow: 0 10px 30px rgba(0, 0, 0, .16);
+  font-size: 13px; line-height: 1.45; }
+.jt-ipcard .ic-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.jt-ipcard .ic-ip { font-family: var(--mono, ui-monospace, monospace); font-weight: 700; font-size: 14px; }
+.jt-ipcard .ic-row { display: grid; grid-template-columns: 6.5em 1fr; gap: 8px; padding: 2px 0; }
+.jt-ipcard .ic-k { color: var(--muted); }
+.jt-ipcard .ic-v { overflow-wrap: anywhere; }
+.jt-ipcard .ic-v.muted { color: var(--muted); }
+.jt-ipcard .ic-v.bad { color: var(--blocked); font-weight: 600; }
+.jt-ipcard .ic-note { margin-left: 6px; font-size: 12px; }
+.jt-ipcard .ic-note.ok { color: var(--ok); }
+.jt-ipcard .ic-note.warn { color: var(--warn); }
+.jt-ipcard .ic-foot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }

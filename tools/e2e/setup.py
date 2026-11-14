@@ -4,7 +4,7 @@ import json
 import sys, time, os, random
 import os.path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-from jtwafmgr import config, auth
+from jtwafmgr import config, auth, util
 from jtwafmgr.app import App
 from jtwafmgr.collector.auditlog import Tailer
 from tests.helpers import record
@@ -122,6 +122,20 @@ for i, (rx, label, ago, state) in enumerate([
 chg('add', 'confident_block', 10224, {'target': 'header', 'header': 'Upgrade', 'regex': '(?i)h2c', 'source': 'external',
     'msg': 'h2c upgrade request'}, 'tighten', 'applied', 'Block requests that ask to upgrade to h2c.', 'admin', 'user', 7200,
     'SecRule REQUEST_HEADERS:Upgrade "@rx (?i)h2c" "id:10224,phase:1,pass,log,msg:\'jt confident block: h2c upgrade request\'"')
+# the DNS check: what synthetic internal and external servers answered, and one PTR name (no DNS is asked)
+if cfg['dns']['enabled']:
+    os.makedirs(cfg['dns']['dir'], exist_ok=True)
+    def _ans(addr):
+        return {'rcode': 'NOERROR', 'addrs': [addr], 'cname': []} if addr else {'rcode': 'NXDOMAIN', 'addrs': [], 'cname': []}
+    names = {'app.example.com': ('192.168.77.10', None), 'intranet.example.com': ('192.168.77.11', None),
+             'intra.example.com': ('192.168.77.11', None), 'static.example.com': ('198.51.100.20', '198.51.100.20')}
+    with open(os.path.join(cfg['dns']['dir'], 'results.json'), 'w') as fh:
+        json.dump({'checked_at': util.iso(now - 600), 'checked_epoch': now - 600, 'internal': ['192.0.2.53'], 'external': ['198.51.100.53'],
+                   'wildcards': {}, 'names': {n: {'internal': {'192.0.2.53': _ans(i)}, 'external': {'198.51.100.53': _ans(e)},
+                                                  'class': 'public' if e else 'internal_only', 'public_private': False}
+                                              for n, (i, e) in names.items()}}, fh)
+    with open(os.path.join(cfg['dns']['dir'], 'ptr.json'), 'w') as fh:
+        json.dump({'203.0.113.9': {'name': 'scanner9.example.net', 'confirmed': True, 'at': now - 600}}, fh)
 # country blocks: synthetic registry lists (documentation ranges stand in for countries) and one waiting rule
 if cfg['countries']['enabled']:
     from tests.test_countries import stage
