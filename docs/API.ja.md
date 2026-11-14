@@ -483,6 +483,8 @@ ModSecurity を使わないサイトも含めてすべてのサイトに効き�
     それぞれ 1 件になり、最後の 1 件が終わるまでブロックは続きます。
   - 201 とその内容を返します：`{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at",
     "created_by", "via": "token", "extended", "ended_at", "ended_by"}`。
+  - トークンは無期限のブロックを設定できません（`"ttl": "permanent"` は 403 `admin_required`）。管理者は Web 画面で設定
+    できます。同じアドレスを再びブロックしても無期限は短くなりません（`expires_at` は null、`permanent` あり）。
 - **`DELETE /blocks/{ip}?source=`**（スコープ `blocks:write`）：そのトークン自身のそのアドレスのブロックを解除します
   （`source` を付けるとその送信元だけ）。他のトークンのブロックには触れません（404 `not_found`）。`{"removed": n}` を返します。
 - **`GET /blocks?state=active|all|removed|expired`**（スコープ `blocks:read`）：一覧と、nginx が本当にファイルを読み込んで

@@ -27,6 +27,10 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
 header.top .wrap { max-width: 1320px; }
 nav.links { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+/* the links in the middle of the bar (logo and name stay left, language right); auto margins, unlike justify-content:
+   center, never cut off the first links when a narrow screen scrolls the row */
+nav.links > a:first-child { margin-left: auto; }
+nav.links > a:last-child { margin-right: auto; }
 nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6px 9px; border-radius: 8px; }
 nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
 @media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }

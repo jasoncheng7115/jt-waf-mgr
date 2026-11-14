@@ -56,7 +56,7 @@
         <template #cell-actions="{ row }"><div class="rowbtns">
           <button v-if="row.locked" class="btn small" type="button" :disabled="busy" @click="update(row, { unlock: true }, 'users.unlocked')"><Icon name="unlock" />{{ t('users.unlock') }}</button>
           <template v-if="!isSelf(row)">
-            <button class="btn small" type="button" :disabled="busy" @click="update(row, { disabled: !row.disabled })">
+            <button class="btn small" :class="{ danger: !row.disabled }" type="button" :disabled="busy" @click="update(row, { disabled: !row.disabled })">
               <Icon :name="row.disabled ? 'check' : 'block'" />{{ row.disabled ? t('users.enable') : t('users.disable') }}</button>
             <button class="btn small ghost" type="button" :disabled="busy" :aria-pressed="editing === row.username ? 'true' : 'false'" @click="toggleEdit(row)">
               <Icon name="more" />{{ t('users.more') }}</button>

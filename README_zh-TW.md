@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.31
+# jt-waf-mgr v0.4.32
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -101,8 +101,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.31.tar.gz.sig jt-waf-mgr-0.4.31.tar.gz
-tar xzf jt-waf-mgr-0.4.31.tar.gz && cd jt-waf-mgr-0.4.31
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.32.tar.gz.sig jt-waf-mgr-0.4.32.tar.gz
+tar xzf jt-waf-mgr-0.4.32.tar.gz && cd jt-waf-mgr-0.4.32
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼
@@ -198,7 +198,8 @@ ModSecurity 的也算。使用方式：
    它看的是 WAF 事件，只計算被拒絕或找不到（4xx/5xx）的檔名，其中至少要有一個明確的機密檔（.env、.git、金鑰、傾印、備份檔）；
    只要有任何一個這類檔名拿到 2xx/3xx，就不自動封鎖，留給人判斷。它不經過變更流程、會在所有站台封鎖，所以預設關閉。
 
-封鎖預設 24 小時，權杖最長 7 天、手動最長 30 天，沒有永久封鎖。內部網路、已知掃描器、信任的代理與保護清單永遠不會被
+封鎖預設 24 小時，權杖最長 7 天、手動最長 30 天；核准者可以延長，管理者可以在網頁上設為永久封鎖（需填理由，權杖與自動規則
+都不能設永久）。內部網路、已知掃描器、信任的代理與保護清單永遠不會被
 封鎖。nginx 比對的是 `real_ip` 之後的位址，所以在 CDN 後面的站台要設定 `set_real_ip_from` / `real_ip_header`。自己有
 `allow` / `deny` 的 server 與 location 不會繼承這份清單，「封鎖中的 IP」頁會列出。封鎖約一分鐘內對新的請求生效；已經開著的連線（WebSocket）會持續到自己結束。詳細說明見 [API 手冊](docs/API.zh-TW.md)
 第 4.9 節。

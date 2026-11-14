@@ -75,6 +75,10 @@ async function audit(page, where) {
       // the decision flowchart: every box shows all of its text (a fixed-height box cut a second detail line)
       clipped: [...document.querySelectorAll('.fl-box')].filter((b) => b.scrollHeight > b.clientHeight + 1).map((b) => b.innerText.slice(0, 40)),
       // a card shows one accent line on its left: a thick left border next to the title bar's own line looks doubled
+      // everything that can be clicked shows the pointing hand
+      nohand: [...document.querySelectorAll('button:not(:disabled), a[href], [role=button]')].filter((e) => e.offsetParent !== null
+        && getComputedStyle(e).cursor !== 'pointer').map((e) => (e.innerText || e.getAttribute('aria-label') || e.tagName).trim().slice(0, 30)),
+      // no native tooltip left once the pointer has been over it (tooltip.js moves titles to the site's own)
       doubled: [...document.querySelectorAll('.card')].filter((c) => {
         const head = c.querySelector(':scope > .cardhead:first-child, :scope > h2:first-child')
         return head && parseFloat(getComputedStyle(c).borderLeftWidth) >= 2 && /inset/.test(getComputedStyle(head).boxShadow)
@@ -89,6 +93,7 @@ async function audit(page, where) {
   if (r.clipped.length) problems.push(where + ': flowchart text cut off: ' + r.clipped.slice(0, 3).join(' | '));
   if (r.dates) problems.push(where + ': native date input x' + r.dates);
   if (r.doubled.length) problems.push(where + ': card with a doubled left line: ' + r.doubled.slice(0, 3).join(' | '));
+  if (r.nohand.length) problems.push(where + ': clickable without the pointing hand: ' + r.nohand.slice(0, 5).join(' | '));
   if (r.noicon.length) problems.push(where + ': buttons without icon: ' + r.noicon.slice(0, 5).join(' | '));
   if (r.overflow) notes.push('warn ' + where + ': horizontal page overflow');
 }
@@ -234,16 +239,39 @@ async function audit(page, where) {
   await page.locator('.card.form button.primary').click();
   await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 4, null, { timeout: 5000 }).catch(() => {});
   ok((await page.locator('.datatable tbody tr').count()) === 4, 'blocks: an approver blocks an address');
-  await page.locator('.datatable tbody tr').filter({ hasText: '203.0.113.99' }).locator('button').click();
+  await page.locator('.datatable tbody tr').filter({ hasText: '203.0.113.99' }).locator('button', { hasText: '立即解除' }).click();
   await page.locator('section[role=dialog] input').fill('e2e done');
-  await page.locator('section[role=dialog] button.primary').click();
+  await page.locator('section[role=dialog] button.danger').click();
   await page.waitForFunction(() => document.querySelectorAll('.datatable tbody tr').length === 3, null, { timeout: 5000 }).catch(() => {});
   ok((await page.locator('.datatable tbody tr').count()) === 3, 'blocks: ending one with a note');
+  // the country of each blocked address; extending a block; an admin can make one permanent
+  const r66 = page.locator('.datatable tbody tr').filter({ hasText: '203.0.113.66' }).first();
+  ok((await r66.locator('.ipcell').innerText()).includes('US'), 'blocks: the country beside the address');
+  await r66.locator('button', { hasText: '延長' }).click();
+  await page.locator('section[role=dialog] input').fill('still scanning');
+  await page.locator('section[role=dialog] button.primary').click();
+  await page.waitForFunction(() => /已延長 1 次/.test(document.body.innerText), null, { timeout: 5000 }).catch(() => {});
+  ok((await r66.innerText()).includes('已延長 1 次'), 'blocks: extending one with a reason');
+  await r66.locator('button', { hasText: '延長' }).click();
+  await page.locator('#blk-ext').click();
+  await page.locator('[role=option]').filter({ hasText: '永久' }).first().click();
+  await page.locator('section[role=dialog] input').fill('known botnet');
+  await page.locator('section[role=dialog] button.primary').click();
+  await page.waitForFunction(() => /永久/.test([...document.querySelectorAll('.datatable tbody tr')].map((r) => r.innerText).join(' ')), null, { timeout: 5000 }).catch(() => {});
+  ok((await r66.locator('.badge', { hasText: '永久' }).count()) === 1 && (await r66.locator('button', { hasText: '延長' }).count()) === 0,
+     'blocks: an admin makes one permanent');
   // the top bar: theme, language, account and log out are the same height (icon-only buttons were shorter)
   await page.goto(base + '/', { waitUntil: 'networkidle' });
   const heights = await page.evaluate(() => [...document.querySelectorAll('.topright .btn, .topright .userlink')]
     .filter((e) => e.offsetParent !== null).map((e) => Math.round(e.getBoundingClientRect().height)));
   ok(heights.length >= 4 && new Set(heights).size === 1, 'top bar: controls of one height (' + heights.join(',') + ')');
+  // tooltips: the site's own, never the browser's (the title moves to data-tip as soon as the pointer is over it)
+  const tipped = page.locator('.topright [title], .topright [data-tip]').first();
+  await tipped.hover();
+  await page.waitForSelector('#jt-tip:not([hidden])', { timeout: 3000 }).catch(() => {});
+  ok((await page.locator('#jt-tip:not([hidden])').count()) === 1 && (await tipped.getAttribute('title')) === null
+     && ((await page.locator('#jt-tip').innerText()) || '').trim().length > 0, 'tooltips: the site\'s own, no native title left');
+  await page.keyboard.press('Escape');
   // country blocks: the form lists the staged countries, the preview builds the rule, Settings shows the lists
   await page.goto(base + '/changes/new?kind=country', { waitUntil: 'networkidle' });
   await page.locator('.card.form .field.grow input.mono').first().fill('shop.example.com');

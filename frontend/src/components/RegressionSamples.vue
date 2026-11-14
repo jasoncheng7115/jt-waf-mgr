@@ -25,7 +25,7 @@
       <template #cell-note="{ row }">{{ safeText(row.note, 200) }}</template>
       <template #cell-added_at="{ row }">{{ fmtTime(row.added_at) }}</template>
       <template #cell-actions="{ row }">
-        <button v-if="canEdit" type="button" class="btn small ghost" :disabled="busy" @click="remove(row)"><Icon name="delete" />{{ t('common.delete') }}</button>
+        <button v-if="canEdit" type="button" class="btn small ghost danger" :disabled="busy" @click="remove(row)"><Icon name="delete" />{{ t('common.delete') }}</button>
       </template>
     </DataTable>
   </section>

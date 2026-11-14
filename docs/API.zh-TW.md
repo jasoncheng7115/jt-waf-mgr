@@ -454,6 +454,8 @@ SIEM，請在網頁介面的設定中新增外送記錄目的地（syslog 等格
   - 同一個來源再送同一個位址，會延長到期時間（`extended` 加一），不會多一筆。不同來源各自一筆；最後一筆結束後才解除封鎖。
   - 回 201 與該筆資料：`{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at", "created_by",
     "via": "token", "extended", "ended_at", "ended_by"}`。
+  - 權杖不能設永久封鎖（`"ttl": "permanent"` 會被拒絕，403 `admin_required`）；管理者可以在網頁上設定。對同一位址再次封鎖
+    不會縮短永久封鎖（它的 `expires_at` 是 null，另有 `permanent`）。
 - **`DELETE /blocks/{ip}?source=`**（scope `blocks:write`）：解除這個權杖自己對該位址的封鎖（有 `source` 就只解除那個來源）。
   其他權杖的封鎖永遠不會動到：回 404 `not_found`。回 `{"removed": n}`。
 - **`GET /blocks?state=active|all|removed|expired`**（scope `blocks:read`）：封鎖清單，以及 nginx 是否真的載入清單檔：

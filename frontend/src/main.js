@@ -5,6 +5,7 @@ import { state, setSession } from './store.js'
 import { get, setUnauthenticatedHandler, setSetupRequiredHandler } from './api.js'
 import { setLang } from './i18n.js'
 import './theme.js'
+import { installTooltips } from './tooltip.js'
 import './style.css'
 
 setUnauthenticatedHandler(() => {
@@ -35,6 +36,7 @@ async function boot() {
   const app = createApp(App)
   app.use(router)
   app.mount('#app')
+  installTooltips()
 }
 
 boot()

@@ -188,7 +188,7 @@ DEFAULTS = {
         # address asking for auto_recon_paths different such names within auto_recon_minutes is blocked for
         # auto_recon_ttl seconds; at most auto_recon_per_hour such blocks an hour; an address a person unblocked is
         # left alone for 7 days. Off by default.
-        'auto_recon': False,
+        'auto_recon': True,           # on by default (user 2026-11-14); acts only once IP blocks are on
         'auto_recon_paths': 5,
         'auto_recon_minutes': 60,
         'auto_recon_ttl': 86400,

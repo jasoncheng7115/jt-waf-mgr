@@ -75,13 +75,36 @@ def _ids(s):
 
 # GeoIP lookup for event sources (set by App; None in tools that run without it)
 GEO = None
+# the country of an outside address from the registries' lists (the country blocks' data), when there is no GeoIP
+# database or it does not know the address (set by App)
+COUNTRY = None
+# rule id ranges whose hit means "the WAF would have refused this" (confident blocks, country rules; set by App)
+REFUSING_RANGES = ()
+
+
+def _redirected(r):
+    """Answered with a redirect although a refusing rule matched: the site redirects every path before the WAF can
+    step in (nothing was served), not a request the WAF chose to let through."""
+    st = r['status']
+    if r['outcome'] != 'logged' or st is None or not 300 <= st < 400:
+        return False
+    return any(lo <= i <= hi for i in _ids(r['rule_ids']) for lo, hi in REFUSING_RANGES)
 
 
 def geo(ip):
     try:
-        return GEO(ip) if GEO and ip else None
+        g = GEO(ip) if GEO and ip else None
     except Exception:            # never let a broken database break an event list
-        return None
+        g = None
+    if g and (g.get('scope') == 'internal' or g.get('cc')):
+        return g
+    try:
+        cc = COUNTRY(ip) if COUNTRY and ip else None
+    except Exception:            # noqa: BLE001
+        cc = None
+    if cc:
+        return dict(g or {}, scope='external', cc=cc, country=(g or {}).get('country') or cc, source='registries')
+    return g
 
 
 def event_summary(r):
@@ -89,7 +112,7 @@ def event_summary(r):
             'query': r['query'], 'src_ip': r['src_ip'], 'origin': r['origin'], 'status': r['status'],
             'outcome': r['outcome'], 'decided_by': r['decided_by'], 'rule_ids': _ids(r['rule_ids']),
             'families': [x for x in r['families'].strip(',').split(',') if x], 'message': r['message'],
-            'local_rule_ids': _ids(r['local_rule_ids']), 'src_geo': geo(r['src_ip'])}
+            'local_rule_ids': _ids(r['local_rule_ids']), 'src_geo': geo(r['src_ip']), 'redirected': _redirected(r)}
 
 
 def event_full(r):
@@ -438,7 +461,7 @@ def _event_filters(req, with_time=True):
             raise ApiError(400, 'bad_request', 'country: a two-letter country code')
         tw = [w for w in where if w.startswith('ts')]
         ips = []
-        if GEO:
+        if GEO or COUNTRY:
             for r in req.app.db.q("SELECT DISTINCT src_ip FROM events WHERE origin='external'" + ''.join(' AND ' + w for w in tw),
                                   tuple(args[:len(tw)])):
                 g = geo(r[0])
@@ -452,6 +475,13 @@ def _event_filters(req, with_time=True):
     if rid is not None:
         where.append('rule_ids LIKE ?')
         args.append('%%,%d,%%' % rid)
+    if q.get('outcome') == 'redirected':
+        # redirected before the WAF could refuse: logged, 3xx, and a refusing rule among the matched ones
+        where.append("outcome='logged' AND status>=300 AND status<400 AND id IN (SELECT event_id FROM event_rules WHERE "
+                     + ' OR '.join('rule_id BETWEEN ? AND ?' for _ in REFUSING_RANGES) + ')' if REFUSING_RANGES else '0')
+        for lo, hi in REFUSING_RANGES:
+            args += [lo, hi]
+        q = dict(q, outcome='')
     for key, allowed in (('outcome', ('blocked', 'logged')), ('decided_by', ('confident', 'score', 'fallback', 'other')),
                          ('origin', ('external', 'internal'))):
         if q.get(key):
@@ -1765,7 +1795,8 @@ def country_sites(app, req):
                                         "WHERE er.rule_id IN (%s) AND er.ts >= ? AND er.outcome = 'blocked' "
                                         'GROUP BY e.src_ip ORDER BY 2 DESC LIMIT 500' % qs, ids + [since]):
                     top[lk.country(ip) or '??'] += k
-            site['recent'] = {'days': 7, 'refused': row['n'] or 0, 'sources': row['src'] or 0, 'last_at': row['last'],
+            site['recent'] = {'days': 7, 'refused': row['n'] or 0, 'sources': row['src'] or 0,
+                              'last_at': util.iso(row['last']) if row['last'] else None,
                               'countries': [{'country': c, 'requests': k} for c, k in top.most_common(5)]}
         out.append(site)
     man = app.countries.manifest() if getattr(app, 'countries', None) else None

@@ -487,7 +487,9 @@ every call answers 409 `blocks_off`.
   - The same address from the same source again extends the block (`extended` counts up) and never adds a
     second entry. Another source gets its own entry; the address stays blocked until the last entry ends.
   - Answers 201 with the entry: `{"id", "ip", "source", "reason", "state": "active", "created_at", "expires_at",
-    "created_by", "via": "token", "extended", "ended_at", "ended_by"}`.
+    "permanent", "created_by", "via": "token", "extended", "ended_at", "ended_by"}`.
+  - A token never blocks permanently (`"ttl": "permanent"` is refused, 403 `admin_required`); an admin can, in the web
+    interface. Blocking an address again never shortens a permanent block (its `expires_at` is null).
 - **`DELETE /blocks/{ip}?source=`** (scope `blocks:write`): ends the token's own entries for that address (only the
   one source when `source` is given). Another token's entries are never touched: 404 `not_found`. Answers
   `{"removed": n}`.

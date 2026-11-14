@@ -108,6 +108,7 @@ const outcomeOpts = computed(() => [
   { value: '', label: t('filter.all_outcomes') },
   { value: 'blocked', label: t('outcome.blocked'), icon: 'block' },
   { value: 'logged', label: t('outcome.logged'), icon: 'page' },
+  { value: 'redirected', label: t('outcome.redirected'), icon: 'forward' },
 ])
 const deciderOpts = computed(() => [{ value: '', label: t('filter.all_deciders') }, ...DECIDERS.map((d) => ({ value: d, label: t('decided.' + d) }))])
 const originOpts = computed(() => [

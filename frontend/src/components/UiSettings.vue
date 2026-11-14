@@ -62,7 +62,7 @@
                 <input :id="'uiset-in-' + k" v-model="form[k]" type="password" autocomplete="new-password" spellcheck="false"
                        :placeholder="s[k].set ? t('uiset.secret_set', { hint: s[k].hint }) : t('uiset.secret_unset')">
                 <span v-if="s[k].set && !cleared[k] && !form[k]" class="badge b-ok">{{ t('uiset.secret_is_set') }}</span>
-                <button v-if="s[k].set" type="button" class="btn small ghost" :class="{ on: cleared[k] }" @click="toggleClear(k)"><Icon name="clear" />{{ cleared[k] ? t('uiset.secret_keep') : t('uiset.secret_clear') }}</button>
+                <button v-if="s[k].set" type="button" class="btn small ghost" :class="{ on: cleared[k], danger: !cleared[k] }" @click="toggleClear(k)"><Icon name="clear" />{{ cleared[k] ? t('uiset.secret_keep') : t('uiset.secret_clear') }}</button>
               </div>
               <input v-else :id="'uiset-in-' + k" v-model="form[k]" type="text" spellcheck="false" class="w-lg" :class="{ mono: MONO.includes(k) }" :placeholder="PLACEHOLDER[k] || ''">
             </div>
@@ -410,12 +410,6 @@ onMounted(async () => {
 .switch input:checked + .knob { background: var(--accent); }
 .switch input:checked + .knob::after { left: 19px; }
 .switch input:focus-visible + .knob { outline: 2px solid var(--accent); outline-offset: 2px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chipcheck { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 16px;
-  cursor: pointer; margin: 0; background: var(--panel); }
-.chipcheck input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.chipcheck.on { border-color: var(--accent); background: var(--panel-2); color: var(--accent); }
-.chipcheck:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .modelrow { display: flex; flex-direction: column; gap: 10px; }
 .modelpick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .teststate { display: flex; gap: 6px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: .92em; max-width: 560px; }

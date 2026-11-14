@@ -194,9 +194,14 @@ class Scan:
             for raw in (b'{', b'[]', b'"x"', b'{"a":' + b'1' * 100 + b'}', b'\xff\xfe', b'null'):
                 st, _, _ = self.req(method, path, raw_body=raw, headers={'Content-Type': 'application/json'}, sess=admin)
                 self.check('input', 'malformed body %s %s' % (method, path), st < 500, st)
-        st, _, _ = self.req('POST', '/api/v1/auth/login', raw_body=b'{"a":"' + b'x' * (3 * 1024 * 1024) + b'"}',
-                            headers={'Content-Type': 'application/json'})
-        self.check('input', 'oversized body refused', st in (400, 413), st)
+        # the server refuses an oversized body: with a 400 / 413, or by closing the connection before the client has
+        # sent it all (a broken pipe or reset on our side) -- either way the body was not taken in
+        try:
+            st, _, _ = self.req('POST', '/api/v1/auth/login', raw_body=b'{"a":"' + b'x' * (3 * 1024 * 1024) + b'"}',
+                                headers={'Content-Type': 'application/json'})
+        except (BrokenPipeError, ConnectionResetError):
+            st = 'closed'
+        self.check('input', 'oversized body refused', st in (400, 413, 'closed'), st)
 
     def login_checks(self):
         a = self.req('POST', '/api/v1/auth/login', {'username': 'no-such-user-x', 'password': 'wrong-password-1'})

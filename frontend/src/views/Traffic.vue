@@ -23,11 +23,13 @@
     <Loading v-if="loading && !data" />
     <template v-if="data && data.enabled">
       <div class="tiles">
-        <div v-for="st in tiles" :key="st.key" class="tile stat">
+        <component :is="st.to ? 'RouterLink' : 'div'" v-for="st in tiles" :key="st.key" class="tile stat" :class="[st.cls, { tilelink: st.to }]" :to="st.to">
           <div class="tl"><Icon :name="st.icon" />{{ st.label }}</div>
           <div class="tv">{{ st.text }}</div>
-          <div class="ts"><span class="tsub">{{ st.sub }}</span></div>
-        </div>
+          <div class="ts"><span v-if="st.delta" class="delta" :class="st.delta.dir">{{ st.delta.text }}</span>
+            <span v-if="st.sub" class="tsub">{{ st.sub }}</span></div>
+          <Sparkline class="stat-spark" :values="st.series" :tone="st.tone" :label="st.label" />
+        </component>
       </div>
       <p v-if="!data.totals.total" class="alert info"><Icon name="info" /> {{ data.polled_at ? t('traffic.no_data') : t('traffic.not_yet') }}</p>
       <section class="card">
@@ -68,6 +70,7 @@ import DataTable from '../components/DataTable.vue'
 import SelectBox from '../components/SelectBox.vue'
 import TruncText from '../components/TruncText.vue'
 import TimeBars from '../components/charts/TimeBars.vue'
+import Sparkline from '../components/charts/Sparkline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,14 +97,32 @@ function setQuery(q) {
 function pct(a, b) { return b ? (a * 100 / b) : 0 }
 function fmtPct(v) { return (v >= 10 || v === 0 ? v.toFixed(0) : v.toFixed(v >= 1 ? 1 : 2)) + '%' }
 
+// the same tiles as the overview: value, change against the same length of time just before, trend
+const prevLabel = computed(() => ({ '24h': t('overview.prev_24h'), '7d': t('overview.prev_7d') }[range.value] || t('overview.prev_custom')))
+function delta(cur, prev) {
+  if (prev === undefined || prev === null) return null
+  if (!prev) return cur ? { dir: 'up', text: t('overview.trend_new', { range: prevLabel.value }) } : { dir: 'flat', text: t('overview.trend_same', { range: prevLabel.value }) }
+  const p = Math.round(((cur - prev) / prev) * 100)
+  if (p === 0) return { dir: 'flat', text: t('overview.trend_same', { range: prevLabel.value }) }
+  return { dir: p > 0 ? 'up' : 'down', text: (p > 0 ? '▲ ' : '▼ ') + Math.abs(p) + '% ' + t('overview.trend_vs', { range: prevLabel.value }) }
+}
 const tiles = computed(() => {
   const s = data.value.totals
+  const pv = data.value.previous || {}
+  const ser = (f) => (data.value.series || []).map((b) => ({ t: b.t, v: f(b) }))
+  const evq = { range: range.value === '30d' ? '7d' : range.value }
+  if (host.value) evq.host = host.value
   return [
-    { key: 'total', icon: 'chart', label: t('traffic.total'), text: fmtNum(s.total), sub: t('traffic.external_n', { n: fmtNum(s.external) }) },
-    { key: 'blocked', icon: 'shield', label: t('traffic.waf_blocked'), text: fmtNum(s.blocked), sub: t('traffic.share', { p: fmtPct(pct(s.blocked, s.total)) }) },
-    { key: 's4xx', icon: 'warn', label: t('traffic.s4xx'), text: fmtNum(s.s4xx), sub: t('traffic.share', { p: fmtPct(pct(s.s4xx, s.total)) }) },
-    { key: 's5xx', icon: 'error', label: t('traffic.s5xx'), text: fmtNum(s.s5xx), sub: t('traffic.share', { p: fmtPct(pct(s.s5xx, s.total)) }) },
-    { key: 'bytes', icon: 'send', label: t('traffic.bytes'), text: fmtBytes(s.bytes), sub: t('traffic.s444_429', { a: fmtNum(s.s444), b: fmtNum(s.s429) }) },
+    { key: 'total', cls: 't-events', icon: 'chart', label: t('traffic.total'), text: fmtNum(s.total), tone: 's1', series: ser((b) => b.total || 0),
+      delta: delta(s.total, pv.total), sub: t('traffic.external_n', { n: fmtNum(s.external) }) },
+    { key: 'blocked', cls: 't-blocked', icon: 'shield', label: t('traffic.waf_blocked'), text: fmtNum(s.blocked), tone: 'blocked', series: ser((b) => b.blocked || 0),
+      delta: delta(s.blocked, pv.blocked), sub: t('traffic.share', { p: fmtPct(pct(s.blocked, s.total)) }), to: { path: '/events', query: Object.assign({ outcome: 'blocked' }, evq) } },
+    { key: 's4xx', cls: 't-logged', icon: 'warn', label: t('traffic.s4xx'), text: fmtNum(s.s4xx), tone: 'logged', series: ser((b) => b.s4xx || 0),
+      delta: delta(s.s4xx, pv.s4xx), sub: t('traffic.share', { p: fmtPct(pct(s.s4xx, s.total)) }) },
+    { key: 's5xx', cls: 't-blocked', icon: 'error', label: t('traffic.s5xx'), text: fmtNum(s.s5xx), tone: 'blocked', series: ser((b) => b.s5xx || 0),
+      delta: delta(s.s5xx, pv.s5xx), sub: t('traffic.share', { p: fmtPct(pct(s.s5xx, s.total)) }) },
+    { key: 'bytes', cls: 't-ext', icon: 'send', label: t('traffic.bytes'), text: fmtBytes(s.bytes), tone: 'ext', series: ser((b) => b.bytes || 0),
+      delta: delta(s.bytes, pv.bytes), sub: t('traffic.s444_429', { a: fmtNum(s.s444), b: fmtNum(s.s429) }) },
   ]
 })
 const statusSeries = computed(() => [

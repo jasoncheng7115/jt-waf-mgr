@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.31
+# jt-waf-mgr v0.4.32
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -115,8 +115,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.31.tar.gz.sig jt-waf-mgr-0.4.31.tar.gz
-tar xzf jt-waf-mgr-0.4.31.tar.gz && cd jt-waf-mgr-0.4.31
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.32.tar.gz.sig jt-waf-mgr-0.4.32.tar.gz
+tar xzf jt-waf-mgr-0.4.32.tar.gz && cd jt-waf-mgr-0.4.32
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示
@@ -218,7 +218,8 @@ CRS は jt-waf-mgr が扱います。新しいホストに必要なのは、ngin
    ファイル名だけを数え、少なくとも 1 つは明白な機密ファイル（.env、.git、鍵、ダンプ、バックアップ）であることが条件です。
    こうした名前に 2xx/3xx が返ったアドレスは自動でブロックせず、人の判断に任せます。変更フローを通らず全サイトでブロックするため、既定はオフです。
 
-ブロックの既定は 24 時間、トークンからは最長 7 日、手動では最長 30 日で、永久ブロックはありません。内部ネットワーク、
+ブロックの既定は 24 時間、トークンからは最長 7 日、手動では最長 30 日です。承認者は延長でき、管理者は Web 画面で無期限に
+できます（理由が必要。トークンやルールからは不可）。内部ネットワーク、
 既知のスキャナー、信頼するプロキシ、保護リストは決してブロックされません。nginx は `real_ip` 後のアドレスで判定するため、
 CDN の後ろのサイトには `set_real_ip_from` / `real_ip_header` が必要です。独自の `allow` / `deny` を持つ server と location は
 このリストを継承しません（「ブロック中の IP」ページに表示）。ブロックは約 1 分以内に新しいリクエストに効きます。すでに開いている接続（WebSocket）は閉じるまで続きます。詳しくは [API マニュアル](docs/API.ja.md) の 4.9 節を参照してください。

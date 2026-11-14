@@ -47,10 +47,8 @@
             <div class="corow">
               <span class="badge" :class="!c.enabled ? 'b-logged' : c.mode === 'allow' ? 'b-ok' : 'b-blocked'">{{ t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) }}</span>
               <span v-for="cc in c.countries" :key="cc" class="cochip"><b class="mono">{{ cc }}</b> {{ countryName(cc) }}</span>
-            </div>
-            <div class="sub">
-              <RouterLink v-if="c.rule_id" :to="'/rules/' + c.rule_id" class="mono">{{ c.rule_id }}</RouterLink>
-              <span v-if="!c.enabled" class="badge b-logged gapl">{{ t('managed.disabled') }}</span>
+              <RouterLink v-if="c.rule_id" :to="'/rules/' + c.rule_id" class="mono small ruleid">#{{ c.rule_id }}</RouterLink>
+              <span v-if="!c.enabled" class="badge b-logged">{{ t('managed.disabled') }}</span>
             </div>
           </div>
           <div v-for="c in row.country_changes" :key="'c' + c.change_id + '-' + (c.item_id || '')" class="corow">
@@ -63,9 +61,9 @@
         </template>
         <template #cell-recent="{ row }">
           <template v-if="row.recent">
-            <div><b>{{ fmtNum(row.recent.refused) }}</b> <span class="muted small">{{ t('csites.recent_sources', { n: fmtNum(row.recent.sources) }) }}</span></div>
-            <div v-if="row.recent.countries.length" class="sub">
-              <span v-for="x in row.recent.countries" :key="x.country" class="cotop" :title="countryName(x.country)">{{ x.country }} {{ fmtNum(x.requests) }}</span>
+            <div class="recentnum"><b>{{ fmtNum(row.recent.refused) }}</b><span v-if="row.recent.refused" class="muted small">{{ t('csites.recent_sources', { n: fmtNum(row.recent.sources) }) }}</span></div>
+            <div v-if="row.recent.countries.length" class="corow">
+              <span v-for="x in row.recent.countries" :key="x.country" class="cochip small"><b class="mono">{{ x.country }}</b> {{ countryName(x.country) }} · {{ fmtNum(x.requests) }}</span>
             </div>
             <div v-if="row.recent.last_at" class="sub">{{ t('csites.last', { at: fmtMinute(row.recent.last_at) }) }}</div>
           </template>
@@ -87,7 +85,7 @@
           <div v-if="canPropose" class="rowactions">
             <template v-for="c in row.countries" :key="'a' + c.item_id">
               <RouterLink class="btn small ghost" :to="{ path: '/changes/new', query: { item: c.item_id } }"><Icon name="edit" />{{ t('managed.modify') }}</RouterLink>
-              <button type="button" class="btn small ghost" @click="open(row, c, c.enabled ? 'disable' : 'enable')"><Icon :name="c.enabled ? 'hide' : 'show'" />{{ c.enabled ? t('managed.disable') : t('managed.enable') }}</button>
+              <button type="button" class="btn small ghost" :class="{ danger: c.enabled }" @click="open(row, c, c.enabled ? 'disable' : 'enable')"><Icon :name="c.enabled ? 'hide' : 'show'" />{{ c.enabled ? t('managed.disable') : t('managed.enable') }}</button>
             </template>
             <RouterLink v-if="!row.countries.length && !row.waf_off" class="btn small ghost"
                         :to="{ path: '/changes/new', query: { kind: 'country', host: row.host } }"><Icon name="add" />{{ t('vhosts.country_add') }}</RouterLink>
@@ -197,6 +195,8 @@ onMounted(load)
 .limit { margin-bottom: 6px; }
 .corow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
 .cochip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel-2); font-size: 13px; }
-.cotop { display: inline-block; margin-right: 8px; font-family: var(--mono, monospace); }
+.ruleid { margin-left: 2px; white-space: nowrap; }
+.recentnum { display: flex; align-items: baseline; gap: 6px; }
+.cochip.small { font-size: 12px; padding: 0 7px; }
 .rowactions { display: flex; flex-wrap: wrap; gap: 6px; }
 </style>

@@ -142,8 +142,4 @@ onMounted(() => { load(); loadUrlChoices() })
 .hp-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .hp-q { width: 14em; max-width: 100%; }
 .hostpick .chips { display: flex; flex-wrap: wrap; gap: 8px; max-height: 220px; overflow: auto; }
-.chipcheck { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 16px;
-  cursor: pointer; margin: 0; background: var(--panel); font: inherit; color: var(--text); }
-.chipcheck.on { border-color: var(--accent); background: var(--panel-2); color: var(--accent); }
-.chipcheck:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>

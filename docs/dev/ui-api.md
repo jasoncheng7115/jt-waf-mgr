@@ -194,6 +194,12 @@ is also how `included` is detected.
   extended.
 - `DELETE /api/v1/blocks/{ip}?source=` (token `blocks:write`: its own entries only) → `{"removed": n}`
 - `POST /api/v1/blocks/{id}/remove` (approver, `{"note"}` required) → `{"removed": 1}`
+- `POST /api/v1/blocks/{id}/extend` (approver; `{"ttl": seconds | "permanent", "reason"}`) → the block. A new end is
+  counted from now, up to `ui_max_ttl`, and must be later than the current one (409 `not_later`); `"permanent"` is for
+  an admin (403 `admin_required`). `POST /blocks` also takes `"ttl": "permanent"` from an admin in the interface, never
+  from a token. Each block has `permanent` (its `expires_at` is then null) and, in the list, `geo`.
+- Events: `redirected` (logged, a 3xx answer, a confident-block or country rule matched); `GET /events?outcome=redirected`.
+- `GET /traffic` has `previous`: the totals of the same length of time just before (null when nothing was counted).
 
 Country blocks (0.4.27; countries.py, rulegen kind `country`):
 - `GET /api/v1/countries` (viewer) → `{"enabled", "rules_dir", "generated_at", "stale", "countries": {CC: {"v4", "v6",

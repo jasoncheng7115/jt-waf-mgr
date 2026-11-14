@@ -19,7 +19,8 @@ Never blocked (checked here and again by the root program): private, loopback, l
 reserved addresses, the internal networks, the known scanners, the trusted proxies and the protected list
 (for example a CDN in front of the sites: blocking one of its addresses would block everyone behind it).
 A token blocks single addresses only, for at most api_max_ttl; an approver may block a range up to /24 (IPv4)
-or /64 (IPv6) for at most ui_max_ttl. Nothing is permanent.
+or /64 (IPv6) for at most ui_max_ttl; an admin may block permanently (in the web interface, with a reason).
+Nothing the API or a rule does is permanent.
 
 One active entry per (address, source): the same source sending the same address again extends it; another
 source gets its own entry, and removing one source's entry leaves the others (the address stays blocked until
@@ -109,9 +110,19 @@ def check_target(cfg, value, allow_range=False):
     return str(net) if net.prefixlen != full else str(a)
 
 
+# a permanent block: an expiry no clock reaches (the expiry sweep never ends it; only a person does)
+PERMANENT_AT = 32503680000.0          # 3000-01-01
+
+
+def is_permanent(r):
+    return (r['expires_at'] or 0) >= PERMANENT_AT
+
+
 def public(r):
+    perm = is_permanent(r)
     return {'id': r['id'], 'ip': r['ip'], 'source': r['source'], 'reason': r['reason'], 'state': r['state'],
-            'created_at': util.iso(r['created_at']), 'expires_at': util.iso(r['expires_at']),
+            'created_at': util.iso(r['created_at']), 'expires_at': None if perm else util.iso(r['expires_at']),
+            'permanent': perm,
             'created_by': r['created_by'], 'via': r['via'], 'extended': r['extended'],
             'ended_at': util.iso(r['ended_at']) if r['ended_at'] else None, 'ended_by': r['ended_by']}
 
@@ -186,12 +197,15 @@ class Blocks:
                 raise BlockError('invalid_source')
             if not reason:
                 raise BlockError('reason_required')
+            permanent = ttl == 'permanent'
+            if permanent and not (via == 'user' and role == 'admin'):
+                raise BlockError('admin_required', 403)       # never a token, never a rule
             try:
-                ttl = int(ttl if ttl not in (None, '') else b['default_ttl'])
+                ttl = int(PERMANENT_AT - util.now()) if permanent else int(ttl if ttl not in (None, '') else b['default_ttl'])
             except (TypeError, ValueError):
                 raise BlockError('invalid_ttl')
             top = b['api_max_ttl'] if via == 'token' else b['ui_max_ttl']
-            if not b['min_ttl'] <= ttl <= top:
+            if not permanent and not b['min_ttl'] <= ttl <= top:
                 raise BlockError('invalid_ttl', min=b['min_ttl'], max=top)
             net = check_target(self.cfg, ip, allow_range=via == 'user' and role in ('approver', 'admin'))
             if via == 'system' and '/' in net:
@@ -202,7 +216,7 @@ class Blocks:
             self._refuse(actor, via, src_ip, e.code, ip=ip, source=source)
             raise
         now = util.now()
-        exp = now + ttl
+        exp = PERMANENT_AT if permanent else now + ttl
         with self.db.tx() as c:
             r = c.execute("SELECT * FROM ip_blocks WHERE state='active' AND ip=? AND source=?", (net, source)).fetchone()
             if r:
@@ -231,7 +245,8 @@ class Blocks:
                                    {'reason': 'the IP block list is full (%d); new blocks are refused' % b['max_active']})
             raise BlockError(code, 409, limit=b['max_active'] if bid is None else b['max_per_token'])
         self.app.audit.log(action, actor, via if via in ('token', 'system') else 'user', src_ip, 'ok', ip=net, source=source,
-                           ttl=ttl, block_id=bid, token_id=token_id, reason=util.clip(reason, 200))
+                           ttl=None if permanent else ttl, permanent=permanent or None, block_id=bid, token_id=token_id,
+                           reason=util.clip(reason, 200))
         self.sync()
         return public(self.db.one('SELECT * FROM ip_blocks WHERE id=?', (bid,)))
 
@@ -268,6 +283,44 @@ class Blocks:
                                note=util.clip(' '.join(str(note or '').split()), 200))
         self.sync()
         return len(rows)
+
+    def extend(self, block_id, ttl, reason, actor, role, src_ip=None):
+        """A person sets a new end for an active block: now + ttl (up to ui_max_ttl, approver and up), or "permanent"
+        (an admin only). A new end must be later than the current one; a written reason is required either way."""
+        b = self.cfg['blocks']
+        reason = ' '.join(str(reason or '').split())[:300]
+        r = self.db.one("SELECT * FROM ip_blocks WHERE state='active' AND id=?", (block_id,))
+        try:
+            if not r:
+                raise BlockError('not_found', 404)
+            if not reason:
+                raise BlockError('reason_required')
+            if role not in ('approver', 'admin'):
+                raise BlockError('forbidden', 403)
+            now = util.now()
+            if ttl == 'permanent':
+                if role != 'admin':
+                    raise BlockError('admin_required', 403)
+                new_exp = PERMANENT_AT
+            else:
+                try:
+                    ttl = int(ttl)
+                except (TypeError, ValueError):
+                    raise BlockError('invalid_ttl')
+                if not b['min_ttl'] <= ttl <= b['ui_max_ttl']:
+                    raise BlockError('invalid_ttl', min=b['min_ttl'], max=b['ui_max_ttl'])
+                new_exp = now + ttl
+            if is_permanent(r) or new_exp <= r['expires_at']:
+                raise BlockError('not_later', 409)
+        except BlockError as e:
+            self._refuse(actor, 'user', src_ip, e.code, block_id=block_id)
+            raise
+        self.db.x("UPDATE ip_blocks SET expires_at=?, extended=extended+1, reason=? WHERE id=? AND state='active'",
+                  (new_exp, util.clip(r['reason'] + ' | ' + reason, 300) if reason not in r['reason'] else r['reason'], block_id))
+        self.app.audit.log('block.extend', actor, 'user', src_ip, 'ok', ip=r['ip'], source=r['source'], block_id=block_id,
+                           permanent=ttl == 'permanent', ttl=None if ttl == 'permanent' else ttl, reason=util.clip(reason, 200))
+        self.sync()
+        return public(self.db.one('SELECT * FROM ip_blocks WHERE id=?', (block_id,)))
 
     def expire(self, now=None):
         now = now or util.now()
@@ -382,23 +435,29 @@ class Blocks:
     def auto_recon(self, now=None):
         """Program rule (no LLM): an external address that asked for auto_recon_paths different secret or
         configuration file names (analyst.RECON_NAME) within auto_recon_minutes is blocked for auto_recon_ttl.
-        Only requests that were refused or not found count (status 400 and up), at least one of the names must be
-        one no site serves on purpose (UNMISTAKABLE: .env, .git, keys, dumps, backups...), and an address that got
-        a 2xx / 3xx answer for any such name in the window is left to a person: that is a matter to look into, not
-        a scanner to block blindly (a shared exit or a tenant's own config.json). Returns the addresses blocked."""
+        Requests that were refused or not found count (status 400 and up), and so do redirects (3xx) that hit a
+        confident-block rule: the WAF would have refused them, but the site answers every path with a redirect before
+        the WAF can step in (nothing is served). At least one of the names must be one no site serves on purpose
+        (UNMISTAKABLE: .env, .git, keys, dumps, backups...), and an address that got any other 2xx / 3xx answer for
+        such a name in the window is left to a person: that is a matter to look into, not a scanner to block blindly
+        (a shared exit or a tenant's own config.json). Returns the addresses blocked."""
         from .analyst import RECON_NAME
         b = self.cfg['blocks']
         if not (b['enabled'] and b['auto_recon']):
             return []
         now = now or util.now()
         per, answered = collections.defaultdict(set), set()
-        for r in self.db.q("SELECT DISTINCT src_ip, path, status FROM events WHERE ts>=? AND origin='external'",
+        lo, hi = self.cfg['waf']['confident_range']
+        for r in self.db.q("SELECT DISTINCT src_ip, path, status, rule_ids FROM events WHERE ts>=? AND origin='external'",
                            (now - b['auto_recon_minutes'] * 60,)):
             p = (r['path'] or '').lower()
             if not RECON_NAME.search(p):
                 continue
             st = r['status']
-            if st is not None and 200 <= st < 400:
+            confident = any(x.isdigit() and lo <= int(x) <= hi for x in (r['rule_ids'] or '').split(','))
+            if st is not None and 300 <= st < 400 and confident:
+                per[r['src_ip']].add(p)          # redirected before the WAF could refuse it: nothing was served
+            elif st is not None and 200 <= st < 400:
                 answered.add(r['src_ip'])
             elif st is not None and st >= 400:
                 per[r['src_ip']].add(p)

@@ -37,6 +37,7 @@
           <label class="field grow"><span>{{ t('blocks.reason') }}</span><input v-model.trim="nb.reason" maxlength="300"></label>
         </div>
         <p class="muted small">{{ t('blocks.add_hint') }}</p>
+        <p v-if="nb.ttl === 'permanent'" class="alert warn small">{{ t('blocks.permanent_hint') }}</p>
         <ErrorBox :error="addError" />
         <div class="actions"><button type="button" class="btn primary danger" :disabled="busy || !nb.ip || !nb.reason" @click="add"><Icon name="lock" />{{ t('blocks.add_btn') }}</button></div>
       </section>
@@ -46,16 +47,22 @@
           <Icon :name="STATE_ICON[s]" />{{ t('blocks.state.' + s) }}</button>
       </div>
       <DataTable id="blocks" :columns="cols" :rows="data.items" :row-key="(r) => r.id" :page-size="50">
-        <template #cell-ip="{ row }"><RouterLink class="mono" :to="'/lookup/' + encodeURIComponent(row.ip.split('/')[0])">{{ safeText(row.ip, 64) }}</RouterLink></template>
+        <template #cell-ip="{ row }"><span class="ipcell"><RouterLink class="mono" :to="'/lookup/' + encodeURIComponent(row.ip.split('/')[0])">{{ safeText(row.ip, 64) }}</RouterLink>
+          <GeoTag :geo="row.geo" compact /></span></template>
         <template #cell-source="{ row }"><span class="mono small">{{ safeText(row.source, 64) }}</span>
           <div class="sub">{{ safeText(row.created_by, 64) }} · {{ row.via === 'token' ? t('blocks.via_token') : row.via === 'system' ? t('blocks.via_system') : t('blocks.via_ui') }}</div></template>
         <template #cell-reason="{ row }"><TruncText :text="row.reason" :max="120" /></template>
         <template #cell-created_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.created_at) }}</span></template>
-        <template #cell-expires_at="{ row }"><span class="nowrap">{{ fmtShortTime(row.expires_at) }}</span></template>
+        <template #cell-expires_at="{ row }"><span v-if="row.permanent" class="badge b-blocked"><Icon name="lock" />{{ t('blocks.permanent') }}</span>
+          <span v-else class="nowrap">{{ fmtShortTime(row.expires_at) }}</span>
+          <div v-if="row.extended" class="sub">{{ t('blocks.extended_n', { n: row.extended }) }}</div></template>
         <template #cell-state="{ row }"><span class="badge" :class="STATE_BADGE[row.state]">{{ t('blocks.state.' + row.state) }}</span>
           <div v-if="row.ended_by" class="sub">{{ safeText(row.ended_by, 64) }}</div></template>
         <template #cell-act="{ row }">
-          <button v-if="row.state === 'active' && canAdd" type="button" class="btn tiny" @click="ending = row; note = ''"><Icon name="unlock" />{{ t('blocks.end') }}</button>
+          <div v-if="row.state === 'active' && canAdd" class="rowacts">
+            <button v-if="!row.permanent" type="button" class="btn tiny" @click="openExtend(row)"><Icon name="timer" />{{ t('blocks.extend') }}</button>
+            <button type="button" class="btn tiny danger" @click="ending = row; note = ''; extending = null"><Icon name="unlock" />{{ t('blocks.end') }}</button>
+          </div>
         </template>
       </DataTable>
       <section v-if="ending" class="card form" role="dialog" :aria-label="t('blocks.end')">
@@ -63,8 +70,22 @@
         <label class="field"><span>{{ t('blocks.note') }}</span><input v-model.trim="note" maxlength="300"></label>
         <ErrorBox :error="endError" />
         <div class="actions">
-          <button type="button" class="btn primary" :disabled="busy || !note" @click="end"><Icon name="check" />{{ t('blocks.end') }}</button>
+          <button type="button" class="btn danger" :disabled="busy || !note" @click="end"><Icon name="unlock" />{{ t('blocks.end') }}</button>
           <button type="button" class="btn ghost" @click="ending = null"><Icon name="cancel" />{{ t('common.cancel') }}</button>
+        </div>
+      </section>
+      <section v-if="extending" class="card form" role="dialog" :aria-label="t('blocks.extend')">
+        <h2><Icon name="timer" /> {{ t('blocks.extend_title', { ip: extending.ip }) }}</h2>
+        <p class="muted small">{{ t('blocks.extend_now', { at: extending.expires_at ? fmtShortTime(extending.expires_at) : '—' }) }}</p>
+        <div class="filters">
+          <div class="field"><label for="blk-ext">{{ t('blocks.extend_to') }}</label><SelectBox id="blk-ext" v-model="ext.ttl" :options="extOpts" /></div>
+          <label class="field grow"><span>{{ t('blocks.reason') }}</span><input v-model.trim="ext.reason" maxlength="300"></label>
+        </div>
+        <p v-if="ext.ttl === 'permanent'" class="alert warn small">{{ t('blocks.permanent_hint') }}</p>
+        <ErrorBox :error="extError" />
+        <div class="actions">
+          <button type="button" class="btn primary" :disabled="busy || !ext.reason" @click="extend"><Icon name="timer" />{{ t('blocks.extend') }}</button>
+          <button type="button" class="btn ghost" @click="extending = null"><Icon name="cancel" />{{ t('common.cancel') }}</button>
         </div>
       </section>
       <section class="card">
@@ -101,6 +122,7 @@ import Icon from '../components/Icon.vue'
 import DataTable from '../components/DataTable.vue'
 import SelectBox from '../components/SelectBox.vue'
 import TruncText from '../components/TruncText.vue'
+import GeoTag from '../components/GeoTag.vue'
 
 const STATES = ['active', 'all']
 const STATE_ICON = { active: 'lock', all: 'list' }
@@ -126,8 +148,32 @@ function dur(s) {
   if (s % 3600 === 0) return t('blocks.hours', { n: s / 3600 })
   return t('blocks.minutes', { n: Math.round(s / 60) })
 }
+// an admin may also block permanently (never a token or a rule)
 const ttlOpts = computed(() => [3600, 6 * 3600, 86400, 3 * 86400, 7 * 86400, 30 * 86400]
-  .filter((s) => !data.value || s <= data.value.limits.ui_max_ttl).map((s) => ({ value: s, label: dur(s) })))
+  .filter((s) => !data.value || s <= data.value.limits.ui_max_ttl).map((s) => ({ value: s, label: dur(s) }))
+  .concat(isAdmin.value ? [{ value: 'permanent', label: t('blocks.permanent') }] : []))
+// a new end, counted from now: only the ones later than the current end
+const extOpts = computed(() => ttlOpts.value.filter((o) => o.value === 'permanent' || !extending.value || !extending.value.expires_at
+  || Date.now() + o.value * 1000 > new Date(extending.value.expires_at).getTime()))
+const extending = ref(null)
+const ext = reactive({ ttl: 7 * 86400, reason: '' })
+const extError = ref(null)
+function openExtend(row) {
+  extending.value = row
+  ending.value = null
+  extError.value = null
+  ext.reason = ''
+  ext.ttl = (extOpts.value.find((o) => o.value !== 'permanent') || { value: 'permanent' }).value
+}
+async function extend() {
+  busy.value = true
+  extError.value = null
+  try {
+    await post('/blocks/' + extending.value.id + '/extend', { ttl: ext.ttl, reason: ext.reason })
+    extending.value = null
+    await load()
+  } catch (e) { extError.value = e } finally { busy.value = false }
+}
 // a fail2ban action that blocks and unblocks through this server's API (the token is filled in by the admin)
 const f2b = computed(() => ['# /etc/fail2ban/action.d/jt-waf-block.conf   (chmod 600)', '[Definition]',
   'actionban   = curl -fsS -m 10 -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \\',
@@ -137,11 +183,12 @@ const f2b = computed(() => ['# /etc/fail2ban/action.d/jt-waf-block.conf   (chmod
 function shortFile(f) { return safeText(String(f || '').split('/').slice(-2).join('/'), 120) }
 
 const cols = computed(() => [
-  { key: 'ip', label: t('blocks.ip'), required: true, nowrap: true },
+  { key: 'ip', label: t('blocks.ip'), required: true, nowrap: true, text: (r) => r.ip + ' ' + ((r.geo && r.geo.cc) || '') },
   { key: 'source', label: t('blocks.source'), text: (r) => r.source + ' ' + r.created_by },
   { key: 'reason', label: t('blocks.reason') },
   { key: 'created_at', label: t('blocks.since'), nowrap: true, text: (r) => fmtShortTime(r.created_at) },
-  { key: 'expires_at', label: t('blocks.until'), nowrap: true, text: (r) => fmtShortTime(r.expires_at) },
+  { key: 'expires_at', label: t('blocks.until'), nowrap: true, value: (r) => (r.permanent ? '9999' : r.expires_at || ''),
+    text: (r) => (r.permanent ? t('blocks.permanent') : fmtShortTime(r.expires_at)) },
   { key: 'state', label: t('blocks.state'), nowrap: true, text: (r) => t('blocks.state.' + r.state) },
   { key: 'act', label: '', sortable: false, required: true, text: () => '' },
 ])
@@ -174,6 +221,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.ipcell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.rowacts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 ul.plain { list-style: none; padding: 0; margin: 6px 0 0; }
 ul.plain li { padding: 3px 0; }
 ol.steps { margin: 6px 0 10px; padding-left: 22px; }

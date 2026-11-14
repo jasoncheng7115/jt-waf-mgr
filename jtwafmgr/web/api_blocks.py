@@ -31,6 +31,9 @@ def block_list(app, req):
         items = app.blocks.listing(state)
     except BlockError as e:
         raise _err(e)
+    from . import api
+    for it in items:                      # the country of the address (of the first address of a range)
+        it['geo'] = api.geo(it['ip'].split('/')[0])
     return json_response(200, dict(app.blocks.status(), items=items))
 
 
@@ -71,9 +74,27 @@ def block_remove(app, req):
     return json_response(200, {'removed': n})
 
 
+def block_extend(app, req):
+    """A person sets a later end for an active block (approver: up to the interface maximum; admin: "permanent")."""
+    b = req.body()
+    try:
+        bid = int(req.params['id'])
+    except ValueError:
+        raise ApiError(404, 'not_found')
+    ttl = b.get('ttl')
+    if ttl != 'permanent' and not isinstance(ttl, int):
+        raise ApiError(422, 'invalid_ttl', 'ttl: seconds or "permanent"')
+    try:
+        item = app.blocks.extend(bid, ttl, b.get('reason'), req.user['username'], req.user['role'], src_ip=req.client_ip)
+    except BlockError as e:
+        raise _err(e)
+    return json_response(200, item)
+
+
 def register(router):
     R = router.add
     R('GET', V + '/blocks', block_list, ('role', 'viewer', 'blocks:read'))
     R('POST', V + '/blocks', block_add, ('role', 'approver', 'blocks:write'))
     R('DELETE', V + '/blocks/{ip}', block_delete, ('role', 'approver', 'blocks:write'))
     R('POST', V + '/blocks/{id}/remove', block_remove, ('role', 'approver', None))
+    R('POST', V + '/blocks/{id}/extend', block_extend, ('role', 'approver', None))

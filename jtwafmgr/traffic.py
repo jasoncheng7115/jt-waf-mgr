@@ -330,9 +330,17 @@ def report(app, since, until, host=None):
         if r['host'] in by_host:
             by_host[r['host']]['blocked'], by_host[r['host']]['logged'] = r['bl'] or 0, r['lg'] or 0
     totals = {k: sum(s[k] for s in series) for k in COLS + ('blocked', 'logged')}
+    # the same length of time just before: the change shown on each tile
+    span = until - since
+    prev = app.db.one('SELECT %s FROM traffic_hourly WHERE hour>=? AND hour<?%s' % (sums, hw),
+                      (int((since - span) // 3600 * 3600), int(since // 3600 * 3600)) + ha)
+    previous = {k: (prev[k] or 0) for k in COLS} if prev and prev['total'] is not None else None
+    if previous is not None:
+        pw = app.db.one("SELECT SUM(outcome='blocked') bl FROM events WHERE ts>=? AND ts<?%s" % hw, (since - span, since) + ha)
+        previous['blocked'] = (pw['bl'] or 0) if pw else 0
     polled = app.db.get_meta('traffic_polled_at')
     return {'enabled': bool(app.cfg['traffic']['enabled']), 'alert': bool(app.cfg['traffic']['alert']),
             'polled_at': util.iso(float(polled)) if polled else None, 'bucket_seconds': size,
             'since': util.iso(since), 'until': util.iso(until), 'host': host or '',
-            'series': series, 'by_host': list(by_host.values()), 'totals': totals,
+            'series': series, 'by_host': list(by_host.values()), 'totals': totals, 'previous': previous,
             'files': len(files(app.cfg)) if app.cfg['traffic']['enabled'] else 0}

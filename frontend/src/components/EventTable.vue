@@ -6,8 +6,8 @@
              :page-size="pageSize" :toolbar="toolbar" :empty="emptyText || ''" class="events">
     <template #cell-ts="{ row }"><RouterLink :to="'/events/' + row.id">{{ fmtShortTime(row.ts) }}</RouterLink></template>
     <template #cell-outcome="{ row }">
-      <button v-if="filterable" type="button" class="pickval" :title="t('filter.pick')" @click="emit('filter', 'outcome', row.outcome)"><OutcomeBadge :outcome="row.outcome" :decided-by="row.decided_by" /><Icon name="filter" class="pv-icon" /></button>
-      <OutcomeBadge v-else :outcome="row.outcome" :decided-by="row.decided_by" />
+      <button v-if="filterable" type="button" class="pickval" :title="t('filter.pick')" @click="emit('filter', 'outcome', row.redirected ? 'redirected' : row.outcome)"><OutcomeBadge :outcome="row.outcome" :decided-by="row.decided_by" :redirected="row.redirected" /><Icon name="filter" class="pv-icon" /></button>
+      <OutcomeBadge v-else :outcome="row.outcome" :decided-by="row.decided_by" :redirected="row.redirected" />
     </template>
     <template #cell-host="{ row }">
       <button v-if="filterable && row.host" type="button" class="pickval" :title="t('filter.pick')" @click="emit('filter', 'host', row.host)"><TruncText :text="row.host" :max="80" /><Icon name="filter" class="pv-icon" /></button>
@@ -79,6 +79,7 @@ const props = defineProps({
 const emit = defineEmits(['filter'])
 
 function outcomeText(e) {
+  if (e.redirected) return t('outcome.redirected')
   return e.outcome === 'blocked' ? t('outcome.blocked') + (e.decided_by ? ' ' + t('decided.' + e.decided_by) : '') : t('outcome.logged')
 }
 const cols = computed(() => [

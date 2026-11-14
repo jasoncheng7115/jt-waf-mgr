@@ -195,13 +195,50 @@ class LogicTest(unittest.TestCase):
             body = [ln for ln in blocks.render(entries, '/x').splitlines() if ln and not ln.startswith('#')]
             self.assertEqual(body, ['deny %s;' % e for e in entries])
 
-    def _probe(self, ip, paths, ago=60, status=403):
+    def test_extend_and_permanent(self):
+        from jtwafmgr.blocks import BlockError
+        a = self.b.add('203.0.113.40', 3600, 'ui', 'scanner', 'appr1', via='user', role='approver')
+        with self.assertRaises(BlockError) as cm:                         # a reason is required
+            self.b.extend(a['id'], 7 * 86400, '', 'appr1', 'approver')
+        self.assertEqual(cm.exception.code, 'reason_required')
+        with self.assertRaises(BlockError) as cm:                         # not earlier than now
+            self.b.extend(a['id'], 600, 'shorter', 'appr1', 'approver')
+        self.assertEqual(cm.exception.code, 'not_later')
+        with self.assertRaises(BlockError) as cm:                         # beyond the interface maximum
+            self.b.extend(a['id'], self.env.cfg['blocks']['ui_max_ttl'] + 1, 'too long', 'appr1', 'approver')
+        self.assertEqual(cm.exception.code, 'invalid_ttl')
+        e = self.b.extend(a['id'], 7 * 86400, 'still scanning', 'appr1', 'approver')
+        self.assertEqual((e['extended'], e['permanent']), (1, False))
+        with self.assertRaises(BlockError) as cm:                         # permanent: an admin only
+            self.b.extend(a['id'], 'permanent', 'for good', 'appr1', 'approver')
+        self.assertEqual(cm.exception.code, 'admin_required')
+        p = self.b.extend(a['id'], 'permanent', 'known botnet', 'admin1', 'admin')
+        self.assertEqual((p['permanent'], p['expires_at']), (True, None))
+        self.assertEqual(self.audit('block.extend')[-1]['permanent'], True)
+        # nothing shortens it: the expiry sweep far ahead, a token or a rule blocking the same address again
+        self.assertEqual(self.b.expire(now=time.time() + 400 * 365 * 86400), 0)
+        self.b.add('203.0.113.40', 600, 'ui', 'again', 'appr1', via='user', role='approver')
+        self.assertTrue(self.b.blocked('203.0.113.40')[0]['permanent'])
+        with self.assertRaises(BlockError):
+            self.b.extend(a['id'], 7 * 86400, 'shorter now', 'admin1', 'admin')
+        # never from a token or a rule; an admin may block permanently from the form
+        for via, role in (('token', None), ('system', None), ('user', 'approver')):
+            with self.assertRaises(BlockError) as cm:
+                self.b.add('203.0.113.41', 'permanent', 'ui' if via == 'user' else 'x/y', 'r', 'someone', via=via, token_id='t', role=role)
+            self.assertEqual(cm.exception.code, 'admin_required')
+        n = self.b.add('203.0.113.41', 'permanent', 'ui', 'known botnet', 'admin1', via='user', role='admin')
+        self.assertTrue(n['permanent'])
+        # and a person can still end it at once
+        self.assertEqual(self.b.remove('admin1', block_id=n['id'], note='false alarm'), 1)
+        self.assertEqual(self.b.blocked('203.0.113.41'), [])
+
+    def _probe(self, ip, paths, ago=60, status=403, rules=''):
         for i, p in enumerate(paths):
             self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, status, outcome, "
                           "rule_ids, local_rule_ids, families, message, matches) VALUES ('n', ?, ?, 'www.example.com', 'GET', ?, '', "
-                          "?, 'external', ?, ?, '', '', '', '', '[]')",
+                          "?, 'external', ?, ?, ?, '', '', '', '[]')",
                           ('%s-%d-%d-%d' % (ip, i, ago, status), time.time() - ago, p, ip, status,
-                           'blocked' if status == 403 else 'detected'))
+                           'blocked' if status == 403 else 'detected', rules))
 
     def test_auto_recon_leaves_answered_and_ambiguous_sources(self):
         self.env.cfg.data['blocks']['auto_recon'] = True
@@ -215,14 +252,25 @@ class LogicTest(unittest.TestCase):
         self._probe('203.0.113.83', ['/.git/config'], status=403)  # four ambiguous plus one unmistakable: a scanner
         self.assertEqual(self.b.auto_recon(), ['203.0.113.83'])
 
+    def test_auto_recon_counts_redirects_the_waf_would_have_refused(self):
+        # a site that redirects every path answers 301 before the WAF can refuse: with a confident-block rule hit, those
+        # are probes (nothing served); a plain redirect without one is still an answer for a person to look at
+        self.env.cfg.data['blocks']['auto_recon'] = True
+        lo = self.env.cfg['waf']['confident_range'][0]
+        secrets = ['/.env', '/.env.bak', '/.env.old', '/api/.env', '/backend/.env']
+        self._probe('203.0.113.90', secrets, status=301, rules=',%d,930130,' % (lo + 5))
+        self._probe('203.0.113.91', secrets, status=301, rules=',930130,')
+        self.assertEqual(self.b.auto_recon(), ['203.0.113.90'])
+
     def test_auto_recon(self):
         secrets = ['/.env', '/config.json', '/.aws/credentials', '/wp-config.php.bak', '/docker-compose.yml', '/id_rsa.pem']
         self._probe('203.0.113.70', secrets)                       # six secret names: a scanner
         self._probe('203.0.113.71', secrets[:3] + ['/', '/about'])  # three: below the threshold
         self._probe('198.51.100.10', secrets)                      # protected network: never
         self._probe('203.0.113.72', secrets, ago=3 * 3600)         # outside the window
-        self.assertEqual(self.b.auto_recon(), [])                  # off by default
-        self.env.cfg.data['blocks']['auto_recon'] = True
+        self.env.cfg.data['blocks']['auto_recon'] = False
+        self.assertEqual(self.b.auto_recon(), [])                  # switched off
+        self.env.cfg.data['blocks']['auto_recon'] = True           # on by default
         self.assertEqual(self.b.auto_recon(), ['203.0.113.70'])
         r = self.b.blocked('203.0.113.70')[0]
         self.assertEqual((r['source'], r['via'], r['created_by']), ('jt-waf-mgr/recon', 'system', 'system'))

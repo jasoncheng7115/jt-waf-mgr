@@ -27,6 +27,10 @@ header.top .wrap { display: flex; align-items: center; gap: 18px; height: 60px; 
 .brand img { width: 28px; height: 28px; filter: drop-shadow(0 2px 6px rgba(37, 99, 196, .35)); }
 header.top .wrap { max-width: 1320px; }
 nav.links { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; }
+/* the links in the middle of the bar (logo and name stay left, language right); auto margins, unlike justify-content:
+   center, never cut off the first links when a narrow screen scrolls the row */
+nav.links > a:first-child { margin-left: auto; }
+nav.links > a:last-child { margin-right: auto; }
 nav.links a { color: var(--text); font-size: 14px; font-weight: 500; padding: 6px 9px; border-radius: 8px; }
 nav.links a:hover { color: var(--blue); background: #eef4fd; text-decoration: none; }
 @media (max-width: 1360px) { nav.links a { padding: 6px 7px; font-size: 13.5px; } }
@@ -185,7 +189,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.31</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.32</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -432,7 +436,7 @@ const T = {
   nav_features: 'Features', nav_flow: 'Change workflow', nav_ai: 'Event analysis', nav_notify: 'Notifications', nav_security: 'Security', nav_screens: 'Screenshots', nav_install: 'Install',
   lead: 'A self-hosted web manager for nginx + libmodsecurity v3 + OWASP CRS 4. Read what the WAF did, tune it through an evidence-checked, sandbox-tested and approved workflow, let your own LLM review the events, and get told what needs a person.',
   releases: 'Releases', get_started: 'Get started',
-  features_h: 'Everything a ModSecurity site is missing', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one. It writes nothing until you adopt your rule files, and even then only ModSecurity files and, if you switch it on, one IP block list you include yourself; never the rest of the nginx configuration.',
+  features_h: 'A management interface for ModSecurity', features_sub: 'libmodsecurity v3 has no management interface. jt-waf-mgr adds one. It writes nothing until you adopt your rule files, and even then only ModSecurity files and, if you switch it on, one IP block list you include yourself; never the rest of the nginx configuration.',
   f1_h: 'Events you can read', f1: 'Blocked and logged requests by site, attack type, source country and network (with a world map drawn in the page, no map service), rule and time. "Blocked only by the CRS score" first: the likely false positives.',
   f2_h: 'Safe rule changes', f2: 'Exclusions, confident blocks, redactions, plugin toggles and expert rules, checked against the access logs and a sandbox, approved, applied by a small root program that restores on failure.',
   f3_h: 'WAF model', f3: 'How a request is decided on your sites, drawn from the live configuration: engine per site, scoring, thresholds, exclusions and blocks.',
@@ -584,7 +588,7 @@ const T = {
   nav_features: '功能', nav_flow: '變更流程', nav_ai: '事件分析', nav_notify: '通知', nav_security: '安全', nav_screens: '截圖', nav_install: '安裝',
   lead: '自架的 nginx + libmodsecurity v3 + OWASP CRS 4 網頁管理工具。看懂 WAF 做了什麼，透過證據檢查、沙箱測試、人員核准的流程調整規則，由你自己的 LLM 檢視事件，需要有人處理的事情會通知你。',
   releases: '下載發行版', get_started: '開始使用',
-  features_h: 'ModSecurity 站台缺的，都在這裡', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，以及你啟用時的一個 IP 封鎖清單檔（由你自己 include）；其他 nginx 設定一律不碰。',
+  features_h: '補強 ModSecurity 管理介面', features_sub: 'libmodsecurity v3 沒有管理介面。jt-waf-mgr 補上它：在你納管規則檔之前什麼都不寫入，之後也只寫 ModSecurity 的檔案，以及你啟用時的一個 IP 封鎖清單檔（由你自己 include）；其他 nginx 設定一律不碰。',
   f1_h: '看得懂的事件', f1: '封鎖與只記錄的請求，依站台、攻擊類型、來源國家與網路（頁面內繪製的世界地圖，不使用地圖服務）、規則與時間呈現。「只因 CRS 分數被封鎖」排最前面：最可能是誤判。',
   f2_h: '安全的規則變更', f2: '排除、確定封鎖、遮蔽、外掛開關與專家規則，先用存取記錄與沙箱檢查，再經核准，由失敗會自動還原的小型 root 程式套用。',
   f3_h: 'WAF 判斷流程', f3: '依實際設定畫出請求在你的站台上怎麼被判定：各站台引擎、計分、門檻、排除與封鎖。',
@@ -736,7 +740,7 @@ const T = {
   nav_features: '機能', nav_flow: '変更フロー', nav_ai: 'イベント分析', nav_notify: '通知', nav_security: 'セキュリティ', nav_screens: 'スクリーンショット', nav_install: 'インストール',
   lead: 'nginx + libmodsecurity v3 + OWASP CRS 4 のためのセルフホスト型 Web 管理ツール。WAF が何をしたかを読み取り、証拠確認・サンドボックス試験・承認を経るフローで調整し、自前の LLM にイベントを確認させ、人の対応が必要なことを知らせます。',
   releases: 'リリース', get_started: 'はじめる',
-  features_h: 'ModSecurity のサイトに足りないものすべて', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補います。ルールファイルを取り込むまで何も書き込まず、その後も書き込むのは ModSecurity のファイルと、オンにした場合の IP ブロックリスト 1 つ（include はお客様が行います）だけで、それ以外の nginx の設定には書き込みません。',
+  features_h: 'ModSecurity の管理インターフェースを補う', features_sub: 'libmodsecurity v3 には管理画面がありません。jt-waf-mgr はそれを補います。ルールファイルを取り込むまで何も書き込まず、その後も書き込むのは ModSecurity のファイルと、オンにした場合の IP ブロックリスト 1 つ（include はお客様が行います）だけで、それ以外の nginx の設定には書き込みません。',
   f1_h: '読めるイベント', f1: 'ブロック・記録のみのリクエストを、サイト、攻撃の種類、送信元の国とネットワーク（ページ内で描画する世界地図、地図サービスは不使用）、ルール、時間ごとに表示。「CRS スコアだけでブロック」を先頭に：誤検知の可能性が高いものです。',
   f2_h: '安全なルール変更', f2: '除外、確定ブロック、マスク、プラグイン切替、エキスパートルールを、アクセスログとサンドボックスで確認し、承認後、失敗時に復元する小さな root プログラムが適用。',
   f3_h: 'WAF 判定フロー', f3: '現在の設定から、サイトでリクエストがどう判定されるか（サイトごとのエンジン、スコア、しきい値、除外、ブロック）を図示。',

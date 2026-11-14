@@ -12,7 +12,7 @@
         <b>{{ i === 0 ? t('logship.main') : (d.name || t('logship.n', { n: i + 1 })) }}</b>
         <span v-if="i === 0" class="muted small">{{ t('logship.main_hint') }}</span>
         <span class="stat muted small">{{ statText(d) }}</span>
-        <button v-if="i > 0" type="button" class="btn small ghost" @click="remove(i)"><Icon name="delete" />{{ t('logship.remove') }}</button>
+        <button v-if="i > 0" type="button" class="btn small ghost danger" @click="remove(i)"><Icon name="delete" />{{ t('logship.remove') }}</button>
       </div>
       <div class="dgrid">
         <label class="switch"><input v-model="d.enabled" type="checkbox"><span class="knob" aria-hidden="true"></span>
@@ -159,7 +159,6 @@ onMounted(load)
 .flabel { display: block; font-size: 13px; color: var(--muted); margin-bottom: 3px; }
 .content { margin: 10px 0 4px; align-items: center; }
 .content .flabel { display: inline; margin: 0 6px 0 0; }
-.chipcheck { cursor: pointer; }
 .sample { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; max-height: 180px; overflow: auto; margin: 6px 0 0; }
 @media (max-width: 640px) { .dgrid .grow { grid-column: auto; } }
 </style>

@@ -337,7 +337,9 @@ input[type=checkbox] { padding: 0; }
 .btn:disabled { opacity: .55; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.07); }
-.btn.danger { color: var(--blocked); border-color: var(--blocked); background: transparent; }
+/* negative actions (switch off, delete, end a block, reject): red in every form of button, the same on hover */
+.btn.danger, .btn.ghost.danger, .btn.small.danger, .btn.tiny.danger { color: var(--blocked); border-color: var(--blocked); background: transparent; }
+.btn.danger:hover:not(:disabled) { background: var(--blocked-bg); color: var(--blocked); }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 3px 9px; font-size: 13px; }
 /* a page header mixes small and normal buttons: one size there, so they line up */
@@ -962,3 +964,28 @@ a.stchip { text-decoration: none; }
 
 /* space before a value that follows other inline content (a leading space inside the element is dropped) */
 .gapl { margin-left: .4em; }
+
+/* the site's own tooltip (tooltip.js): every title on the site shows here, never as the browser's native one */
+.jt-tip { position: absolute; z-index: 1000; max-width: min(420px, calc(100vw - 12px)); padding: 6px 10px; border-radius: 6px;
+  background: var(--tip-bg, #1f2937); color: var(--tip-fg, #f9fafb); font-size: 12.5px; line-height: 1.45; white-space: pre-line;
+  overflow-wrap: anywhere; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); pointer-events: none; }
+:root[data-theme="dark"] .jt-tip { --tip-bg: #e5e7eb; --tip-fg: #111827; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .jt-tip { --tip-bg: #e5e7eb; --tip-fg: #111827; } }
+
+/* everything that can be clicked shows the pointing hand; a disabled button does not */
+button:not(:disabled), [role="button"], [role="menuitemradio"], [role="tab"], a[href], summary, label[for], .clickable { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* a stat tile that opens a list (e.g. the WAF blocks of the window): looks like a tile, lifts a little on hover */
+a.tile.tilelink { color: inherit; text-decoration: none; }
+a.tile.tilelink:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
+
+/* a group of choices that can each be on or off (what a log destination sends, editions to download, ...): chips with
+   a check, room between them; the checkbox itself is hidden but still takes the keyboard */
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chipcheck { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border: 1px solid var(--border-strong);
+  border-radius: 16px; cursor: pointer; margin: 0; background: var(--panel); font: inherit; font-size: 13px; color: var(--text); user-select: none; }
+.chipcheck input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.chipcheck:hover { background: var(--panel-2); }
+.chipcheck.on { border-color: var(--accent); background: var(--accent-bg, var(--panel-2)); color: var(--accent); font-weight: 600; }
+.chipcheck:focus-within, .chipcheck:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

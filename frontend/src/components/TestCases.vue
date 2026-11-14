@@ -29,7 +29,7 @@
           <input :value="(tc.absent_rules || []).join(', ')" :disabled="disabled" class="mono" maxlength="200" :placeholder="disabled ? '' : '930120'" @change="set(i, 'absent_rules', ids($event.target.value))">
         </label>
       </div>
-      <div class="actions"><button v-if="!disabled" type="button" class="btn small ghost" @click="remove(i)"><Icon name="delete" />{{ t('tests.remove') }}</button></div>
+      <div class="actions"><button v-if="!disabled" type="button" class="btn small ghost danger" @click="remove(i)"><Icon name="delete" />{{ t('tests.remove') }}</button></div>
     </div>
     <div v-if="!modelValue.length" class="muted small">{{ t('tests.none') }}</div>
     <div v-if="!disabled" class="actions">

@@ -113,7 +113,7 @@
           <template #cell-actions="{ row }">
             <div v-if="canPropose" class="rowactions">
               <RouterLink v-if="row.kind !== 'raw' || isAdmin" class="btn small ghost" :to="{ path: '/changes/new', query: { item: row.id } }"><Icon name="edit" />{{ t('managed.modify') }}</RouterLink>
-              <button type="button" class="btn small ghost" @click="open(row, row.enabled ? 'disable' : 'enable')"><Icon :name="row.enabled ? 'hide' : 'show'" />{{ row.enabled ? t('managed.disable') : t('managed.enable') }}</button>
+              <button type="button" class="btn small ghost" :class="{ danger: row.enabled }" @click="open(row, row.enabled ? 'disable' : 'enable')"><Icon :name="row.enabled ? 'hide' : 'show'" />{{ row.enabled ? t('managed.disable') : t('managed.enable') }}</button>
               <button type="button" class="btn small danger" @click="open(row, 'delete')"><Icon name="delete" />{{ t('managed.delete') }}</button>
             </div>
           </template>

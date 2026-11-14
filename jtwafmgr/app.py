@@ -23,6 +23,8 @@ class App:
         from .geoip import GeoIP
         self.geoip = GeoIP(cfg)
         api.GEO = self.geoip.lookup
+        api.COUNTRY = self._registry_country
+        api.REFUSING_RANGES = (tuple(cfg['waf']['confident_range']), tuple(cfg['waf']['country_range']))
         self.router = Router()
         api.register(self.router)
         self.tailer = None
@@ -43,6 +45,13 @@ class App:
         self._fix_country_events()
         if start_collector:
             self.start_collector()
+
+    def _registry_country(self, ip):
+        """The country of an outside address from the registries' lists (None for internal or unknown ones)."""
+        if self.geoip.is_local(ip):
+            return None
+        lk = self.countries.lookup() if getattr(self, 'countries', None) else None
+        return lk.country(ip) if lk else None
 
     def _note_version(self):
         """One audit row whenever the program version differs from the last run (upgrade or rollback)."""

@@ -2,6 +2,27 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.32 (2026-11-14)
+
+- IP blocks: an approver can extend an active block (a new end counted from now, up to the interface maximum, with a
+  reason); an admin can make a block permanent, from the list or the form (it never ends by itself; a person ends it).
+  A token or a rule never sets a permanent block, and blocking the same address again never shortens one. Each
+  blocked address shows its country.
+- Countries without a GeoIP database: the registries' lists of the country blocks give the country of an outside
+  address on every page (events, blocks, the country filter).
+- Automatic blocking of sources that guess secret files also counts requests answered with a redirect although a
+  confident-block rule matched (a site that redirects every path answers before the WAF can refuse; nothing is
+  served). It is on by default for new installations (it acts once IP blocks are on). Such events show "redirected
+  (nothing served)" and the outcome filter picks them out.
+- Tooltips: one tooltip in the site's style everywhere (light and dark, keyboard focus, Escape); the browser's own
+  never shows. Everything that can be clicked shows the pointing hand. Negative actions (switch off, delete, end a
+  block, reject) are red; the build refuses one that is not.
+- Request volume: the tiles are the overview's (change against the same length of time before, the trend, a link
+  from the WAF blocks to their events).
+- Country limits page: the rule id on the same line as the countries, the refusing countries as named chips, the time
+  of the last refusal (it showed 1970). "Help" in the menu. The log destination's choices are chips with room between
+  them.
+
 ## 0.4.31 (2026-11-14)
 
 - Sites page: the country-limits column is one line per site (what its country rules allow or block) linking to

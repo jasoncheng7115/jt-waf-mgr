@@ -20,6 +20,9 @@ TABLE_EXEMPT = {
     'DatePicker.vue': 'the calendar grid of the date picker',
 }
 SELECT_EXEMPT = {'SelectBox.vue'}
+# labels of negative actions: their buttons carry the "danger" class (red), whatever else they look like
+NEGATIVE = ('managed.disable', 'managed.delete', 'users.disable', 'blocks.end', 'common.delete', 'logship.remove',
+            'tests.remove', 'uiset.secret_clear', 'tokens.revoke', 'change.reject', 'toggle.off', 'toggle.group_off')
 # button classes whose content is the label itself -> why no icon
 BUTTON_EXEMPT_CLASSES = {
     'dp-day': 'calendar day cells: the date number is the content',
@@ -58,6 +61,11 @@ def main():
                 if '<Icon' not in m.group(2):
                     line = tpl[:m.start()].count('\n') + 1
                     problems.append('%s (template line %d): card title without <Icon>: %s' % (rel, line, ' '.join(m.group(0).split())[:100]))
+            # a negative action (switch off, delete, end a block, revoke, reject, remove) is red: class "danger" on the button
+            for m in re.finditer(r'<button\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>(.*?)</button>', tpl, re.S):
+                if re.search(r"t\('(" + '|'.join(re.escape(k) for k in NEGATIVE) + r")'\)", m.group(2)) and 'danger' not in m.group(1):
+                    line = tpl[:m.start()].count('\n') + 1
+                    problems.append('%s (template line %d): negative action without the "danger" class' % (rel, line))
             # a leading space inside an inline element is dropped by the template compiler, so the text runs into what
             # comes before it ("4.30.0/etc/nginx/..."): space it with the gapl class or put it on its own line
             for m in re.finditer(r'<(span|b|small|em|code)\b[^>]*> +\{\{', tpl):
