@@ -366,6 +366,19 @@ class Countries:
     def manifest(self):
         return read_manifest(self.dir)
 
+    def lookup(self):
+        """Which staged country an address is in, for the pages (built once per set of lists, then kept)."""
+        man = self.manifest()
+        key = man and man.get('generated_at')
+        if not key:
+            return None
+        cached = getattr(self, '_lookup', None)
+        if cached and cached[0] == key:
+            return cached[1]
+        lk = Lookup(self.dir)
+        self._lookup = (key, lk)
+        return lk
+
     def available(self):
         man = self.manifest()
         return sorted(man['countries']) if man else []
@@ -393,6 +406,33 @@ class Countries:
                     except DataError:
                         continue
         return sorted(sets)
+
+    def set_users(self):
+        """For each list file: the sites whose rules use it (applied rules; a waiting change adds "(change #n)")."""
+        out = {}
+
+        def add(spec, label):
+            try:
+                name = set_name((spec or {}).get('countries') or [])
+            except DataError:
+                return
+            host = ((spec or {}).get('host') or {}).get('value') or '?'
+            out.setdefault(name, [])
+            if host + label not in out[name]:
+                out[name].append(host + label)
+        for it in self.app.workflow.managed.items():
+            if it['kind'] == 'country' and not it.get('deleted'):
+                add(it['spec'] if isinstance(it['spec'], dict) else json.loads(it['spec'] or '{}'), '')
+        for (cid, op, kind, spec) in self.db.q("SELECT id, op, kind, spec FROM changes WHERE state IN "
+                                               "('checking', 'pending_approval', 'approved', 'applying') ORDER BY id"):
+            try:
+                sp = json.loads(spec or '{}')
+            except ValueError:
+                continue
+            for o in (sp.get('ops', []) if op == 'bundle' else [{'kind': kind, 'spec': sp}]):
+                if o.get('kind') == 'country' and (o.get('spec') or {}).get('countries'):
+                    add(o['spec'], ' (#%d)' % cid)
+        return out
 
     def sync(self, force=False, now=None):
         """Queue the sets for the root program when they or the staged data changed. Returns the request id."""
@@ -472,6 +512,7 @@ class Countries:
                 'last_errors': {k: v['error'] for k, v in (st.get('registries') or {}).items() if v.get('error')},
                 'requested': os.path.exists(os.path.join(self.dir, REQUEST_FILE)),
                 'sets': self.desired_sets(),
+                'set_users': self.set_users(),
                 'applied': {'at': util.iso(applied['at']) if applied.get('at') else None, 'ok': applied.get('ok'),
                             'summary': applied.get('summary')},
                 'pending': bool(self._meta(META_PENDING))}

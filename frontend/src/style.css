@@ -210,7 +210,7 @@ a.navitem:hover, button.navitem:hover { background: var(--panel-2); text-decorat
 .pagehead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pagehead h1 { margin: 0; margin-right: auto; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
-.card.attention { border-left: 3px solid var(--score); }
+/* attention: the title bar's accent line is amber (below); no second border beside it */
 .cardhead { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 6px; }
 .cardhead h2 { margin: 0; min-width: 0; }
 .count { font-weight: 500; color: var(--muted); font-size: 14px; margin-left: 4px; }
@@ -468,10 +468,11 @@ tr.hl td { background: var(--warn-bg); }
 .checkcard .itemchart { margin: 4px 0 6px; }
 .checkcard > .btn { margin-top: 10px; }
 .sumcount { margin-right: 8px; }
-.control.st-gap { border-left: 3px solid var(--blocked); }
-.control.st-partial { border-left: 3px solid var(--warn); }
-.control.st-met { border-left: 3px solid var(--ok); }
-.control.st-organisational { border-left: 3px solid var(--border-strong); }
+/* the status colour is the title bar's own accent line (one line, as on the system check), not a second border */
+.control.st-gap > .cardhead:first-child, .control.st-gap > h2:first-child { box-shadow: inset 4px 0 0 var(--blocked); }
+.control.st-partial > .cardhead:first-child, .control.st-partial > h2:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+.control.st-met > .cardhead:first-child, .control.st-met > h2:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+.control.st-organisational > .cardhead:first-child, .control.st-organisational > h2:first-child { box-shadow: inset 4px 0 0 var(--border-strong); }
 .refs { margin: 4px 0 8px; }
 .needs { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin: 6px 0 8px; }
 .chgpaths { display: flex; flex-direction: column; gap: 6px; }
@@ -952,3 +953,6 @@ a.stchip { text-decoration: none; }
 .switch input:checked + .knob::after { left: 19px; }
 .switch input:focus-visible + .knob { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 760px) { .srow { grid-template-columns: 1fr; } }
+
+/* space before a value that follows other inline content (a leading space inside the element is dropped) */
+.gapl { margin-left: .4em; }

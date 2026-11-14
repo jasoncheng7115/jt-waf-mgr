@@ -335,6 +335,200 @@ class TestWorkflow(unittest.TestCase):
                for i in seen['items'] if i['kind'] == 'country' and not i.get('deleted')]
         self.assertEqual([(g['host']['value'], g['countries']) for g in got], [('app.example.com', ['TW'])])
 
+    def test_changing_a_limit_and_the_sites_page(self):
+        from jtwafmgr.web import api
+        self.app.cfg.data['countries']['enabled'] = True
+        stage(self.app.cfg['countries']['dir'])
+        two = dict(self.spec, countries=['JP', 'TW'])
+        cid = self.wf.propose('add', 'country', two, 'Taiwan and Japan', 'op')
+        self.wf.run_checks(cid)
+        self.assertEqual(self.wf.get(cid)['state'], 'pending_approval', self.wf.get(cid)['checks'])
+        servers = [{'server_names': ['app.example.com', 'www.example.com']}, {'server_names': ['_']},
+                   {'server_names': ['other.example.com']}]
+        api._vhost_countries(self.app, servers)
+        self.assertEqual(servers[0]['countries'], [])
+        self.assertEqual([(c['change_id'], c['op'], c['countries']) for c in servers[0]['country_changes']],
+                         [(cid, 'add', ['JP', 'TW'])])
+        self.assertEqual((servers[1]['country_changes'], servers[2]['country_changes']), ([], []))
+        self.wf.approve(cid, self.p2.user('appr'))
+        self.p2.fake_apply()
+        self.assertEqual(self.wf.get(cid)['state'], 'applied')
+        api._vhost_countries(self.app, servers)
+        item = self.wf.managed.item_by_rule(self.wf.get(cid)['rule_id'])
+        self.assertEqual([(c['item_id'], c['mode'], c['countries'], c['enabled']) for c in servers[0]['countries']],
+                         [(item['id'], 'allow', ['JP', 'TW'], True)])
+        self.assertEqual((servers[0]['country_changes'], servers[2]['countries']), ([], []))
+
+        def direction(spec):
+            c = self.wf.propose('modify', 'country', spec, 'change the limit', 'op', item_id=item['id'])
+            d = self.wf.get(c)['direction']
+            self.wf.cancel(c, self.p2.user('op'))
+            return d
+        self.assertEqual(direction(dict(two, countries=['TW'])), 'tighten')                 # fewer allowed
+        self.assertEqual(direction(dict(two, note='same countries')), 'tighten')
+        self.assertEqual(direction(dict(two, countries=['JP', 'TW', 'US'])), 'loosen')      # one more allowed
+        self.assertEqual(direction(dict(two, mode='deny')), 'loosen')                       # turned around
+        self.assertEqual(direction(dict(two, host={'mode': 'exact', 'value': 'other.example.com'})), 'loosen')
+        # a waiting disable shows on the site whose rule it changes
+        c = self.wf.propose('disable', None, None, 'off for a test', 'op', item_id=item['id'])
+        api._vhost_countries(self.app, servers)
+        self.assertEqual([(x['change_id'], x['op']) for x in servers[0]['country_changes']], [(c, 'disable')])
+
+    def _applied_rule(self, countries=('JP', 'TW')):
+        self.app.cfg.data['countries']['enabled'] = True
+        stage(self.app.cfg['countries']['dir'])
+        cid = self.wf.propose('add', 'country', dict(self.spec, countries=list(countries)), 'a limit', 'op')
+        self.wf.run_checks(cid)
+        self.wf.approve(cid, self.p2.user('appr'))
+        self.p2.fake_apply()
+        self.assertEqual(self.wf.get(cid)['state'], 'applied')
+        return self.wf.managed.item_by_rule(self.wf.get(cid)['rule_id'])
+
+    def test_a_changed_limit_is_checked_as_changed_and_never_applied_alone(self):
+        item = self._applied_rule()
+        self.wf.set_setting('apply.auto_tighten', True, 'boss')
+        seen = {}
+
+        class Stub:
+            def available(self):
+                return True
+
+            def run_change(self, r, files, tests, managed, samples=None, items=None):
+                seen['items'], seen['tests'] = items, tests
+                return {'ok': True, 'cases': 0, 'failed': 0, 'results': []}
+        self.wf.sandbox = Stub()
+        cid = self.wf.propose('modify', 'country', dict(self.spec, countries=['TW']), 'Taiwan only now', 'op', item_id=item['id'])
+        r = self.wf.get(cid)
+        self.assertEqual(r['direction'], 'tighten')
+        # the change carries its own country tests, the sandbox sees the new limit (not the old one), the list it
+        # needs is queued for the root program, and a tightening country change still waits for a person
+        self.assertEqual([(t.get('src_ip'), t['expect']) for t in json.loads(r['tests'])],
+                         [('198.51.100.1', 200), ('203.0.113.1', 403), (None, 200)])
+        self.assertIn('TW', self.app.countries.desired_sets())
+        self.wf.run_checks(cid)
+        got = [json.loads(i['spec']) if isinstance(i['spec'], str) else i['spec']
+               for i in seen['items'] if i['kind'] == 'country' and not i.get('deleted')]
+        self.assertEqual([g['countries'] for g in got], [['TW']])
+        self.assertEqual(self.wf.get(cid)['state'], 'pending_approval')
+        self.assertIn('requests', json.loads(self.wf.get(cid)['checks'])['evidence'])     # its impact, counted
+
+    def test_one_more_country_is_a_loosening(self):
+        item = self._applied_rule(['TW'])
+        self.wf.set_setting('approval.single_admin_mode', True, 'boss')
+        cid = self.wf.propose('modify', 'country', dict(self.spec, countries=['JP', 'TW']), 'Japan too', 'boss',
+                              item_id=item['id'])
+        self.wf.run_checks(cid)
+        self.assertEqual(self.wf.get(cid)['direction'], 'loosen')
+        with self.assertRaises(ChangeError):                      # one's own loosening: a fresh code and a reason
+            self.wf.approve(cid, self.p2.user('boss'), '', 'Japan too, ten chars')
+        for op in ('disable', 'delete'):
+            c = self.wf.propose(op, None, None, 'test %s' % op, 'op', item_id=item['id'])
+            self.assertEqual(self.wf.get(c)['direction'], 'loosen')
+            self.wf.cancel(c, self.p2.user('op'))
+
+    def test_preview_gives_the_direction_the_change_will_get(self):
+        from jtwafmgr.web import api
+        item = self._applied_rule()
+
+        class Req:
+            def __init__(self, body):
+                self._b, self.user, self.client_ip = body, {'username': 'op', 'role': 'operator'}, '192.0.2.5'
+
+            def body(self):
+                return self._b
+
+        def preview(body):
+            resp = api.change_preview(self.app, Req(body))
+            return json.loads(resp.body)
+        self.assertEqual(preview({'kind': 'country', 'spec': self.spec})['direction'], 'tighten')
+        self.assertEqual(preview({'kind': 'country', 'spec': dict(self.spec, countries=['TW']), 'item_id': item['id']})['direction'], 'tighten')
+        self.assertEqual(preview({'kind': 'country', 'spec': dict(self.spec, countries=['JP', 'TW', 'US']), 'item_id': item['id']})['direction'], 'loosen')
+        blocks = [i for i in self.wf.managed.items() if i['kind'] == 'confident_block']
+        if blocks:                                # any other changed rule loosens, as the change itself will
+            b = blocks[0]
+            self.assertEqual(preview({'kind': 'confident_block', 'spec': json.loads(b['spec']), 'item_id': b['id']})['direction'], 'loosen')
+
+    def test_sites_page_names_and_states(self):
+        from jtwafmgr.web import api
+        item = self._applied_rule()
+        wild = self.wf.propose('add', 'country', {'host': {'mode': 'exact', 'value': '*.example.org'}, 'mode': 'deny',
+                                                  'countries': ['US']}, 'not from the US', 'op')
+        bundle = self.wf.propose_bundle([{'op': 'add', 'kind': 'country', 'spec': {
+            'host': {'mode': 'exact', 'value': 'shop.example.net'}, 'mode': 'allow', 'countries': ['TW']}}], 'shop', 'op')
+        servers = [{'server_names': ['app.example.com']}, {'server_names': ['a.example.org', 'b.example.org']},
+                   {'server_names': ['shop.example.net']}, {'server_names': ['~^(?<x>.+)\\.example\\.com$']},
+                   {'server_names': []}]
+        api._vhost_countries(self.app, servers)
+        self.assertEqual([c['item_id'] for c in servers[0]['countries']], [item['id']])
+        self.assertEqual([(c['change_id'], c['mode']) for c in servers[1]['country_changes']], [(wild, 'deny')])
+        self.assertEqual([c['change_id'] for c in servers[2]['country_changes']], [bundle])
+        self.assertEqual((servers[3]['countries'], servers[4]['countries']), ([], []))      # regex names, none
+        # a cancelled change and a deleted rule are gone from the page
+        self.wf.cancel(wild, self.p2.user('op'))
+        c = self.wf.propose('delete', None, None, 'no limit any more', 'op', item_id=item['id'])
+        self.wf.run_checks(c)
+        self.wf.approve(c, self.p2.user('appr'), '', 'no limit any more')
+        self.p2.fake_apply()
+        api._vhost_countries(self.app, servers)
+        self.assertEqual((servers[0]['countries'], servers[0]['country_changes'], servers[1]['country_changes']), ([], [], []))
+
+    def test_crs_comparison_requests_come_from_allowed_countries(self):
+        self._applied_rule(['TW'])
+        self.wf.equivalence_requests = lambda limit=400: [
+            {'host': 'app.example.com', 'method': 'GET', 'path': '/', 'source': 'external'},
+            {'host': 'app.example.com', 'method': 'GET', 'path': '/', 'source': 'internal'},
+            {'host': 'other.example.com', 'method': 'GET', 'path': '/', 'source': 'external'}]
+        from jtwafmgr.sandbox import Sandbox
+        self.wf.sandbox = Sandbox(self.app.cfg, self.app.site)
+        self.assertEqual([r.get('src_ip') for r in self.wf._crs_requests()], ['198.51.100.1', None, None])
+
+    def test_country_sites_page(self):
+        from jtwafmgr.web import api
+        item = self._applied_rule()                      # app.example.com: TW and JP
+        rid = item['rule_id']
+        intra = self.wf.propose('add', 'country', {'host': {'mode': 'exact', 'value': 'intranet.example.com'}, 'mode': 'allow',
+                                                   'countries': ['TW']}, 'intranet', 'op')
+        self.wf.run_checks(intra)
+        self.wf.approve(intra, self.p2.user('appr'))
+        self.p2.fake_apply()
+        gone = self.wf.propose('add', 'country', {'host': {'mode': 'exact', 'value': 'gone.example.net'}, 'mode': 'deny',
+                                                  'countries': ['US']}, 'a site that is not there', 'op')
+        now = time.time()
+        for i, ip in enumerate(('203.0.113.7', '203.0.113.7', '192.0.2.9')):
+            cur = self.app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, outcome, "
+                                "decided_by, rule_ids, local_rule_ids, families, message, matches) VALUES ('n', ?, ?, "
+                                "'app.example.com', 'GET', '/', '', ?, 'external', 'blocked', 'confident', ?, '', '', '', '[]')",
+                                ('cs%d' % i, now - 60, ip, ',%d,' % rid))
+            self.app.db.x("INSERT INTO event_rules(event_id, rule_id, ts, outcome) VALUES (?, ?, ?, 'blocked')",
+                          (cur.lastrowid, rid, now - 60))
+
+        class Req:
+            query, params, user, client_ip = {}, {}, {'username': 'v', 'role': 'viewer'}, '192.0.2.5'
+        out = json.loads(api.country_sites(self.app, Req()).body)
+        sites = {x['host']: x for x in out['sites']}
+        app_site = sites['app.example.com']
+        self.assertEqual([(c['mode'], c['countries']) for c in app_site['countries']], [('allow', ['JP', 'TW'])])
+        self.assertEqual((app_site['recent']['refused'], app_site['recent']['sources']), (3, 2))
+        self.assertEqual({c['country']: c['requests'] for c in app_site['recent']['countries']}, {'US': 2, 'JP': 1})
+        self.assertTrue(app_site['bypass'])                                     # /remote.php/dav skips the WAF
+        # a server block with two names: the rule names one, the other is open
+        self.assertEqual(sites['intranet.example.com']['uncovered'], ['intra.example.com'])
+        self.assertTrue(sites['static.example.com']['waf_off'])
+        self.assertEqual(sites['static.example.com']['countries'], [])
+        self.assertEqual([c['change_id'] for c in out['unmatched_changes']], [gone])
+        self.assertEqual(out['unmatched_rules'], [])
+
+    def test_modify_direction_rules(self):
+        d = rulegen.country_modify_direction
+        h = {'mode': 'exact', 'value': 'a.example.com'}
+        self.assertEqual(d({'host': h, 'mode': 'allow', 'countries': ['JP', 'TW']}, {'host': h, 'mode': 'allow', 'countries': ['TW']}), 'tighten')
+        self.assertEqual(d({'host': h, 'mode': 'allow', 'countries': ['TW']}, {'host': h, 'mode': 'allow', 'countries': []}), 'loosen')
+        self.assertEqual(d({'host': h, 'mode': 'deny', 'countries': ['CN']}, {'host': h, 'mode': 'deny', 'countries': ['CN', 'RU']}), 'tighten')
+        self.assertEqual(d({'host': h, 'mode': 'deny', 'countries': ['CN', 'RU']}, {'host': h, 'mode': 'deny', 'countries': ['CN']}), 'loosen')
+        self.assertEqual(d({'host': h, 'mode': 'allow', 'countries': ['TW']},
+                           {'host': {'mode': 'exact', 'value': 'A.example.com'}, 'mode': 'allow', 'countries': ['TW']}), 'tighten')
+        self.assertEqual(d({}, {'host': h, 'mode': 'allow', 'countries': ['TW']}), 'loosen')
+
     def test_impact_from_the_access_logs(self):
         self.app.cfg.data['countries']['enabled'] = True
         stage(self.app.cfg['countries']['dir'])
@@ -359,6 +553,27 @@ class TestWorkflow(unittest.TestCase):
         m = Monitor(self.app)
         self.assertEqual(m._cause({'ts': time.time()}, {'added': [cd + 'TW.data'], 'removed': [], 'changed': []}), 'jt-waf-mgr')
         self.assertEqual(m._cause({'ts': time.time()}, {'added': [cd + 'notes.txt'], 'removed': [], 'changed': []}), 'outside')
+
+
+class TestStoredEvents(unittest.TestCase):
+    def test_country_blocks_stored_as_score_blocks_are_put_right_once(self):
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        app = App(env.cfg)
+        app.stop()
+        app.db.set_meta('fix.country_decided', '')
+        now = time.time()
+        for i, (rid, decided) in enumerate(((10309, 'score'), (930130, 'score'), (10305, 'confident'))):
+            cur = app.db.x("INSERT INTO events(node_id, unique_id, ts, host, method, path, query, src_ip, origin, outcome, decided_by, "
+                           "rule_ids, local_rule_ids, families, message, matches) VALUES ('n', ?, ?, 'a.example.com', 'GET', '/', '', "
+                           "'203.0.113.5', 'external', 'blocked', ?, ?, '', '', '', '[]')", ('u%d' % i, now, decided, ',%d,949110,' % rid))
+            eid = cur.lastrowid if hasattr(cur, 'lastrowid') else app.db.one('SELECT MAX(id) FROM events')[0]
+            app.db.x("INSERT INTO event_rules(event_id, rule_id, ts, outcome) VALUES (?, ?, ?, 'blocked')", (eid, rid, now))
+        app2 = App(env.cfg)
+        self.addCleanup(app2.stop)
+        got = [r[0] for r in app2.db.q('SELECT decided_by FROM events ORDER BY id')]
+        self.assertEqual(got, ['confident', 'score', 'confident'])
+        self.assertEqual(app2.db.get_meta('fix.country_decided'), '1')
 
 
 class TestSandbox(unittest.TestCase):
@@ -411,6 +626,42 @@ class TestSandbox(unittest.TestCase):
         self.assertFalse(_host_match({'mode': 'exact', 'value': '*.example.com'}, 'a.b.example.com'))
         self.assertTrue(_host_match({'mode': 'regex', 'value': r'^(a|b)\.example\.com$'}, 'b.example.com'))
         self.assertTrue(_host_match({'mode': 'any'}, 'z.example.com'))
+
+    def test_no_address_to_send_from_fails_the_check(self):
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        stage(env.cfg['countries']['dir'])
+        app = App(env.cfg)
+        self.addCleanup(app.stop)
+        from jtwafmgr.sandbox import Sandbox, SandboxError
+        sb = Sandbox(app.cfg, app.site)
+        items = [{'kind': 'country', 'spec': json.dumps({'host': {'mode': 'exact', 'value': 'a.example.com'}, 'mode': 'allow',
+                                                         'countries': ['ZA', 'FR']})}]
+        cases = [{'host': 'a.example.com', 'path': '/x', 'source': 'external', 'expect': 'not403', 'origin': 'regression'}]
+        # FR has no staged list, but ZA has: ZA is used; with only FR the samples cannot be sent, so the check fails
+        self.assertEqual(sb.country_sources(cases, items)[0]['src_ip'], '198.18.4.1')
+        items[0]['spec'] = json.dumps({'host': {'mode': 'exact', 'value': 'a.example.com'}, 'mode': 'allow', 'countries': ['FR']})
+        with self.assertRaises(SandboxError):
+            sb.country_sources(cases, items)
+        r = {'op': 'disable', 'kind': 'exclusion', 'direction': 'tighten', 'spec': '{}'}
+        res = sb.run_change(r, {}, [], app.workflow.managed, [{'host': 'a.example.com', 'method': 'GET', 'path': '/x'}], items)
+        self.assertEqual((res['ok'], res['error']), (False, 'sandbox_failed'))
+        self.assertIn('no address of FR', res['message'])
+
+    def test_a_preferred_address_that_is_never_refused_is_not_used(self):
+        env = TempEnv()
+        self.addCleanup(env.cleanup)
+        stage(env.cfg['countries']['dir'])
+        env.cfg.data['blocks']['protected'] = ['198.51.100.0/28']       # the change's own "passes" address is protected
+        app = App(env.cfg)
+        self.addCleanup(app.stop)
+        from jtwafmgr.sandbox import Sandbox
+        sb = Sandbox(app.cfg, app.site)
+        items = [{'kind': 'country', 'spec': json.dumps({'host': {'mode': 'exact', 'value': 'a.example.com'}, 'mode': 'allow',
+                                                         'countries': ['TW']})}]
+        cases = [{'host': 'a.example.com', 'path': '/', 'source': 'external', 'expect': 'not403', 'origin': 'regression'}]
+        with self.assertRaises(Exception):          # TW's only sample address is protected: nothing usable to send from
+            sb.country_sources(cases, items, prefer='198.51.100.1')
 
     def test_candidate_lists_built_inside_the_sandbox(self):
         env = TempEnv()

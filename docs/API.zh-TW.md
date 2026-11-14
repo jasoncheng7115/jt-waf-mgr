@@ -315,6 +315,9 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 `tests` 也可以帶 `src_ip`（只限 `external`）：請求的公開來源位址。證據檢查從存取記錄計算這條規則會封鎖的量（`requests`、
 `refused`、`refused_sources`、`refused_success`、`countries`），只供參考，不會讓變更失敗。國家封鎖永遠不會自動套用。
 `GET /countries`（已登入的使用者；權杖沒有對應的 scope）列出有清單的國家與使用中的清單。
+`GET /countries/sites`（scope `rules:read`）列出每個 nginx 站台的國家規則、處理中的國家變更、WAF 是否啟用，以及最近
+7 天封鎖了多少。規則用 Host 標頭判斷站台（尾端多一個點或帶埠號也算）。請求行寫完整網址時 nginx 會依網址轉送，但
+ModSecurity 看不到這個網址：國家限制若必須擋住這類請求，nginx 也要保留一道檢查。
 
 **種類 `redaction` 與 `plugin`**：`redaction` 用 `fields`（最多 30 個參數名稱，不檢查，因此永遠不會被複製進稽核記錄），
 可加 `host`、`path`；`plugin` 用 `plugin`（CRS 外掛名稱）與必填的 `host`，為單一站台啟用外掛。
@@ -383,7 +386,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/change
 - **`GET /rules/{id}/hits`**：每日命中數，`days` 1 到 365（預設 30）：
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`。
 - **`GET /rules/removals`**：被 `SecRuleRemoveById` 等指令移除的規則。
-- **`GET /vhosts`**：nginx 站台與各自的 WAF 設定。
+- **`GET /vhosts`**：nginx 站台與各自的 WAF 設定；`countries` 列出每站的國家規則（模式、國家、規則編號、是否啟用），
+  `country_changes` 列出還在處理中的國家變更。
 - **`GET /crs`**：CRS 版本、偏執等級、門檻、引擎模式、外掛。
 - **`GET /crs/updates`**：jt-waf-mgr 是否負責更新 CRS、主機上有哪些版本、最新發行版。
 - **`GET /waf/model`**：每個站台上一個請求如何被判定（引擎、計分、門檻、排除）。

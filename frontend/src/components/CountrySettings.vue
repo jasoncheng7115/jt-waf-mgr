@@ -18,7 +18,13 @@
           <span v-if="st.last_ok === false" class="badge b-blocked">{{ t('countries.last_failed') }}</span>
           <span v-if="st.requested" class="badge b-warn">{{ t('countries.queued') }}</span></dd>
         <dt>{{ t('countries.sets') }}</dt>
-        <dd><span v-if="!st.sets.length">—</span><span v-for="s in st.sets" :key="s" class="badge mono setbadge">{{ s }}</span></dd>
+        <dd><span v-if="!st.sets.length">—</span>
+          <div v-for="s in st.sets" :key="s" class="setrow">
+            <span class="badge mono setbadge">{{ s }}</span>
+            <span>{{ s.split('-').map(countryName).join(t('common.list_sep')) }}</span>
+            <span v-if="(st.set_users || {})[s]" class="muted small gapl">{{ t('countries.set_used_by', { sites: st.set_users[s].join(t('common.list_sep')) }) }}</span>
+          </div>
+          <div class="muted small">{{ t('countries.sets_hint') }}</div></dd>
         <dt>{{ t('countries.applied') }}</dt>
         <dd>{{ st.applied.at ? fmtMinute(st.applied.at) : '—' }}
           <span v-if="st.applied.ok === false" class="badge b-blocked">{{ t('countries.apply_failed') }}</span>
@@ -42,7 +48,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { get, post } from '../api.js'
-import { t } from '../i18n.js'
+import { t, lang } from '../i18n.js'
 import { hasRole } from '../store.js'
 import { fmtBytes, fmtMinute, safeText } from '../util.js'
 import Icon from './Icon.vue'
@@ -52,6 +58,9 @@ import FlowSteps from './FlowSteps.vue'
 import UiSettings from './UiSettings.vue'
 
 const emit = defineEmits(['saved'])
+// country names in the interface language from the browser
+const regionNames = computed(() => { try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null } })
+function countryName(c) { try { return (regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
 const st = ref(null)
 const error = ref(null)
 const busy = ref(false)
@@ -85,5 +94,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.setbadge { margin: 0 6px 4px 0; }
+.setbadge { margin: 0 6px 0 0; }
+.setrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 4px; }
+.coreg { margin: 12px 0 16px; }   /* the registries table: room above the buttons */
 </style>

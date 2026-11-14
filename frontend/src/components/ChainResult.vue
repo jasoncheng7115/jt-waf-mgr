@@ -9,8 +9,8 @@
     </template>
     <template v-else>
       <strong>{{ t('chain.broken') }}</strong>
-      <span v-if="s.reason"> {{ tOr('chain.reason.' + s.reason, s.reason) }}</span>
-      <span v-if="s.bad_id"> {{ t('chain.bad_id', { id: s.bad_id }) }}</span>
+      <span v-if="s.reason" class="gapl">{{ tOr('chain.reason.' + s.reason, s.reason) }}</span>
+      <span v-if="s.bad_id" class="gapl">{{ t('chain.bad_id', { id: s.bad_id }) }}</span>
       <ul v-if="s.anchor_problems && s.anchor_problems.length" class="plainlist small">
         <li v-for="(p, i) in s.anchor_problems" :key="i">{{ tOr('chain.reason.' + p.reason, p.reason) }}<template v-if="p.id"> · #{{ p.id }}</template><template v-if="p.at"> · {{ fmtMinute(p.at) }}</template></li>
       </ul>

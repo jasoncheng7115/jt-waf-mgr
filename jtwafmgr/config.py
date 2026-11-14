@@ -149,6 +149,9 @@ DEFAULTS = {
         # files changed by known automation (CRS updates, country lists): recorded as "automation", not as an
         # outside change; glob patterns
         'automation_paths': [],
+        # the host's authentication logs: who was logged in when a file changed outside jt-waf-mgr (read with the
+        # adm group; missing files are skipped)
+        'auth_logs': ['/var/log/auth.log', '/var/log/secure'],
     },
     'backup': {
         # Daily copy of the database (SQLite online backup) with a SHA-256 file, kept keep_days.
@@ -406,6 +409,9 @@ class Config:
         for k in ('anchor_minutes', 'program_check_minutes', 'config_check_minutes'):
             if data['integrity'][k] < 1:
                 raise ConfigError('integrity.%s must be at least 1' % k)
+        al = data['integrity']['auth_logs']
+        if not isinstance(al, list) or len(al) > 5 or not all(isinstance(x, str) and x.startswith('/') for x in al):
+            raise ConfigError('integrity.auth_logs: up to 5 absolute paths')
         if not 0 <= data['backup']['hour'] <= 23 or data['backup']['keep_days'] < 1:
             raise ConfigError('backup.hour 0-23, backup.keep_days at least 1')
         nt = data['notify']

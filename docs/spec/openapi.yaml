@@ -116,6 +116,17 @@ components:
         bypass_locations: {type: array, items: {type: string}}
         client_max_body_size: {type: string}
         access_restriction: {type: [string, "null"], description: "e.g. lan-only, country list"}
+        countries:
+          type: array
+          description: managed country rules covering one of the server names
+          items: {type: object, properties: {item_id: {type: integer}, rule_id: {type: integer}, enabled: {type: boolean},
+                                             mode: {type: string, enum: [allow, deny]}, countries: {type: array, items: {type: string}}}}
+        country_changes:
+          type: array
+          description: country changes still on their way (checking, waiting for approval, being applied)
+          items: {type: object, properties: {change_id: {type: integer}, op: {type: string}, state: {type: string},
+                                             item_id: {type: [integer, "null"]}, mode: {type: [string, "null"]},
+                                             countries: {type: array, items: {type: string}}}}
     ChangeProposal:
       type: object
       required: [kind, spec, reason]

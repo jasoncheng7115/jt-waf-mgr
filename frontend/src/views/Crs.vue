@@ -38,16 +38,16 @@
         <h2><Icon name="download" /> {{ t('crsupd.title') }}</h2>
         <dl class="kv">
           <dt>{{ t('crsupd.in_use') }}</dt><dd><b>{{ upd.location ? upd.location.version || '—' : t('crsupd.none') }}</b>
-            <span v-if="upd.location" class="mono small muted"> {{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"> → {{ safeText(upd.location.target, 200) }}</template></span></dd>
+            <div v-if="upd.location" class="mono small muted breakall">{{ safeText(upd.location.path, 200) }}<template v-if="upd.location.link"> → {{ safeText(upd.location.target, 200) }}</template></div></dd>
           <template v-if="upd.versions.length"><dt>{{ t('crsupd.on_disk') }}</dt><dd class="mono">{{ upd.versions.join(', ') }}</dd></template>
           <dt>{{ t('crsupd.managed') }}</dt><dd>
             <label v-if="isAdmin" class="switch"><input type="checkbox" :checked="upd.manage" :disabled="busy" @change="setManage($event.target.checked)">
               <span class="knob" aria-hidden="true"></span><span>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span></label>
             <span v-else>{{ upd.manage ? t('uiset.on') : t('uiset.off') }}</span>
-            <span class="muted small"> {{ t('crsupd.managed_hint', { n: upd.wait_days }) }}</span></dd>
+            <div class="muted small">{{ t('crsupd.managed_hint', { n: upd.wait_days }) }}</div></dd>
           <template v-if="st.checked_at"><dt>{{ t('crsupd.checked') }}</dt><dd>{{ fmtMinute(st.checked_at) }} · <span class="badge" :class="STATE_CLS[st.state] || 'b-logged'">{{ tOr('crsupd.state.' + st.state, st.state) }}</span></dd></template>
-          <template v-if="st.candidate"><dt>{{ t('crsupd.newest') }}</dt><dd>{{ st.candidate.version }} <span class="muted small">{{ t('crsupd.published', { at: fmtMinute(st.candidate.published_at), ready: fmtMinute(st.candidate.ready_at) }) }}</span></dd></template>
-          <template v-if="st.staged"><dt>{{ t('crsupd.staged') }}</dt><dd><b>{{ st.staged.version }}</b> <span class="muted small">{{ t('crsupd.staged_hint', { at: fmtMinute(st.staged.verified_at), n: st.staged.files }) }}</span></dd></template>
+          <template v-if="st.candidate"><dt>{{ t('crsupd.newest') }}</dt><dd>{{ st.candidate.version }}<div class="muted small">{{ t('crsupd.published', { at: fmtMinute(st.candidate.published_at), ready: fmtMinute(st.candidate.ready_at) }) }}</div></dd></template>
+          <template v-if="st.staged"><dt>{{ t('crsupd.staged') }}</dt><dd><b>{{ st.staged.version }}</b><div class="muted small">{{ t('crsupd.staged_hint', { at: fmtMinute(st.staged.verified_at), n: st.staged.files }) }}</div></dd></template>
           <template v-if="st.newer_major"><dt>{{ t('crsupd.major') }}</dt><dd>{{ t('crsupd.major_hint', { v: st.newer_major }) }}</dd></template>
         </dl>
         <p v-if="upd.manage && upd.external_updater" class="alert warn">{{ t('crsupd.external', { path: safeText(upd.external_updater, 200) }) }}</p>
@@ -227,5 +227,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.crsupd .kv dd > div { margin-top: 2px; }
 .wafeffective { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); background: var(--panel-2); color: var(--text); }
 </style>

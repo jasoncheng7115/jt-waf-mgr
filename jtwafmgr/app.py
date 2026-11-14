@@ -40,6 +40,7 @@ class App:
         from .compliance import Monitor
         self.monitor = Monitor(self)
         self._note_version()
+        self._fix_country_events()
         if start_collector:
             self.start_collector()
 
@@ -57,6 +58,19 @@ class App:
                                    severity='crit' if prev[0].isdigit() and _vkey(__version__) < _vkey(prev) else None,
                                    previous=prev, current=__version__)
         except Exception:      # never keep the service from starting over a note
+            pass
+
+    def _fix_country_events(self):
+        """Before 0.4.30 a block by a country rule was stored as decided by the CRS score (listed with the likely false
+        positives): stored events are put right once."""
+        try:
+            if self.db.get_meta('fix.country_decided'):
+                return
+            lo, hi = self.cfg['waf']['country_range']
+            self.db.x("UPDATE events SET decided_by='confident' WHERE outcome='blocked' AND decided_by IN ('score', 'other') "
+                      'AND id IN (SELECT event_id FROM event_rules WHERE rule_id BETWEEN ? AND ?)', (lo, hi))
+            self.db.set_meta('fix.country_decided', '1')
+        except Exception:      # never keep the service from starting over a correction
             pass
 
     def start_collector(self):

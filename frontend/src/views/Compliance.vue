@@ -16,7 +16,7 @@
         <p>
           <template v-if="data.level">{{ t('compliance.level', { level: t('compliance.lv.' + data.level) }) }}</template>
           <template v-else>{{ t('compliance.level_unset') }}</template>
-          <span class="muted small"> {{ t('compliance.level_hint') }}</span>
+          <span class="muted small gapl">{{ t('compliance.level_hint') }}</span>
         </p>
         <div class="seg" role="group" :aria-label="t('compliance.filter')">
           <button v-for="f in FILTERS" :key="f" type="button" :class="{ on: filter === f }" :aria-pressed="filter === f ? 'true' : 'false'" @click="filter = f">

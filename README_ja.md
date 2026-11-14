@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.29
+# jt-waf-mgr v0.4.30
 
 [English](README.md) · [繁體中文](README_zh-TW.md) · **日本語**
 
@@ -47,7 +47,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 - **一時的な IP ブロック**（0.4.24 で追加、任意）：メールサーバーの fail2ban、SOAR プレイブック、承認者が単一アドレスを
   一時的にブロックします。1 つの nginx deny リストがすべてのサイトに効きます。[一時的な IP ブロック](#一時的な-ip-ブロック任意)を参照。
 - **国別ブロック**（0.4.28 で追加、任意）：サイトを一部の国だけに限定、または一部の国をブロックします。一覧は 5 つの地域
-  インターネットレジストリから毎日更新。サイトごとの制限は変更フローを通るルールです。[国別ブロック](#国別ブロック任意)を参照。
+  インターネットレジストリから毎日更新。サイトごとの制限は変更フローを通るルールです。
+  「ルール → 国別制限」に各サイトの許可国とブロック数が表示され、「変更」「制限を追加」ができます。[国別ブロック](#国別ブロック任意)を参照。
 - **リクエスト量**（0.4.23 で追加）：nginx のアクセスログにあるすべてのリクエストを、サイトと時間ごとに集計します（2xx、
   3xx、4xx、5xx、403、444、429、外部、バイト数。数値のみで、IP・URL・User-Agent は保存しません）。WAF がブロックした数と
   並べて表示し、WAF の数字に分母を与えます。管理の「設定」→「リクエスト量」で有効・無効とアラートを設定します。任意の
@@ -86,7 +87,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
   アカウントの期限と見直し。API トークンはスコープと許可送信元ネットワーク付き（提案はできるが承認は不可）。ホスト上での
   復旧は[アカウントと復旧](#アカウントと復旧)を参照してください。
 - **完全性とコンプライアンス**：システムチェック、コンプライアンス、毎日検証されるバックアップとダウンロード（ワンタイム
-  コード）、設定変更の履歴と原因判定（jt-waf-mgr、登録済みの自動化、外部）。
+  コード）、設定変更の履歴と原因判定（jt-waf-mgr、登録済みの自動化、外部）。外部による変更では各ファイルの変更内容
+  （機密らしい値は伏せる）と、その間にホストへログインしていたユーザーを表示します。
 - **画面**：English・繁體中文・日本語、ライト / ダーク、スマートフォンとタブレット、GeoIP（MaxMind GeoLite2、専用の制限付き
   ジョブでダウンロード）と、ページ内で描画するリクエスト発信元の世界地図（地図サービスは使いません）。
 
@@ -95,6 +97,7 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 | ![イベント](docs/shots/ja/events.png) | ![WAF 判定フロー](docs/shots/ja/waf-model.png) |
 | ![イベント分析](docs/shots/ja/analysis.png) | ![通知](docs/shots/ja/notifications.png) |
 | ![アラート](docs/shots/ja/alerts.png) | ![システムチェック](docs/shots/ja/system-check.png) |
+| ![サイトごとの国別制限](docs/shots/ja/countries.png) | ![リクエスト量](docs/shots/ja/traffic.png) |
 
 ## 要件
 
@@ -112,8 +115,8 @@ JSON 監査ログを読み、ファイルを手で編集する必要がありま
 ## インストール
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.29.tar.gz.sig jt-waf-mgr-0.4.29.tar.gz
-tar xzf jt-waf-mgr-0.4.29.tar.gz && cd jt-waf-mgr-0.4.29
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.30.tar.gz.sig jt-waf-mgr-0.4.30.tar.gz
+tar xzf jt-waf-mgr-0.4.30.tar.gz && cd jt-waf-mgr-0.4.30
 sudo ./install.sh                             # 先にすべてのファイルとリリース署名を検証
 sudo jt-waf-mgr check                         # nginx / ModSecurity 設定を解析
 sudo jt-waf-mgr user add alice --role admin   # 一時パスワードを表示

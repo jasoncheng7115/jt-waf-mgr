@@ -183,8 +183,14 @@ class Workflow:
                                       rule_id=spec['before_rule_id'])
         else:
             spec = json.loads(item['spec'])
+        d = rulegen.direction(op, kind, text)
+        if op == 'modify' and kind == 'country':
+            try:
+                d = rulegen.country_modify_direction(json.loads(item['spec']), spec, item['text'], text)
+            except (ValueError, TypeError):
+                d = 'loosen'
         return {'op': op, 'kind': kind, 'item_id': item_id if op != 'add' else None, 'rule_id': rule_id, 'spec': spec,
-                'text': text, 'direction': rulegen.direction(op, kind, text)}
+                'text': text, 'direction': d}
 
     def _start(self, reason, tests):
         reason = (reason or '').strip()

@@ -41,7 +41,7 @@ class TestRulegen(unittest.TestCase):
             'host': {'mode': 'exact', 'value': 'App.Example.com'}, 'path': {'mode': 'prefix', 'value': '/api/'},
             'method': 'post', 'source': 'internal', 'action': 'remove_target_by_id', 'rule_ids': [930120, 932235],
             'targets': ['ARGS:q']}, 10130, self.cfg)
-        self.assertIn(r'"@rx ^app\.example\.com(?::[0-9]+)?$"', text)
+        self.assertIn(r'SecRule REQUEST_HEADERS:Host "@rx ^app\.example\.com\.?(?::[0-9]*)?$"', text)
         self.assertIn('"@beginsWith /api/"', text)
         self.assertIn('"@streq POST"', text)
         self.assertIn('ctl:ruleRemoveTargetById=930120;ARGS:q,ctl:ruleRemoveTargetById=932235;ARGS:q', text)

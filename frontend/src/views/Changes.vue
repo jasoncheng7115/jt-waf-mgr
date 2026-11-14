@@ -41,7 +41,7 @@
                clickable @row-click="(c) => router.push('/changes/' + c.id)">
       <template #cell-id="{ row }"><RouterLink class="mono" :to="'/changes/' + row.id" @click.stop>{{ row.id }}</RouterLink></template>
       <template #cell-created_at="{ row }">{{ fmtShortTime(row.created_at) }}</template>
-      <template #cell-what="{ row }">{{ t('op.' + row.op) }} · {{ t('kind.' + row.kind) }}<span v-if="row.rule_id" class="mono muted"> {{ row.rule_id }}</span></template>
+      <template #cell-what="{ row }">{{ t('op.' + row.op) }} · {{ t('kind.' + row.kind) }}<span v-if="row.rule_id" class="mono muted gapl">{{ row.rule_id }}</span></template>
       <template #cell-summary="{ row }"><TruncText :text="row.summary || ''" :max="2000" expand />
         <div class="sub"><TruncText :text="row.reason || ''" :max="2000" expand /></div></template>
       <template #cell-direction="{ row }"><DirectionBadge :direction="row.direction" /></template>

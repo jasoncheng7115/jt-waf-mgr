@@ -185,7 +185,7 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
 
 <div class="hero"><div class="wrap">
   <div>
-    <h1>jt-waf-mgr <span class="ver">v0.4.29</span></h1>
+    <h1>jt-waf-mgr <span class="ver">v0.4.30</span></h1>
     <p class="lead" data-t="lead"></p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/jasoncheng7115/jt-waf-mgr">GitHub</a>
@@ -282,7 +282,8 @@ p.disclaimer { margin: 16px 0 0; padding: 10px 14px; border-left: 3px solid #f59
     <figure><a class="shotlink" href="shots/en/system-check.png" data-shot="system-check"><img src="shots/en/thumb/system-check.webp" alt="" loading="lazy"></a><figcaption data-t="sc_system"></figcaption></figure>
     <figure><a class="shotlink" href="shots/en/lookup.png" data-shot="lookup"><img src="shots/en/thumb/lookup.webp" alt="" loading="lazy"></a><figcaption data-t="sc_lookup"></figcaption></figure>
     <figure><a class="shotlink" href="shots/en/traffic.png" data-shot="traffic"><img src="shots/en/thumb/traffic.webp" alt="" loading="lazy"></a><figcaption data-t="sc_traffic"></figcaption></figure>
-    <figure><a class="shotlink" href="shots/en/thumb.png" data-shot="overview-dark" data-full="thumb"><img src="shots/en/thumb/overview-dark.webp" alt="" loading="lazy"></a><figcaption data-t="sc_dark"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/countries.png" data-shot="countries"><img src="shots/en/thumb/countries.webp" alt="" loading="lazy"></a><figcaption data-t="sc_countries"></figcaption></figure>
+    <figure><a class="shotlink" href="shots/en/thumb/overview-dark.webp" data-shot="overview-dark" data-full="thumb"><img src="shots/en/thumb/overview-dark.webp" alt="" loading="lazy"></a><figcaption data-t="sc_dark"></figcaption></figure>
   </div>
 </div></section>
 
@@ -488,6 +489,7 @@ const T = {
   open_full: 'Open the whole page',
   sc_lookup: 'Address lookup with its location',
   sc_traffic: 'Request volume next to what the WAF blocked',
+  sc_countries: 'Country limits by site: who may reach each site, what was refused',
   f9_h: 'Request volume',
   f9: 'Every request in the nginx access logs per site and hour (2xx to 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF blocked: the WAF numbers get a denominator. Optional alerts for a traffic spike or many 5xx answers.',
   f10_h: 'Who wrote each rule',
@@ -639,6 +641,7 @@ const T = {
   open_full: '開啟整頁原圖',
   sc_lookup: '查詢位址與所在位置',
   sc_traffic: '請求量與 WAF 封鎖並列',
+  sc_countries: '各站台的國家限制：允許哪些國家、封鎖了多少',
   f9_h: '請求量',
   f9: '依站台與小時統計 nginx 存取記錄裡的每一個請求（2xx 到 5xx、403、444、429、外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量並列，讓 WAF 的數字有分母。可選用流量暴增或大量 5xx 的警示。',
   f10_h: '規則的撰寫者',
@@ -790,6 +793,7 @@ const T = {
   open_full: 'ページ全体を開く',
   sc_lookup: 'アドレスの照会と所在地',
   sc_traffic: 'リクエスト量と WAF のブロックを並べて表示',
+  sc_countries: 'サイトごとの国別制限：接続できる国とブロック数',
   f9_h: 'リクエスト量',
   f9: 'nginx のアクセスログにあるすべてのリクエストをサイトと時間ごとに集計し（2xx から 5xx、403、444、429、外部、バイト数。数値のみで IP・URL・User-Agent は保存しない）、WAF がブロックした数と並べて WAF の数字に分母を与えます。トラフィックの急増や 5xx 多発のアラートも任意で設定できます。',
   f10_h: 'ルールの作成元',

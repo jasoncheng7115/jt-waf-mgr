@@ -337,6 +337,16 @@ SCHEMA = [
     CREATE INDEX ip_blocks_active ON ip_blocks(state, ip);
     CREATE INDEX ip_blocks_token ON ip_blocks(token_id, state);
     """,
+    # 10: the text of the nginx / ModSecurity configuration files by sha256 (zlib, secret-looking values masked before
+    # storing): what an outside change changed, shown as a difference
+    """
+    CREATE TABLE config_contents (
+        sha256 TEXT PRIMARY KEY,
+        size INTEGER NOT NULL,
+        body BLOB NOT NULL,
+        created_at REAL NOT NULL
+    );
+    """,
 ]
 
 

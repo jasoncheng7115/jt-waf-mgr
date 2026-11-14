@@ -339,6 +339,10 @@ are added for you (a request from an allowed and from a refused country, one fro
 from the access logs what the rule would have refused (`requests`, `refused`, `refused_sources`, `refused_success`,
 `countries`); it is informational and never fails the change. A country block is never applied automatically.
 `GET /countries` (any signed-in user; no token scope) lists the countries that have a list and the lists in use.
+`GET /countries/sites` (scope `rules:read`) shows every nginx site with its country rules, the country changes on
+their way, whether the WAF runs there and what the rules refused in the last 7 days.
+The site of a rule is the Host header (also with a trailing dot or a port). A full URL in the request line is routed
+by nginx but not visible to ModSecurity: keep a check in nginx where a country limit must hold against it.
 
 **Kinds `redaction` and `plugin`**: `redaction` takes `fields` (up to 30 argument names that are not inspected, so
 never copied into the audit log) and optional `host` / `path`; `plugin` takes `plugin` (the CRS plugin name) and
@@ -410,7 +414,8 @@ All with scope `rules:read`.
 - **`GET /rules/{id}/hits`**: daily counts, `days` 1 to 365 (default 30):
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`.
 - **`GET /rules/removals`**: rules removed by `SecRuleRemoveById` and similar.
-- **`GET /vhosts`**: the nginx sites and their WAF settings.
+- **`GET /vhosts`**: the nginx sites and their WAF settings; `countries` lists each site's country rules (mode, countries,
+  rule id, enabled) and `country_changes` the country changes still on their way.
 - **`GET /crs`**: the CRS version, paranoia levels, thresholds, engine mode, plugins.
 - **`GET /crs/updates`**: whether jt-waf-mgr keeps the CRS current, the versions on the host, the newest release.
 - **`GET /waf/model`**: how a request is decided on each site (engine, scoring, thresholds, exclusions).

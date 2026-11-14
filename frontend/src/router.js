@@ -13,6 +13,7 @@ import IpLookup from './views/IpLookup.vue'
 import Rules from './views/Rules.vue'
 import RuleDetail from './views/RuleDetail.vue'
 import Vhosts from './views/Vhosts.vue'
+import CountrySites from './views/CountrySites.vue'
 import Crs from './views/Crs.vue'
 import WafModel from './views/WafModel.vue'
 import AdminUsers from './views/AdminUsers.vue'
@@ -52,6 +53,7 @@ const routes = [
   { path: '/changes/:id(\\d+)', name: 'change', component: ChangeDetail, props: true },
   { path: '/versions', name: 'versions', component: Versions },
   { path: '/vhosts', name: 'vhosts', component: Vhosts },
+  { path: '/countries', name: 'countries', component: CountrySites },
   { path: '/crs', name: 'crs', component: Crs },
   { path: '/waf', name: 'waf', component: WafModel },
   { path: '/account', name: 'account', component: Account },

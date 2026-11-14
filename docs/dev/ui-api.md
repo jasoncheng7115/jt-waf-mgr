@@ -198,7 +198,14 @@ is also how `included` is detected.
 Country blocks (0.4.27; countries.py, rulegen kind `country`):
 - `GET /api/v1/countries` (viewer) → `{"enabled", "rules_dir", "generated_at", "stale", "countries": {CC: {"v4", "v6",
   "v4_addresses"}}, "registries": {name: {"ipv4", "ipv6", "countries", "size"}}, "last_run", "last_ok", "last_note",
-  "last_errors", "requested", "sets": [SET...], "applied": {"at", "ok", "summary"}, "pending"}`
+  "last_errors", "requested", "sets": [SET...], "set_users": {SET: [host, "host (#change)"...]},
+  "applied": {"at", "ok", "summary"}, "pending"}`
+- `GET /api/v1/countries/sites` (viewer, scope `rules:read`) → `{"enabled", "generated_at", "sites": [{"host", "names",
+  "blocks": [{"file", "line", "listen", "waf"}], "waf_off", "bypass": [location...], "restrictions": [text...],
+  "countries": [{"item_id", "rule_id", "enabled", "mode", "countries"}], "country_changes": [{"change_id", "op", "state",
+  "item_id", "mode", "countries"}], "uncovered": [name...], "recent": null | {"days": 7, "refused", "sources", "last_at",
+  "countries": [{"country", "requests"}]}}], "unmatched_rules": [...], "unmatched_changes": [...]}`. Sites are server
+  blocks grouped by their first plain name; a regex-only or catch-all block is not a site.
 - `POST /api/v1/countries/update` (admin) → 202, the same object; leaves `update.request` for jt-waf-mgr-countries.path.
 - Changes: `kind: "country"`, spec `{"host": {"mode": "exact", "value"}, "mode": "allow"|"deny", "countries": [CC...],
   "note"}`; 409 `countries_off` / `countries_no_data`, 422 `invalid_spec` (`unknown_country`, `invalid_countries`).
@@ -225,7 +232,11 @@ Audit: `block.add`, `block.extend`, `block.remove`, `block.refused`, `block.expi
   "body_limit": "10G",            // client_max_body_size, null if default
   "restrictions": ["if ($lan = 0) { return 444; }", "allow 192.0.2.0/24; deny all"],   // raw directives, text only
   "realip": false,                // set_real_ip_from in effect for this server
-  "upstreams": ["http://192.0.2.10:8080"]}],
+  "upstreams": ["http://192.0.2.10:8080"],
+  // the managed country rules whose site covers one of the server names, and country changes still on their way
+  "countries": [{"item_id": 7, "rule_id": 10301, "enabled": true, "mode": "allow", "countries": ["JP", "TW"]}],
+  "country_changes": [{"change_id": 41, "op": "modify", "state": "pending_approval", "item_id": 7, "mode": "allow",
+                       "countries": ["TW"]}]}],
  "warnings": ["rules file loaded per vhost: …"]}
 ```
 

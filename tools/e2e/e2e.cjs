@@ -61,11 +61,11 @@ async function setLang(page, lang) {
   }, lang);
 }
 
-const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
+const ROUTES = ['/', '/events', '/rules', '/rules/930110', '/vhosts', '/countries', '/crs', '/lookup/203.0.113.9', '/managed', '/changes', '/changes/new',
   '/versions', '/config-changes', '/guide', '/account', '/admin/users', '/admin/users/review', '/admin/tokens', '/admin/audit',
   '/admin/system', '/admin/compliance', '/admin/settings', '/admin/notify', '/alerts', '/waf', '/analysis', '/traffic', '/blocks', '/nope'];
 
-const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9', '/traffic'];
+const README_PAGES = ['/', '/events', '/waf', '/analysis', '/admin/notify', '/alerts', '/admin/system', '/changes', '/rules', '/lookup/203.0.113.9', '/traffic', '/countries'];
 
 async function audit(page, where) {
   const r = await page.evaluate(() => {
@@ -73,7 +73,12 @@ async function audit(page, where) {
       dates: document.querySelectorAll('input[type=date],input[type=datetime-local],input[type=time]').length,
       noicon: [], overflow: document.documentElement.scrollWidth > window.innerWidth + 2,
       // the decision flowchart: every box shows all of its text (a fixed-height box cut a second detail line)
-      clipped: [...document.querySelectorAll('.fl-box')].filter((b) => b.scrollHeight > b.clientHeight + 1).map((b) => b.innerText.slice(0, 40)) };
+      clipped: [...document.querySelectorAll('.fl-box')].filter((b) => b.scrollHeight > b.clientHeight + 1).map((b) => b.innerText.slice(0, 40)),
+      // a card shows one accent line on its left: a thick left border next to the title bar's own line looks doubled
+      doubled: [...document.querySelectorAll('.card')].filter((c) => {
+        const head = c.querySelector(':scope > .cardhead:first-child, :scope > h2:first-child')
+        return head && parseFloat(getComputedStyle(c).borderLeftWidth) >= 2 && /inset/.test(getComputedStyle(head).boxShadow)
+      }).map((c) => (c.querySelector('h2, .cardhead') || c).innerText.trim().slice(0, 30)) };
     for (const b of document.querySelectorAll('button, a.btn')) {
       if (b.classList.contains('dp-day')) continue;
       if (!b.querySelector('svg') && b.offsetParent !== null) out.noicon.push((b.innerText || b.getAttribute('aria-label') || '').trim().slice(0, 40));
@@ -83,6 +88,7 @@ async function audit(page, where) {
   if (r.selects) problems.push(where + ': native select x' + r.selects);
   if (r.clipped.length) problems.push(where + ': flowchart text cut off: ' + r.clipped.slice(0, 3).join(' | '));
   if (r.dates) problems.push(where + ': native date input x' + r.dates);
+  if (r.doubled.length) problems.push(where + ': card with a doubled left line: ' + r.doubled.slice(0, 3).join(' | '));
   if (r.noicon.length) problems.push(where + ': buttons without icon: ' + r.noicon.slice(0, 5).join(' | '));
   if (r.overflow) notes.push('warn ' + where + ': horizontal page overflow');
 }
@@ -243,6 +249,46 @@ async function audit(page, where) {
   await page.waitForFunction(() => /ipMatchFromFile/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
   ok(nCountries === 6 && (await page.locator('.cochip').count()) === 1 && (await page.locator('body').innerText()).includes('ipMatchFromFile'),
      'country block: staged countries, a chosen one, the rule preview (' + nCountries + ')');
+  // the sites page: a country-limit column; "add limit" opens the same form with the site filled in
+  await page.goto(base + '/vhosts', { waitUntil: 'networkidle' });
+  const addLimit = page.locator('.datatable tbody tr').filter({ hasText: 'intra.example.com' }).locator('a', { hasText: '新增限制' });
+  const offRow = page.locator('.datatable tbody tr').filter({ hasText: 'static.example.com' });
+  ok((await page.locator('.datatable thead', { hasText: '國家限制' }).count()) === 1 && (await addLimit.count()) === 1
+     && (await offRow.locator('a', { hasText: '新增限制' }).count()) === 0 && (await offRow.locator('.cocell', { hasText: 'WAF' }).count()) === 1,
+     'sites: "add limit" where ModSecurity runs, a note instead where it is off');
+  await addLimit.first().click();
+  await page.waitForLoadState('networkidle');
+  ok(/kind=country/.test(page.url()) && (await page.locator('.card.form .field.grow input.mono').first().inputValue()) === 'intranet.example.com',
+     'sites: "add limit" opens the country form for that site');
+  // a limit in place: shown on its site with "modify"; fewer allowed countries tighten, one more loosens
+  await page.goto(base + '/vhosts', { waitUntil: 'networkidle' });
+  const appRow = page.locator('.datatable tbody tr').filter({ hasText: 'app.example.com' });
+  ok((await appRow.locator('.corow', { hasText: '只允許' }).count()) === 1 && (await appRow.locator('.cocode', { hasText: 'JP' }).count()) === 1
+     && (await appRow.locator('a', { hasText: '新增限制' }).count()) === 0 && (await appRow.locator('.cocell .warn', { hasText: 'location' }).count()) === 1,
+     'sites: the limit in place, a note on the location that skips the WAF, no "add limit" beside it');
+  await appRow.locator('a', { hasText: '修改' }).first().click();
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => document.querySelectorAll('.cochip').length === 2, null, { timeout: 5000 }).catch(() => {});
+  const dirBadge = async () => { await page.waitForTimeout(900); return (await page.locator('.card').filter({ hasText: 'ipMatchFromFile' }).locator('.badge', { hasText: /收緊|放寬/ }).first().innerText()).trim() }
+  ok(/item=/.test(page.url()) && (await page.locator('.cochip').count()) === 2, 'country modify: the form holds the rule in place');
+  await page.locator('.cochip', { hasText: 'JP' }).locator('button').click();
+  const dTight = await dirBadge();
+  await page.locator('#co-add').click();
+  await page.locator('[role=option]').filter({ hasText: 'US' }).first().click();
+  await page.locator('#co-add').click().catch(() => {});
+  await page.keyboard.press('Escape').catch(() => {});
+  const dLoose = await dirBadge();
+  ok(dTight.includes('收緊') && dLoose.includes('放寬'), 'country modify: fewer countries tighten, another one loosens (' + dTight + ' / ' + dLoose + ')');
+  // country limits by site: names in the interface language, "add limit" where the WAF runs, a note where it is off,
+  // and a waiting change for a name no server block has
+  await page.goto(base + '/countries', { waitUntil: 'networkidle' });
+  const cs = (h) => page.locator('#country-sites tbody tr, .datatable tbody tr').filter({ hasText: h }).first();
+  ok((await cs('app.example.com').locator('.cochip', { hasText: '台灣' }).count()) === 1
+     && (await cs('app.example.com').locator('a', { hasText: '修改' }).count()) === 1
+     && (await cs('intranet.example.com').locator('a', { hasText: '新增限制' }).count()) === 1
+     && (await cs('static.example.com').locator('a', { hasText: '新增限制' }).count()) === 0
+     && (await page.locator('.card', { hasText: 'shop.example.com' }).count()) >= 1,
+     'country limits page: per site, with names, actions and the change for a name no site has');
   await page.goto(base + '/admin/settings', { waitUntil: 'networkidle' });
   await page.waitForSelector('.coreg tbody tr', { timeout: 5000 }).catch(() => {});
   ok((await page.locator('.coreg tbody tr').count()) === 5 && (await page.locator('.setbadge').count()) >= 1,
@@ -311,7 +357,7 @@ async function audit(page, where) {
   // Thumbnails for the project site (docs/index.html): one screen of each page, rendered at twice the resolution
   // so they stay sharp when shown small (tools/make_thumbs.py scales them down). Same session, its own window size.
   const THUMBS = { overview: '/', events: '/events', 'waf-model': '/waf', analysis: '/analysis', notifications: '/admin/notify',
-    alerts: '/alerts', 'system-check': '/admin/system', changes: '/changes', rules: '/rules', lookup: '/lookup/203.0.113.9', traffic: '/traffic' };
+    alerts: '/alerts', 'system-check': '/admin/system', changes: '/changes', rules: '/rules', lookup: '/lookup/203.0.113.9', traffic: '/traffic', countries: '/countries' };
   const state = await ctx.storageState();
   for (const scheme of ['light', 'dark']) {
     const tc = await browser.newContext({ storageState: state, viewport: { width: 1200, height: 900 }, deviceScaleFactor: 2, colorScheme: scheme });

@@ -13,7 +13,7 @@
       <template v-if="s.collector">
         <dt>{{ t('status.collector') }}</dt>
         <dd><span class="badge" :class="s.collector.running ? 'b-ok' : 'b-blocked'">{{ s.collector.running ? t('status.running') : t('status.stopped') }}</span>
-          <span class="mono small breakall"> {{ safeText(s.collector.audit_log, 300) }}</span></dd>
+          <span class="mono small breakall gapl">{{ safeText(s.collector.audit_log, 300) }}</span></dd>
         <dt>{{ t('status.last_event') }}</dt><dd>{{ fmtTime(s.collector.last_event_at) }}</dd>
         <dt>{{ t('status.lag') }}</dt><dd class="mono">{{ s.collector.lag_seconds ?? '—' }}</dd>
         <dt>{{ t('status.events_total') }}</dt><dd class="mono">{{ fmtNum(s.collector.events_total) }}</dd>

@@ -131,6 +131,12 @@ if cfg['countries']['enabled']:
                                                 'countries': ['TW', 'JP']}, 10300, app.cfg)
     chg('add', 'country', 10300, cspec, 'tighten', 'pending_approval', 'shop.example.com serves customers in Taiwan and Japan only.',
         'approver', 'user', 1800, ctext)
+    # one country limit in place (app.example.com: Taiwan and Japan), for the sites page and its "modify" link
+    aspec, atext, _ = rulegen.build('country', {'host': {'mode': 'exact', 'value': 'app.example.com'}, 'mode': 'allow',
+                                                'countries': ['TW', 'JP']}, 10301, app.cfg)
+    app.db.x("INSERT INTO managed_rules(rule_id, kind, placement, position, spec, text, comment, enabled, deleted, origin, "
+             "created_by, created_at, updated_at, change_id) VALUES (10301, 'country', 'before', 900, ?, ?, '', 1, 0, 'created', "
+             "'approver', ?, ?, NULL)", (json.dumps(aspec), atext, now - 7200, now - 7200))
 chg('add', 'confident_block', 10230, {'target': 'ua', 'regex': '(?i)sqlmap', 'source': 'external', 'msg': 'sqlmap'}, 'tighten',
     'pending_approval', 'SOAR playbook: sqlmap user agent seen on shop.example.com.', 'soar-playbook', 'api', 900,
     'SecRule REQUEST_HEADERS:User-Agent "@rx (?i)sqlmap" "id:10230,phase:1,pass,log,msg:\'jt confident block: sqlmap\'"', owner='admin')

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Shared by the git hooks: refuse text (commit messages, tag messages) that names private hosts,
-addresses or mailboxes (the private denylist, see tools/preflight.py) or carries a session link."""
+"""Shared by the git hooks and the release tool: refuse text (commit messages, tag messages, release notes) that
+names private hosts, addresses or mailboxes (the private denylist and the generic checks of tools/preflight.py),
+carries a key or token, or a session link."""
 import os
 import re
 import sys
@@ -17,12 +18,19 @@ def problems(text):
         if rx.search(text):
             out.append('contains a "%s" line' % rx.pattern.strip('^:'))
     low = text.lower()
-    for d, rx in preflight.load_denylist():
+    deny = preflight.load_denylist(required=True)
+    if deny is None:
+        return ['cannot be checked: no private denylist (%s); set JT_WAF_DENYLIST to it, or to an empty file'
+                % preflight.DENYLIST]
+    for d, rx in deny:
         if rx.search(low):
             out.append('names a private item from the denylist')
-    for rx in getattr(preflight, 'GENERIC_TEXT_PATTERNS', ()):
-        if rx.search(text):
-            out.append('matches %s' % rx.pattern)
+    # the same generic checks as published files: private addresses (test placeholders aside), mailboxes other
+    # than example.com and the co-author line, private keys and tokens
+    before = len(preflight.failures)
+    preflight.scan_text('message', text, [], allow_marker=False)
+    out += [f.split('] ', 1)[-1].replace('message:', 'line ', 1) for f in preflight.failures[before:]]
+    del preflight.failures[before:]
     return out
 
 

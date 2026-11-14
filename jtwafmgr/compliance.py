@@ -9,14 +9,18 @@
   Taiwan's Cyber Security Management Act protection baseline, OWASP Top 10:2025) and a status
   computed from the live configuration. Only what the code actually does is claimed.
 """
+import difflib
 import fnmatch
 import glob
+import hashlib
 import json
 import os
 import sqlite3
 import sys
 import threading
+import re
 import time
+import zlib
 
 from . import __version__, integrity, util
 
@@ -162,6 +166,7 @@ class Monitor:
 
     def check_config(self):
         files, digest = integrity.fingerprint(self.config_files())
+        self._keep_contents(files)
         last = self.db.one('SELECT * FROM config_snapshots ORDER BY id DESC LIMIT 1')
         if last and last['digest'] == digest:
             self.state['config'] = {'checked_at': util.iso(time.time()), 'files': len(files), 'changed': False,
@@ -170,14 +175,105 @@ class Monitor:
         changes = integrity.diff_fingerprints(json.loads(last['files']), files) if last else {}
         cause = 'baseline' if not last else self._cause(last, changes)
         t = util.now()
+        stored = dict(changes)
+        extra = {}
+        if last:
+            # what changed in each file, and -- for a change from outside -- who was logged in to the host meanwhile
+            stored['diffs'] = self._diffs(json.loads(last['files']), files, changes)
+            if cause not in ('jt-waf-mgr',):
+                from . import logins
+                try:
+                    found, loose = logins.sessions(self.cfg['integrity']['auth_logs'], last['ts'], t)
+                except Exception:          # noqa: BLE001 -- a lead for a person, never a reason to miss the change
+                    found, loose = [], []
+                summ = logins.summary(found) if found else ''
+                for x in found:
+                    x['start'], x['end'] = util.iso(x['start']), util.iso(x['end']) if x['end'] else None
+                    for c in x['commands']:
+                        c['at'] = util.iso(c['at'])
+                for c in loose:
+                    c['at'] = util.iso(c['at'])
+                stored['logins'], stored['commands'] = found, loose
+                touched = changes.get('changed', []) + changes.get('added', []) + changes.get('removed', [])
+                extra = {'path': ', '.join(touched[:5]) + (' …' if len(touched) > 5 else ''),
+                         'reason': summ or 'no login recorded in the host\'s authentication log'}
         cur = self.db.x('INSERT INTO config_snapshots(ts, digest, files, changes, cause) VALUES (?,?,?,?,?)',
-                        (t, digest, json.dumps(files), json.dumps(changes), cause))
+                        (t, digest, json.dumps(files), json.dumps(stored), cause))
         if last:
             self.audit.log('config.changed', 'system', 'system', None, 'ok' if cause in ('jt-waf-mgr', 'automation') else 'outside',
-                           snapshot=cur.lastrowid, cause=cause, **{k: v[:30] for k, v in changes.items()})
+                           snapshot=cur.lastrowid, cause=cause, **{k: v[:30] for k, v in changes.items()}, **extra)
         self.state['config'] = {'checked_at': util.iso(time.time()), 'files': len(files), 'changed': bool(last),
                                 'last_change_id': cur.lastrowid, 'cause': cause}
         return self.state['config']
+
+    # --- what changed: the text of the configuration files, secret-looking values masked ----------------------------
+    CONTENT_MAX = 512 * 1024
+    SECRET_WORD = re.compile(r'(?i)(?:password|passwd|secret|token|api[_-]?key|authorization|bearer|credential|'
+                             r'private[_-]?key|auth_basic_user_file|cookie)')
+    LONG_RANDOM = re.compile(r'[A-Za-z0-9+/_=-]{40,}')
+
+    @classmethod
+    def mask_config(cls, text):
+        """The value after a secret-looking word is replaced by ***, and so is any long random-looking string (a key,
+        a token, a hash): the stored copy shows what changed in a line, never the secret itself."""
+        out = []
+        for line in text.splitlines():
+            m = cls.SECRET_WORD.search(line)
+            if m:
+                rest = re.match(r'(\S*\s+)(.*?)(;?\s*)$', line[m.end():])
+                if rest and rest.group(2):
+                    line = line[:m.end()] + rest.group(1) + '***' + rest.group(3)
+            out.append(cls.LONG_RANDOM.sub('***', line))
+        return '\n'.join(out) + ('\n' if text.endswith('\n') else '')
+
+    def _keep_contents(self, files):
+        """Store the masked text of every configuration file version not stored yet (text files up to 512 KB; the
+        nginx program and modules are not text). The bytes read must hash to the fingerprint just taken."""
+        shas = [h for h in files.values() if h]
+        if not shas:
+            return
+        have = set()
+        for i in range(0, len(shas), 400):
+            part = shas[i:i + 400]
+            have.update(r[0] for r in self.db.q('SELECT sha256 FROM config_contents WHERE sha256 IN (%s)'
+                                                % ','.join('?' * len(part)), part))
+        for p, h in files.items():
+            if not h or h in have:
+                continue
+            try:
+                if os.path.getsize(p) > self.CONTENT_MAX:
+                    continue
+                with open(p, 'rb') as fh:
+                    data = fh.read(self.CONTENT_MAX + 1)
+            except OSError:
+                continue
+            if b'\0' in data[:8192] or hashlib.sha256(data).hexdigest() != h:
+                continue
+            body = zlib.compress(self.mask_config(data.decode('utf-8', 'replace')).encode('utf-8'), 6)
+            self.db.x('INSERT OR IGNORE INTO config_contents(sha256, size, body, created_at) VALUES (?,?,?,?)',
+                      (h, len(data), body, util.now()))
+            have.add(h)
+
+    def _content(self, sha):
+        r = self.db.one('SELECT body FROM config_contents WHERE sha256=?', (sha,)) if sha else None
+        try:
+            return zlib.decompress(r['body']).decode('utf-8') if r else None
+        except (zlib.error, UnicodeDecodeError):
+            return None
+
+    def _diffs(self, old, new, changes, max_files=10, max_lines=300):
+        """{path: unified diff of the masked text} for the changed and added files (removed ones: their last text),
+        or a note when a version was not stored (a binary file, a file too large, the first change after upgrading)."""
+        out = {}
+        for p in (changes.get('changed', []) + changes.get('added', []) + changes.get('removed', []))[:max_files]:
+            a, b = self._content(old.get(p)), self._content(new.get(p))
+            if (old.get(p) and a is None) or (new.get(p) and b is None):
+                out[p] = None
+                continue
+            lines = list(difflib.unified_diff((a or '').splitlines(), (b or '').splitlines(), 'before', 'after',
+                                              lineterm='', n=2))
+            out[p] = '\n'.join(lines[:max_lines]) + ('\n…' if len(lines) > max_lines else '')
+        return out
 
     def _cause(self, last, changes):
         """jt-waf-mgr when every changed file is a managed file (or the main ModSecurity file at adoption),
@@ -238,8 +334,14 @@ class Monitor:
             sql += ' WHERE id < ?'
             args.append(before)
         rows = self.db.q(sql + ' ORDER BY id DESC LIMIT ?', args + [limit + 1])
-        items = [{'id': r['id'], 'ts': util.iso(r['ts']), 'digest': r['digest'], 'cause': r['cause'],
-                  'changes': json.loads(r['changes'])} for r in rows[:limit]]
+        items = []
+        for r in rows[:limit]:
+            ch = json.loads(r['changes'])
+            # the list carries the paths and how many logins; the differences are on the snapshot's own page
+            ch['logins'] = len(ch.get('logins') or [])
+            ch.pop('diffs', None)
+            ch.pop('commands', None)
+            items.append({'id': r['id'], 'ts': util.iso(r['ts']), 'digest': r['digest'], 'cause': r['cause'], 'changes': ch})
         return items, (str(rows[limit - 1]['id']) if len(rows) > limit else None)
 
     def config_snapshot(self, sid):

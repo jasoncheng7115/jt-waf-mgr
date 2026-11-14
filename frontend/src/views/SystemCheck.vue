@@ -74,7 +74,7 @@
           <dt>{{ t('backup.last') }}</dt>
           <dd><template v-if="bk.last && bk.last.at">{{ fmtMinute(bk.last.at) }}
             <span class="badge" :class="bk.last.ok ? 'b-ok' : 'b-blocked'">{{ bk.last.ok ? t('result.ok') : t('result.failed') }}</span>
-            <span v-if="bk.last.error" class="small warn"> {{ safeText(bk.last.error, 200) }}</span></template><span v-else class="muted">—</span></dd>
+            <span v-if="bk.last.error" class="small warn gapl">{{ safeText(bk.last.error, 200) }}</span></template><span v-else class="muted">—</span></dd>
         </dl>
         <div v-if="bk.items.length > 1" class="itemchart">
           <h3 class="charthead">{{ t('chart.backup.sizes') }}</h3>
@@ -101,10 +101,10 @@
               <span class="mono">SHA-256 {{ safeText(dlDone[row.file].sha, 64) }}</span></span>
             <template v-if="results[row.file]">
               <span class="badge" :class="results[row.file].ok ? 'b-ok' : 'b-blocked'">{{ results[row.file].ok ? t('backup.verified_ok') : t('backup.verified_bad') }}</span>
-              <span v-if="!results[row.file].ok" class="small warn"> {{ t('backup.sha_ok', { v: results[row.file].sha256_ok ? t('common.yes') : t('common.no') }) }} · integrity_check: {{ safeText(results[row.file].integrity_check, 100) }}</span>
+              <span v-if="!results[row.file].ok" class="small warn gapl">{{ t('backup.sha_ok', { v: results[row.file].sha256_ok ? t('common.yes') : t('common.no') }) }} · integrity_check: {{ safeText(results[row.file].integrity_check, 100) }}</span>
             </template>
-            <span v-if="verifyErrors[row.file]" class="small warn"> {{ errText(verifyErrors[row.file]) }}</span>
-            <span v-if="dlErrors[row.file]" class="small warn"> {{ errText(dlErrors[row.file]) }}</span>
+            <span v-if="verifyErrors[row.file]" class="small warn gapl">{{ errText(verifyErrors[row.file]) }}</span>
+            <span v-if="dlErrors[row.file]" class="small warn gapl">{{ errText(dlErrors[row.file]) }}</span>
           </template>
         </DataTable>
         <p class="muted small">{{ t('backup.offsite', { days: bk.keep_days }) }}</p>

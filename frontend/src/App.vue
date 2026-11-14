@@ -127,6 +127,7 @@ const navGroups = computed(() => [
   { key: 'rules', label: t('nav.g_rules'), icon: 'shield', items: [
     { to: '/rules', label: t('nav.rules_list'), icon: 'shield' },
     { to: '/vhosts', label: t('nav.vhosts'), icon: 'server' },
+    { to: '/countries', label: t('nav.countries'), icon: 'globe' },
     { to: '/crs', label: t('nav.crs'), icon: 'code' },
     { to: '/waf', label: t('waf.title'), icon: 'verify' },
   ] },

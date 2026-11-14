@@ -11,7 +11,10 @@
       （按鈕有圖示、沒有原生 select / 日期輸入、表格使用 DataTable）全部成功。
 - [ ] `python3 tools/preflight.py` — 發佈檢查（私人名稱、位址、機密）成功；它也會檢查
       README.md / README_zh-TW.md / README_ja.md 的標題含新版本號（更新它們以及 docs/index.html）。
-- [ ] 介面有變更時，用瀏覽器測試的結果更新 README 截圖（`docs/shots/{en,zh-TW,ja}/`）。
+- [ ] 介面有任何改動：README 與專案網站的截圖全部用瀏覽器測試重新擷取，三種語言加縮圖（`docs/shots/{en,zh-TW,ja}/`、
+      `thumb/`）；任何一張都不能比這次發版執行舊。
+- [ ] 新功能的測試案例都已寫進測試（見 `TEST_PLAN.md` §4）；新增一種公開檔案或一種公開方式時，要在
+      `tests/test_publication.py` 加上它的檢查。
 
 ## 2. 瀏覽器
 - [ ] `tools/e2e/run.sh` — 每一頁的 zh-TW 與 en、淺色與深色、佈景主題切換、排序 / 篩選 / 欄位選擇 / 分頁、
@@ -40,7 +43,18 @@
 - [ ] 新的寫入路由有稽核（`TestAuditCoverage`）、新的輸入有驗證、攻擊者可控的文字以文字顯示。套用程式、收集器、
       驗證或完整性的變更，要由沒有撰寫它們的人（或 agent）審查。
 
+## 5a. 機密、個資、隱私不外流（見 `TEST_PLAN.md` §5a）
+- [ ] `tools/sync_github.sh`：只複製 PUBLISH.txt 上的路徑，並對結果跑 preflight。
+- [ ] 經過 hook 提交（絕不用 `--no-verify`）：沒有私人名稱、位址、信箱、金鑰或權杖；沒有 `Claude-Session:` 那一行；
+      作者與提交者都是這個 repo 設定的身分。
+- [ ] 附註 tag（`git tag -a vX.Y.Z -m 'jt-waf-mgr vX.Y.Z'`）；`git push` 會對每個要推的 commit 與 tag 跑 `check_push.py`。
+      被拒絕時，把私人內容拿掉，不可跳過 hook。
+- [ ] `tools/gh_release.py`：Release 說明送出前會先掃描。
+- [ ] 截圖只從合成環境擷取；檢查程式有改動時，整個歷史重新掃一次。
+
 ## 6. 正式機安裝
 - [ ] 先在伺服器上執行 `sudo ./upgrade.sh --check`；再執行 `sudo ./upgrade.sh`。
 - [ ] 之後：`sudo jt-waf-mgr doctor`、網頁介面，以及（涉及 nginx 時）站台檢查。
+- [ ] 國家規則或 nginx 修改之後：站台頁、稽核記錄（外部請求被 `jt-country-block` 封鎖）、內部存取與健康檢查網址
+      都和之前一樣；手動修改的檔案都留有備份。
 - [ ] 在部署記錄中記下版本、時間與結果。

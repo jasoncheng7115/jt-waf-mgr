@@ -372,7 +372,7 @@ def on_audit(audit, rid, action, actor, src_ip, result, severity, details):
             link = '/changes/%s' % d['change_id']
         aid = alerts.raise_alert(db, audit, 'system', kind, 'critical', dd or ev, {'event': ev, 'audit_id': rid,
                                  **{k: v for k, v in details.items() if k in ('change_id', 'snapshot', 'reason', 'file',
-                                                                               'error', 'step', 'purpose', 'cause')}},
+                                                                               'error', 'step', 'purpose', 'cause', 'path')}},
                                  link=link, notify=False)
         d['alert_id'] = aid
     sev = None

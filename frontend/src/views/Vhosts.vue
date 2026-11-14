@@ -36,6 +36,30 @@
           {{ t('vhosts.inline_rules') }}: <RouterLink v-for="id in row.inline_rule_ids" :key="id" :to="'/rules/' + id" class="idlink">{{ id }}</RouterLink>
         </div>
       </template>
+      <template #cell-countries="{ row }">
+        <div class="cocell">
+        <div v-for="c in row.countries || []" :key="'r' + c.item_id" class="corow">
+          <span class="badge" :class="!c.enabled ? 'b-logged' : c.mode === 'allow' ? 'b-ok' : 'b-blocked'">{{ t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) }}</span>
+          <span v-for="cc in c.countries" :key="cc" class="mono cocode" :title="countryName(cc)">{{ cc }}</span>
+          <span v-if="!c.enabled" class="muted small">{{ t('managed.disabled') }}</span>
+          <RouterLink v-if="c.rule_id" :to="'/rules/' + c.rule_id" class="idlink mono small">{{ c.rule_id }}</RouterLink>
+          <RouterLink v-if="canPropose" class="btn small ghost" :to="{ path: '/changes/new', query: { item: c.item_id } }"><Icon name="edit" />{{ t('managed.modify') }}</RouterLink>
+        </div>
+        <div v-for="c in row.country_changes || []" :key="'c' + c.change_id + '-' + (c.item_id || '')" class="corow">
+          <RouterLink :to="'/changes/' + c.change_id" class="badge b-warn">{{ t('vhosts.country_pending', { id: c.change_id }) }}</RouterLink>
+          <span class="small muted">{{ t('op.' + (c.op || 'add')) }}</span>
+          <span v-for="cc in c.countries" :key="cc" class="mono cocode" :title="countryName(cc)">{{ cc }}</span>
+        </div>
+        <!-- a country rule is a ModSecurity rule: it does nothing where ModSecurity is off -->
+        <p v-if="row.waf === 'off' && (row.countries || []).length" class="small warn">{{ t('vhosts.country_waf_off_rule') }}</p>
+        <p v-else-if="row.waf !== 'off' && (row.countries || []).length && (row.bypass || []).length" class="small warn">
+          {{ t('vhosts.country_bypass', { n: row.bypass.length }) }}</p>
+        <span v-if="row.waf === 'off' && !(row.countries || []).length" class="muted small">{{ t('vhosts.country_waf_off') }}</span>
+        <RouterLink v-else-if="canPropose && countryHost(row) && !(row.countries || []).length" class="btn small ghost"
+                    :to="{ path: '/changes/new', query: { kind: 'country', host: countryHost(row) } }"><Icon name="add" />{{ t('vhosts.country_add') }}</RouterLink>
+        <span v-else-if="!(row.countries || []).length && !(row.country_changes || []).length" class="muted">—</span>
+        </div>
+      </template>
       <template #cell-bypass="{ row }">
         <div v-for="b in row.bypass || []" :key="b.file + b.line" class="mono" :title="safeText(b.file, 500) + ':' + b.line"><TruncText :text="b.location" :max="120" mono /></div>
         <span v-if="!(row.bypass || []).length" class="muted">—</span>
@@ -53,8 +77,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { get } from '../api.js'
-import { t } from '../i18n.js'
+import { t, lang } from '../i18n.js'
 import { safeText } from '../util.js'
+import { hasRole } from '../store.js'
 import ErrorBox from '../components/ErrorBox.vue'
 import Loading from '../components/Loading.vue'
 import TruncText from '../components/TruncText.vue'
@@ -74,6 +99,8 @@ const cols = computed(() => [
     text: (v) => (v.server_names || []).join(' ') + ' ' + (v.file || '') + ' ' + (v.listen || []).join(' ') },
   { key: 'waf', label: t('vhosts.waf'), nowrap: true, value: (v) => t('waf.' + (v.waf || 'unknown')),
     text: (v) => t('waf.' + (v.waf || 'unknown')) + ' ' + (v.inline_rule_ids || []).join(' ') },
+  { key: 'countries', label: t('vhosts.countries'), value: (v) => (v.countries || []).length,
+    text: (v) => (v.countries || []).concat(v.country_changes || []).map((c) => t('vhosts.country_mode.' + (c.mode === 'deny' ? 'deny' : 'allow')) + ' ' + (c.countries || []).join(' ')).join(' ') },
   { key: 'bypass', label: t('vhosts.bypass'), value: (v) => (v.bypass || []).length, text: (v) => (v.bypass || []).map((b) => b.location).join(' ') },
   { key: 'body_limit', label: t('vhosts.body_limit'), text: (v) => v.body_limit || t('vhosts.default') },
   { key: 'restrictions', label: t('vhosts.restrictions'), value: (v) => (v.restrictions || []).length, text: (v) => (v.restrictions || []).join(' ') },
@@ -81,6 +108,14 @@ const cols = computed(() => [
   { key: 'upstreams', label: t('vhosts.upstreams'), value: (v) => (v.upstreams || []).join(' ') },
 ])
 
+const canPropose = computed(() => hasRole('operator'))
+// country names in the interface language from the browser (as on the new change page)
+const regionNames = computed(() => { try { return new Intl.DisplayNames([{ 'zh-TW': 'zh-Hant-TW', ja: 'ja', en: 'en' }[lang.value] || 'en'], { type: 'region' }) } catch { return null } })
+function countryName(c) { try { return (regionNames.value && regionNames.value.of(c)) || c } catch { return c } }
+// the site a new country rule is for: the first plain name of the server block (not "_" or a regular expression)
+function countryHost(v) {
+  return (v.server_names || []).find((n) => n && n !== '_' && !n.startsWith('~') && /^(\*\.)?[a-z0-9.-]+$/i.test(n)) || ''
+}
 function count(w) { return items.value.filter((v) => v.waf === w).length }
 function wafCls(w) { return w === 'block' ? 'b-blocked' : w === 'on' ? 'b-ok' : w === 'off' ? 'b-warn' : 'b-int' }
 function shortFile(p) {
@@ -117,6 +152,13 @@ onMounted(async () => {
   try { byHost.value = (await get('/overview', { range: '7d' })).by_host || [] } catch { byHost.value = [] }
 })
 </script>
+
+<style scoped>
+.cocell { min-width: 230px; }
+.cocell .warn { margin: 2px 0 0; }
+.corow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
+.cocode { font-size: 12px; }
+</style>
 
 <style scoped>
 .badge .icon { margin-right: 3px; vertical-align: -0.25em; }

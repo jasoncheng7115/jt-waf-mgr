@@ -30,6 +30,12 @@ class TestParser(unittest.TestCase):
         self.assertEqual(e['host'], 'app.example.com')
         self.assertEqual(e['message'], 'Path Traversal Attack')
 
+    def test_country_block_is_confident(self):
+        # a country rule decides by the source address alone (0.4.30: was listed as a CRS score block)
+        e = self.p.parse(record(status=403, engine='Enabled',
+                                rules=[(10309, 'jt country block: only JP TW', ''), (949110, 'Inbound Anomaly Score Exceeded', '')]))
+        self.assertEqual((e['outcome'], e['decided_by']), ('blocked', 'confident'))
+
     def test_fallback(self):
         e = self.p.parse(record(status=403, engine='Enabled', rules=[10203, 10299]))
         self.assertEqual(e['decided_by'], 'fallback')

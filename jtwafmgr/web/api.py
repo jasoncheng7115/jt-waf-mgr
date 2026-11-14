@@ -767,7 +767,48 @@ def vhosts(app, req):
     n, m = app.site.load()
     items = n.servers()
     items.sort(key=lambda s: (s['server_names'][0] if s['server_names'] else '~', s['file'], s['line']))
+    _vhost_countries(app, items)
     return json_response(200, {'items': items, 'warnings': m.warnings + n.errors + m.errors})
+
+
+def _vhost_countries(app, servers):
+    """Each site's country limits: the managed country rules whose site scope covers one of its names, and the
+    country changes still on their way (checking, waiting for approval, being applied)."""
+    from .. import rulegen
+    if getattr(app, 'workflow', None) is None:
+        return [], []
+    rules = []
+    for it in app.workflow.managed.items():
+        if it['kind'] != 'country':
+            continue
+        try:
+            spec = json.loads(it['spec'])
+        except ValueError:
+            continue
+        rules.append({'item_id': it['id'], 'rule_id': it['rule_id'], 'enabled': bool(it['enabled']), 'mode': spec.get('mode'),
+                      'countries': spec.get('countries') or [], 'host': spec.get('host') or {}})
+    changes = []
+    for r in app.db.q("SELECT id, op, kind, item_id, spec, state FROM changes WHERE kind IN ('country', 'bundle') "
+                      "AND state IN ('checking', 'pending_approval', 'approved', 'applying') ORDER BY id"):
+        try:
+            spec = json.loads(r['spec'])
+        except ValueError:
+            continue
+        ops = [b for b in spec.get('ops', []) if b.get('kind') == 'country'] if r['kind'] == 'bundle' else \
+            [{'op': r['op'], 'item_id': r['item_id'], 'spec': spec}]
+        for b in ops:
+            host = (b.get('spec') or {}).get('host')
+            if not host and b.get('item_id'):           # disable / enable / delete: the site of the rule it changes
+                host = next((x['host'] for x in rules if x['item_id'] == b['item_id']), None)
+            changes.append({'change_id': r['id'], 'op': b.get('op'), 'state': r['state'], 'item_id': b.get('item_id'),
+                            'mode': (b.get('spec') or {}).get('mode'), 'countries': (b.get('spec') or {}).get('countries') or [],
+                            'host': host or {}})
+    for s in servers:
+        names = [x for x in s.get('server_names') or [] if x and x != '_' and not x.startswith('~')]
+        hit = lambda h: bool(h) and any(rulegen.host_matches(h, nm) for nm in names)   # noqa: E731
+        s['countries'] = [{k: v for k, v in x.items() if k != 'host'} for x in rules if hit(x['host'])]
+        s['country_changes'] = [{k: v for k, v in x.items() if k != 'host'} for x in changes if hit(x['host'])]
+    return rules, changes
 
 
 def crs(app, req):
@@ -1252,6 +1293,8 @@ def change_preview(app, req):
     spec = b.get('spec') if isinstance(b.get('spec'), dict) else {}
     mg = _wf(app).managed
     item = mg.item(b['item_id']) if isinstance(b.get('item_id'), int) else None
+    if item is not None:
+        kind = item['kind']                 # a changed rule keeps its kind, whatever the form sends
     try:
         if kind == 'raw':
             ids = rulegen.check_raw_text(spec.get('text') or '', cfg=app.cfg)
@@ -1265,8 +1308,17 @@ def change_preview(app, req):
         return json_response(200, {'ok': False, 'field': e.field, 'reason': e.code, 'details': e.details})
     except ValueError as e:
         return json_response(200, {'ok': False, 'field': 'kind', 'reason': str(e)})
-    return json_response(200, {'ok': True, 'rule_id': rid, 'rule_text': text, 'placement': placement,
-                               'direction': rulegen.direction('add', kind, text)})
+    # the same direction the change will get: a changed rule loosens, unless it is a country limit that refuses
+    # at least what it refused before
+    d = rulegen.direction('add', kind, text)
+    if item is not None:
+        d = rulegen.direction('modify', kind, text)
+        if kind == 'country':
+            try:
+                d = rulegen.country_modify_direction(json.loads(item['spec']), spec, item['text'], text)
+            except (ValueError, TypeError):
+                d = 'loosen'
+    return json_response(200, {'ok': True, 'rule_id': rid, 'rule_text': text, 'placement': placement, 'direction': d})
 
 
 def _cid(req):
@@ -1635,6 +1687,74 @@ def countries_status(app, req):
     return json_response(200, app.countries.status())
 
 
+def country_sites(app, req):
+    """Country limits seen from the sites: every nginx site (server blocks grouped by their first name) with its WAF
+    state, the country rules that cover it and the country changes on their way, the locations that skip the WAF (a
+    country rule does not reach them), nginx's own access limits, and what the rules refused in the last 7 days.
+    Rules and changes that match no site are listed apart (a name that changed, a typing error)."""
+    from .. import rulegen
+    n, _ = app.site.load()
+    servers = n.servers()
+    rules, changes = _vhost_countries(app, servers)
+    sites = collections.OrderedDict()
+    for s in sorted(servers, key=lambda x: (x['server_names'][0] if x['server_names'] else '~', x['file'], x['line'])):
+        name = next((x for x in s['server_names'] if x and x != '_' and not x.startswith('~')), None)
+        if not name:
+            continue                                        # a catch-all or regex-only block is not a site
+        site = sites.setdefault(name.lower(), {'host': name.lower(), 'names': [], 'blocks': [], 'bypass': [], 'restrictions': [],
+                                               'countries': {}, 'country_changes': {}})
+        for x in s['server_names']:
+            if x not in site['names']:
+                site['names'].append(x)
+        site['blocks'].append({'file': s['file'], 'line': s['line'], 'listen': s.get('listen') or [], 'waf': s.get('waf')})
+        site['bypass'] += [b['location'] for b in s.get('bypass') or [] if b['location'] not in site['bypass']]
+        site['restrictions'] += [r for r in s.get('restrictions') or [] if r not in site['restrictions']]
+        for c in s['countries']:
+            site['countries'][c['item_id']] = c
+        for c in s['country_changes']:
+            site['country_changes'][(c['change_id'], c.get('item_id'))] = c
+    since = util.now() - 7 * 86400
+    lk = None
+    try:
+        lk = app.countries.lookup()
+    except (OSError, ValueError, AttributeError):
+        lk = None
+    used_items, used_changes = set(), set()
+    out = []
+    for site in sites.values():
+        site['countries'] = list(site['countries'].values())
+        site['country_changes'] = list(site['country_changes'].values())
+        used_items.update(c['item_id'] for c in site['countries'])
+        used_changes.update((c['change_id'], c.get('item_id')) for c in site['country_changes'])
+        site['waf_off'] = all(b['waf'] == 'off' for b in site['blocks'])
+        # a rule names one site; a server block with several names is limited only where a rule names it
+        mine = [r for r in rules if r['item_id'] in {c['item_id'] for c in site['countries']}]
+        plain = [x.lower() for x in site['names'] if x and x != '_' and not x.startswith('~')]
+        site['uncovered'] = [x for x in plain if mine and not any(rulegen.host_matches(r['host'], x) for r in mine)]
+        ids = [c['rule_id'] for c in site['countries'] if c.get('rule_id')]
+        site['recent'] = None
+        if ids:
+            qs = ','.join('?' * len(ids))
+            row = app.db.one('SELECT COUNT(DISTINCT er.event_id) n, COUNT(DISTINCT e.src_ip) src, MAX(er.ts) last '
+                             'FROM event_rules er JOIN events e ON e.id = er.event_id '
+                             "WHERE er.rule_id IN (%s) AND er.ts >= ? AND er.outcome = 'blocked'" % qs, ids + [since])
+            top = collections.Counter()
+            if lk is not None and row['n']:
+                for (ip, k) in app.db.q('SELECT e.src_ip, COUNT(DISTINCT e.id) FROM event_rules er JOIN events e ON e.id = er.event_id '
+                                        "WHERE er.rule_id IN (%s) AND er.ts >= ? AND er.outcome = 'blocked' "
+                                        'GROUP BY e.src_ip ORDER BY 2 DESC LIMIT 500' % qs, ids + [since]):
+                    top[lk.country(ip) or '??'] += k
+            site['recent'] = {'days': 7, 'refused': row['n'] or 0, 'sources': row['src'] or 0, 'last_at': row['last'],
+                              'countries': [{'country': c, 'requests': k} for c, k in top.most_common(5)]}
+        out.append(site)
+    man = app.countries.manifest() if getattr(app, 'countries', None) else None
+    return json_response(200, {
+        'enabled': bool(app.cfg['countries']['enabled']), 'generated_at': (man or {}).get('generated_at'),
+        'sites': out,
+        'unmatched_rules': [{k: v for k, v in r.items()} for r in rules if r['item_id'] not in used_items],
+        'unmatched_changes': [c for c in changes if (c['change_id'], c.get('item_id')) not in used_changes]})
+
+
 def countries_update(app, req):
     """Like GeoIP: the web service never downloads; it leaves a request file for the sandboxed updater unit."""
     try:
@@ -1735,6 +1855,7 @@ def register_compliance(router):
     R('GET', V + '/llm/test', llm_test_result, admin)
     R('POST', V + '/geoip/update', geoip_update, admin)
     R('GET', V + '/countries', countries_status, ('role', 'viewer', None))
+    R('GET', V + '/countries/sites', country_sites, ('role', 'viewer', 'rules:read'))
     R('POST', V + '/countries/update', countries_update, admin)
     R('GET', V + '/geoip/{ip}', geoip_lookup, ('role', 'viewer', 'lookups:read'))
     R('POST', V + '/backups', backup_now, admin)

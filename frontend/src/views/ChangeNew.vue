@@ -416,6 +416,7 @@ onMounted(async () => {
   try {
     if (route.query.item) await prefillItem(route.query.item)
     else if (route.query.from_event) await prefillEvent(route.query.from_event, route.query.mode)
+    else if (kind.value === 'country' && typeof route.query.host === 'string') co.host = route.query.host.trim().toLowerCase().slice(0, 253)
   } catch (e) { loadError.value = e }
   if (kind.value === 'raw' && !hasRole('admin')) {
     if (item.value) { blocked.value = true; loadError.value = { code: 'raw_admin_only' } } else kind.value = 'exclusion'

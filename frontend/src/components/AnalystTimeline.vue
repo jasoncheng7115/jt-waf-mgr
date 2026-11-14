@@ -7,7 +7,8 @@
       <!-- the window every run reads -->
       <rect class="atl-win" :x="PAD" y="22" :width="NOWX - PAD" height="26" rx="4" />
       <text class="atl-wlabel" :x="(PAD + NOWX) / 2" y="39" text-anchor="middle">{{ t('atl.window', { h: windowHours }) }}</text>
-      <line v-for="tk in pastTicks" :key="'p' + tk.x" class="gridline" :x1="tk.x" :x2="tk.x" y1="18" y2="52" />
+      <!-- short ticks under the bar: a line across it would run through its label -->
+      <line v-for="tk in pastTicks" :key="'p' + tk.x" class="gridline" :x1="tk.x" :x2="tk.x" y1="49" y2="55" />
       <text v-for="tk in pastTicks" :key="'pl' + tk.x" class="axis-label" :x="tk.x" y="68" text-anchor="middle">{{ tk.label }}</text>
       <!-- now -->
       <line class="atl-now" :x1="NOWX" :x2="NOWX" y1="10" y2="56" />

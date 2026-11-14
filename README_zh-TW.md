@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.29
+# jt-waf-mgr v0.4.30
 
 [English](README.md) · **繁體中文** · [日本語](README_ja.md)
 
@@ -46,7 +46,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 - **暫時封鎖 IP**（0.4.24 新增，選用）：郵件主機的 fail2ban、SOAR 劇本或核准者可以暫時封鎖單一位址；一個 nginx deny
   清單涵蓋所有站台。見[暫時封鎖 IP](#暫時封鎖-ip選用)。
 - **國家封鎖**（0.4.28 新增，選用）：讓站台只允許某些國家，或封鎖某些國家；清單來自五大區域網際網路註冊機構，每天更新。
-  每個站台的限制都是一條規則，要經過變更流程。見[國家封鎖](#國家封鎖選用)。
+  每個站台的限制都是一條規則，要經過變更流程；「規則 → 國家限制」頁列出每個站台允許哪些國家、封鎖了多少，
+  可直接「修改」或「新增限制」。見[國家封鎖](#國家封鎖選用)。
 - **請求量**（0.4.23 新增）：計算 nginx 存取記錄裡的每一個請求，依站台與小時統計（2xx、3xx、4xx、5xx、403、444、429、
   外部、位元組數；只有數字，不存 IP、網址或 User-Agent），和 WAF 封鎖的數量放在一起，讓 WAF 的數字有分母可以比較。
   在管理的「設定」→「請求量統計」啟用或關閉並設定警示；選用的警示（預設關閉）：流量暴增（該站台前 7 天同一時段平常量的
@@ -78,7 +79,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 - **帳號**：scrypt 密碼、approver / admin 必須雙因素驗證、鎖定、含歷史與期限的密碼政策、帳號到期與審查；API 權杖有範圍與
   允許來源網段（權杖可以提案，永遠不能核准）。主機上的救援指令請見[帳號與救援](#帳號與救援)。
 - **完整性與合規**：系統檢查頁、合規頁、每日驗證過的備份與下載（需一次性驗證碼）、設定異動記錄與來源判斷（jt-waf-mgr、
-  已登記的自動化或外部）。
+  已登記的自動化或外部）；外部修改會顯示每個檔案改了什麼（看起來像機密的值會遮蔽），以及當時誰登入了主機。
 - **介面**：English、繁體中文、日本語；淺色與深色；手機與平板；GeoIP（MaxMind GeoLite2，由獨立的受限程序下載），以及在頁面內繪製的請求來源世界地圖（不使用任何地圖服務）。
 
 | | |
@@ -86,6 +87,7 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 | ![事件](docs/shots/zh-TW/events.png) | ![WAF 判斷流程](docs/shots/zh-TW/waf-model.png) |
 | ![事件分析](docs/shots/zh-TW/analysis.png) | ![通知](docs/shots/zh-TW/notifications.png) |
 | ![待處理警示](docs/shots/zh-TW/alerts.png) | ![系統檢查](docs/shots/zh-TW/system-check.png) |
+| ![各站台的國家限制](docs/shots/zh-TW/countries.png) | ![請求量](docs/shots/zh-TW/traffic.png) |
 
 ## 需求
 
@@ -99,8 +101,8 @@ jt-waf-mgr 把稽核記錄變成看得懂的畫面，把每一次修改變成可
 ## 安裝
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.29.tar.gz.sig jt-waf-mgr-0.4.29.tar.gz
-tar xzf jt-waf-mgr-0.4.29.tar.gz && cd jt-waf-mgr-0.4.29
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.30.tar.gz.sig jt-waf-mgr-0.4.30.tar.gz
+tar xzf jt-waf-mgr-0.4.30.tar.gz && cd jt-waf-mgr-0.4.30
 sudo ./install.sh                             # 先驗證每個檔案與發行檔簽章
 sudo jt-waf-mgr check                         # 解析 nginx / ModSecurity 設定
 sudo jt-waf-mgr user add alice --role admin   # 印出臨時密碼

@@ -24,6 +24,35 @@
           <div><h3 class="charthead">{{ t('chart.cfgchg.this_change') }}</h3><SegBar :parts="kindParts(snap)" :label="t('chart.cfgchg.this_change')" /></div>
         </div>
         <ChangedPaths :changes="snap.changes" />
+        <!-- who was logged in meanwhile (the host's authentication log): a lead, not proof -->
+        <template v-if="Array.isArray(snap.changes.logins)">
+          <h3><Icon name="users" /> {{ t('cfgchg.who') }}</h3>
+          <p class="muted small">{{ t('cfgchg.who_hint') }}</p>
+          <p v-if="!snap.changes.logins.length" class="alert warn">{{ t('cfgchg.who_none') }}</p>
+          <ul class="plainlist wholist">
+            <li v-for="(s, i) in snap.changes.logins" :key="i">
+              <b class="mono">{{ safeText(s.user, 60) }}</b>
+              <span class="gapl">{{ t('cfgchg.who_from', { from: safeText(s.from, 80), method: safeText(s.method, 40) }) }}</span>
+              <span class="muted gapl">{{ fmtMinute(s.start) }} – {{ s.end ? fmtMinute(s.end) : t('cfgchg.still_open') }}</span>
+              <div v-if="s.key" class="small muted mono breakall">{{ safeText(s.key, 200) }}</div>
+              <div v-for="(c, j) in s.commands || []" :key="j" class="small mono breakall">{{ fmtMinute(c.at) }} sudo → {{ safeText(c.as, 40) }}: {{ safeText(c.command, 300) }}</div>
+            </li>
+            <li v-for="(c, j) in snap.changes.commands || []" :key="'c' + j" class="small mono breakall">
+              {{ fmtMinute(c.at) }} {{ safeText(c.by, 60) }} → {{ safeText(c.as, 40) }}: {{ safeText(c.command, 300) }}</li>
+          </ul>
+        </template>
+        <!-- what changed: the stored text of each file (secret-looking values masked) -->
+        <template v-if="snap.changes.diffs && Object.keys(snap.changes.diffs).length">
+          <h3><Icon name="code" /> {{ t('cfgchg.diffs') }}</h3>
+          <p class="muted small">{{ t('cfgchg.diffs_hint') }}</p>
+          <div v-for="(d, path) in snap.changes.diffs" :key="path" class="difffile">
+            <div class="mono small breakall"><b>{{ safeText(path, 400) }}</b></div>
+            <p v-if="d === null" class="muted small">{{ t('cfgchg.diff_none') }}</p>
+            <p v-else-if="!d" class="muted small">{{ t('cfgchg.diff_same') }}</p>
+            <pre v-else class="difftext"><span v-for="(l, i) in d.split('\n')" :key="i" :class="diffCls(l)">{{ l }}
+</span></pre>
+          </div>
+        </template>
         <h3>{{ t('cfgchg.files', { n: fileRows.length }) }}</h3>
         <DataTable id="cfgchg-files" :columns="fileCols" :rows="fileRows" row-key="path" :row-class="(r) => ({ hl: touched.has(r.path) })" :default-sort="{ key: 'path', dir: 1 }">
           <template #cell-path="{ row }"><span class="mono breakall">{{ safeText(row.path, 400) }}</span></template>
@@ -68,6 +97,7 @@
 <script setup>
 import { ref, computed, watch, defineComponent, h } from 'vue'
 import { get } from '../api.js'
+function diffCls(l) { return l.startsWith('+++') || l.startsWith('---') ? 'dh' : l.startsWith('+') ? 'da' : l.startsWith('-') ? 'dd' : l.startsWith('@@') ? 'dh' : '' }
 import RowTimeline from '../components/RowTimeline.vue'
 import { inWindow } from '../timeWindow.js'
 import { t, tOr } from '../i18n.js'
@@ -187,3 +217,12 @@ async function loadOne() {
 
 watch(() => props.id, () => { if (props.id) loadOne(); else load(true) }, { immediate: true })
 </script>
+
+<style scoped>
+.wholist li { margin-bottom: 6px; }
+.difffile { margin-bottom: 12px; }
+.difftext { max-height: 420px; overflow: auto; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; }
+.difftext .da { color: var(--ok); background: var(--ok-bg); display: inline-block; width: 100%; }
+.difftext .dd { color: var(--blocked); background: var(--blocked-bg); display: inline-block; width: 100%; }
+.difftext .dh { color: var(--muted); }
+</style>

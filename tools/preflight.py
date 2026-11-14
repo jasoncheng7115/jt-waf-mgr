@@ -43,23 +43,36 @@ def publish_list():
     return sorted(files)
 
 
-_OCTET = r'(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)'
+_OCTET = r'(?:0{0,2}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d))'
+# a private address, also at the end of a sentence ("... on 192.168.x.y.") and with a prefix length (a network);
+# the generic RFC 1918 blocks themselves (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) are documentation, not secrets
 PRIVATE_IP = re.compile(
-    r'(?<![\w.])(?:192\.168\.' + _OCTET + r'\.' + _OCTET + r'|10\.' + _OCTET + r'\.' + _OCTET + r'\.' + _OCTET +
-    r'|172\.(?:1[6-9]|2\d|3[01])\.' + _OCTET + r'\.' + _OCTET + r')(?![\w.]|/\d)')
-MAILBOX = re.compile(r'\b[\w.+-]*[\w+-]@(?!(?:[\w-]+\.)*example\.(?:com|net|org)\b)[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b')
-SECRET = re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|jwm_[a-z0-9]{12}_[A-Za-z0-9_-]{32,}')
+    r'(?<![\w.])((?:192\.168\.' + _OCTET + r'\.' + _OCTET + r'|10\.' + _OCTET + r'\.' + _OCTET + r'\.' + _OCTET +
+    r'|172\.(?:1[6-9]|2\d|3[01])\.' + _OCTET + r'\.' + _OCTET + r'))(/\d{1,2})?(?!\w|\.\d)')
+GENERIC_PRIVATE_NETS = {'10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'}
+# an IPv6 unique local address with a site's own prefix (fd, two hex digits, then more groups); "fc00::/7" and
+# "fd00::/8" are documentation
+PRIVATE_IP6 = re.compile(r'(?<![\w:])fd[0-9a-f]{2}:[0-9a-f]{1,4}:[0-9a-f:]*', re.I)
+MAILBOX = re.compile(r'\b[\w.+-]*[\w+-]@(?!(?:[\w-]+\.)*example\.(?:com|net|org)\b)[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b', re.I)
+CO_AUTHOR = 'noreply@anthropic.com'
+SECRET = re.compile(r'-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|jwm_[a-z0-9]{12}_[A-Za-z0-9_-]{32,}'
+                    r'|\bgh[pousr]_[A-Za-z0-9]{30,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bAKIA[0-9A-Z]{16}\b'
+                    r'|\bxox[abprs]-[A-Za-z0-9-]{10,}|\bsk-[A-Za-z0-9_-]{32,}')
 # placeholders used by tests and examples (documentation-ish private addresses; 192.168.77.0/24 is the
 # test network of this project)
 PLACEHOLDER_IPS = {'192.168.77.50', '10.0.0.50', '192.168.0.1', '10.0.0.1', '172.16.0.1', '172.31.255.254', '10.255.255.255',
                    '192.168.77.5'}
 
 
-def load_denylist():
+def load_denylist(required=False):
+    """The private names to keep out. required (the git hooks, the release tool): a missing list is None, so the
+    caller refuses instead of publishing with the generic checks only."""
     try:
         with open(DENYLIST) as fh:
             items = [l.strip().lower() for l in fh if l.strip() and not l.startswith('#')]
     except OSError:
+        if required:
+            return None
         print('note: no private denylist at %s (generic checks only)' % DENYLIST)
         return []
     out = []
@@ -77,21 +90,33 @@ def load_denylist():
     return out
 
 
-def scan_text(name, text, deny):
+def scan_text(name, text, deny, allow_marker=True):
+    """allow_marker: a line carrying the marker may name a private-looking address or mailbox on purpose (a test of
+    these checks); denylisted names, keys and tokens are refused on every line. Messages never honour it."""
     for n, line in enumerate(text.splitlines(), 1):
-        if ALLOW_MARKER in line:
-            continue
         low = line.lower()
         for d, rx in deny:
             if rx.search(low):
                 fail('privacy', '%s:%d contains a denylisted name (%s…)' % (name, n, d[:3]))
-        for m in PRIVATE_IP.finditer(line):
-            if m.group(0) not in PLACEHOLDER_IPS and not m.group(0).startswith('192.168.77.'):
-                fail('privacy', '%s:%d private address %s' % (name, n, m.group(0)))
-        if MAILBOX.search(line) and 'noreply@anthropic.com' not in line:
-            fail('privacy', '%s:%d mailbox %s' % (name, n, MAILBOX.search(line).group(0)))
         if SECRET.search(line):
             fail('secret', '%s:%d looks like a private key or token' % (name, n))
+        if allow_marker and ALLOW_MARKER in line:
+            continue
+        for m in PRIVATE_IP.finditer(line):
+            addr, prefix = m.group(1), m.group(2)
+            if prefix and int(prefix[1:]) > 32:
+                continue                            # not a network (a test of a bad prefix length)
+            if prefix:
+                if addr + prefix not in GENERIC_PRIVATE_NETS and not addr.startswith('192.168.77.'):
+                    fail('privacy', '%s:%d private network %s%s' % (name, n, addr, prefix))
+            elif addr not in PLACEHOLDER_IPS and not addr.startswith('192.168.77.'):
+                fail('privacy', '%s:%d private address %s' % (name, n, addr))
+        m6 = PRIVATE_IP6.search(line)
+        if m6:
+            fail('privacy', '%s:%d private IPv6 address %s' % (name, n, m6.group(0)))
+        mb = MAILBOX.search(line.replace(CO_AUTHOR, ''))
+        if mb:
+            fail('privacy', '%s:%d mailbox %s' % (name, n, mb.group(0)))
 
 
 def is_text(data):
@@ -101,18 +126,46 @@ def is_text(data):
 def check_privacy(files, deny):
     for rel in files:
         with open(os.path.join(ROOT, rel), 'rb') as fh:
-            data = fh.read()
-        if rel.startswith('tests/fixtures/') or is_text(data):
-            scan_text(rel, data.decode('utf-8', 'replace'), deny)
-        elif data.startswith(b'\x89PNG\r\n\x1a\n'):
-            check_png(rel, data, deny)
-        elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
-            check_webp(rel, data, deny)
-        else:
-            low = data.lower()
-            for d, rx in deny:
-                if rx.search(low.decode('latin-1')):
-                    fail('privacy', '%s (binary) contains a denylisted name' % rel)
+            check_blob(rel, fh.read(), deny)
+
+
+def _utf16(data):
+    """Text in UTF-16 (a byte-order mark, or a zero byte in every other place): decoded, else None."""
+    head = data[:4096]
+    if head[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        enc = 'utf-16'
+    elif len(head) >= 8 and head[1::2].count(0) > len(head) // 2 * 0.9:
+        enc = 'utf-16-le'
+    elif len(head) >= 8 and head[0::2].count(0) > len(head) // 2 * 0.9:
+        enc = 'utf-16-be'
+    else:
+        return None
+    try:
+        return data.decode(enc)
+    except UnicodeDecodeError:
+        return None
+
+
+def check_blob(rel, data, deny):
+    """One published file's content (from the working tree, a release or a commit being pushed). Text is scanned
+    line by line; screenshots by their metadata; any other binary file (an archive, a database, compiled code)
+    cannot be scanned, so it is refused."""
+    if rel.startswith('tests/fixtures/') or is_text(data):
+        scan_text(rel, data.decode('utf-8', 'replace'), deny)
+    elif data.startswith(b'\x89PNG\r\n\x1a\n'):
+        check_png(rel, data, deny)
+    elif data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        check_webp(rel, data, deny)
+    elif _utf16(data) is not None:
+        scan_text(rel, _utf16(data), deny)
+    else:
+        fail('privacy', '%s: a binary file that cannot be checked (only PNG and WebP images are published)' % rel)
+        low = data.lower().decode('latin-1')
+        for d, rx in deny:
+            if rx.search(low):
+                fail('privacy', '%s (binary) contains a denylisted name' % rel)
+
+
 
 
 def check_png(rel, data, deny):

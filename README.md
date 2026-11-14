@@ -1,4 +1,4 @@
-# jt-waf-mgr v0.4.29
+# jt-waf-mgr v0.4.30
 
 **English** · [繁體中文](README_zh-TW.md) · [日本語](README_ja.md)
 
@@ -50,8 +50,8 @@ something you can read, and every change into a workflow you can trust:
 - **Temporary IP blocks** (new in 0.4.24, optional): fail2ban on a mail server, a SOAR playbook or an approver blocks
   a single address for a while; one nginx deny list covers every site. See [Temporary IP blocks](#temporary-ip-blocks-optional).
 - **Country blocks** (new in 0.4.28, optional): limit a site to some countries, or block some countries, with lists
-  from the five regional Internet registries, refreshed daily. Each site's limit is a rule through the change workflow.
-  See [Country blocks](#country-blocks-optional).
+  from the five regional Internet registries, refreshed daily. Each site's limit is a rule through the change workflow;
+  Rules → Country limits shows every site: who may reach it, what was refused, "modify" and "add limit". See [Country blocks](#country-blocks-optional).
 - **Request volume** (new in 0.4.23): every request in the nginx access logs, counted per site and hour (2xx, 3xx,
   4xx, 5xx, 403, 444, 429, external, bytes; numbers only, no address, URL or user agent), next to what the WAF
   blocked, so the WAF numbers have a denominator. Switched on or off, and its alerts set, in the admin Settings
@@ -96,7 +96,8 @@ something you can read, and every change into a workflow you can trust:
   ageing, account expiry and review; API tokens with scopes and allowed source networks (tokens can propose, never
   approve). Recovery on the host: see [Accounts and recovery](#accounts-and-recovery).
 - **Integrity and compliance**: system check page, compliance page, daily verified backups with download (one-time
-  code), configuration change history with attribution (jt-waf-mgr, registered automation, or outside).
+  code), configuration change history with attribution (jt-waf-mgr, registered automation, or outside); for a change
+  from outside, what changed in each file (secret-looking values masked) and who was logged in to the host meanwhile.
 - **Interface**: English, 繁體中文 and 日本語; light and dark; phones and tablets; GeoIP (MaxMind GeoLite2, downloaded
   by its own sandboxed job) with a world map of where requests come from, drawn in the page (no map service).
 
@@ -105,6 +106,7 @@ something you can read, and every change into a workflow you can trust:
 | ![Events](docs/shots/en/events.png) | ![WAF model](docs/shots/en/waf-model.png) |
 | ![Event analysis](docs/shots/en/analysis.png) | ![Notifications](docs/shots/en/notifications.png) |
 | ![Alerts](docs/shots/en/alerts.png) | ![System check](docs/shots/en/system-check.png) |
+| ![Country limits by site](docs/shots/en/countries.png) | ![Request volume](docs/shots/en/traffic.png) |
 
 ## Requirements
 
@@ -122,8 +124,8 @@ something you can read, and every change into a workflow you can trust:
 ## Install
 
 ```sh
-openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.29.tar.gz.sig jt-waf-mgr-0.4.29.tar.gz
-tar xzf jt-waf-mgr-0.4.29.tar.gz && cd jt-waf-mgr-0.4.29
+openssl dgst -sha256 -verify release-key.pem -signature jt-waf-mgr-0.4.30.tar.gz.sig jt-waf-mgr-0.4.30.tar.gz
+tar xzf jt-waf-mgr-0.4.30.tar.gz && cd jt-waf-mgr-0.4.30
 sudo ./install.sh                             # verifies every file and the release signature first
 sudo jt-waf-mgr check                         # parses the nginx / ModSecurity configuration
 sudo jt-waf-mgr user add alice --role admin   # prints a temporary password

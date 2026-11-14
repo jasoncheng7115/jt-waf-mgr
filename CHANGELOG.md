@@ -2,6 +2,49 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.4.30 (2026-11-14)
+
+- Security: a rule limited to one site (a country limit, a block or an exclusion for a host) did not match the site's
+  name with a trailing dot ("example.com."), which nginx serves as the same site, so such requests skipped it. New
+  and changed rules match it (and a port). **Rules already applied keep the old text until they are changed: propose
+  a "modify" with the same settings for each country rule (it counts as a tightening).** Country limits must name the
+  site exactly.
+- Known limit, documented: a request line with a full URL ("GET http://example.com/ HTTP/1.1") is routed by that URL
+  whatever the Host header says, and nginx gives ModSecurity only the path, so no ModSecurity rule can tell which site
+  it is for (HTTP/2 can do the same with :authority). Where a country limit must hold against such requests (a site
+  reached directly, not through a CDN), keep a check in nginx (a geo variable and `return 403`) as well.
+- Country limits by site (new page under Rules): every nginx site with the countries that may reach it or are
+  blocked (names in the interface language), whether the WAF runs there, locations that skip it, nginx's own access
+  limits, what the rules refused in the last 7 days and from where, the changes on their way, "modify", "switch off"
+  and "add limit" (also for each name of a site that no rule covers yet). Rules and changes that match no site are
+  listed apart. The Sites page has a country-limits column too, and the country list card says which countries and
+  which sites each list file is for.
+- Changing a country limit is a tightening when it covers the same site the same way and refuses at least what it
+  refused before (fewer allowed countries, or more blocked ones) and exempts no new address; anything else is a
+  loosening and needs a person. A country change is never applied automatically. The change form's preview shows the
+  direction the change will get.
+- A block by a country rule counts as a confident block (it was listed with the "CRS score only" blocks, the likely
+  false positives); stored events are corrected once.
+- Configuration changed outside jt-waf-mgr: the alert names the files and who was logged in to the host meanwhile
+  (from the host's authentication log: account, source address, key or password, sudo commands); the change's page
+  shows the logins and what changed in each file. File contents are stored with secret-looking values masked (new
+  table, schema 10).
+- The sandbox fails the check rather than leave out a site's samples when it has no address of an allowed country to
+  send from, and never sends from an address the country rules always let through.
+- Nothing private leaves: the pre-push check looks at every commit being pushed (its message, author and committer,
+  every file it adds or changes against the PUBLISH.txt whitelist and the privacy scan, merges included) and every
+  tag (message and tagger). Private networks, addresses at the end of a sentence, upper-case mailboxes, more key and
+  token formats and UTF-16 text are detected; binary files other than PNG and WebP images are refused; the marker
+  that allows an address on purpose never lets a private name or a key through; without the private denylist the
+  hooks refuse instead of checking less. The release notes are scanned, and the tarball is checked against its
+  checksum and scanned again, before anything is sent to GitHub. New tests (`tests/test_publication.py`) and a test
+  plan section on what is published and what checks it.
+- Layout: one accent line on cards (the status colour or the attention colour was a second line next to the title
+  bar's), the CRS page's version and path and the update switch and its explanation no longer run together (and
+  eight other places with the same lost space; the build refuses that pattern), the analysis timeline's ticks no
+  longer cross its label, space between the registries table and the buttons below it. The browser test checks
+  every page for a doubled line.
+
 ## 0.4.29 (2026-11-14)
 
 - Country blocks: every sandbox request from outside now comes from an address that the country rules of its own site

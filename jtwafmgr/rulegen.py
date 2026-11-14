@@ -176,6 +176,12 @@ def _text_ok(field, s, maxlen=160, required=False):
     return s
 
 
+# the Host header as nginx accepts it for the site: "name", "name." (a trailing dot), "name:443", "name.:443". A full URL
+# in the request line ("GET http://name/ HTTP/1.1") routes by that URL, but nginx gives ModSecurity the path only, so no
+# ModSecurity rule can see it: a site whose country limit must hold for such requests needs the check in nginx too.
+HOST_RX_FMT = r'^%s\.?(?::[0-9]*)?$'
+
+
 def _host_cond(host):
     """{'mode': 'exact'|'regex'|'any', 'value': ...} -> (variable, operator, transforms) or None"""
     if not host or host.get('mode', 'any') == 'any':
@@ -185,7 +191,9 @@ def _host_cond(host):
         if not HOST_RE.match(v):
             raise SpecError('host', 'invalid_host')
         pat = re.escape(v).replace('\\*', '[^.]+') if v.startswith('*.') else re.escape(v)
-        return ('REQUEST_HEADERS:Host', '@rx ^%s(?::[0-9]+)?$' % pat.replace('\\-', '-'), 't:none,t:lowercase')
+        # nginx serves the site for its name with a trailing dot too ("example.com."): that form must match, or a rule
+        # scoped to the site (a country limit, a block) is skipped for it
+        return ('REQUEST_HEADERS:Host', '@rx ' + HOST_RX_FMT % pat.replace('\\-', '-'), 't:none,t:lowercase')
     if mode == 'regex':
         _regex_ok('host', v)
         return ('REQUEST_HEADERS:Host', '@rx ' + v, 't:none,t:lowercase')
@@ -277,9 +285,9 @@ def _country(spec, rid, cfg):
     The list file is written by the root program from the registries' data (countries.py)."""
     from .countries import DataError, set_name
     host = spec.get('host') or {}
+    if host.get('mode') != 'exact':
+        raise SpecError('host', 'scope_required')        # a country limit is per site, named exactly
     h = _host_cond(host)
-    if not h:
-        raise SpecError('host', 'scope_required')        # a country limit is per site
     mode = spec.get('mode')
     if mode not in ('allow', 'deny'):
         raise SpecError('mode', 'invalid_mode')
@@ -498,6 +506,49 @@ def raw_direction(text):
                        r'ctl:\s*requestBodyProcessor|plugin_enabled\s*=\s*1|\ballow\b', t, re.I)
     tighten = re.search(r'\bdeny\b|\bdrop\b|ctl:\s*ruleEngine\s*=\s*On|jt_block\s*=\s*1', t, re.I)
     return 'tighten' if tighten and not loosen else 'loosen'
+
+
+def host_matches(host, h):
+    """Whether a rule's host scope ({'mode': 'any'|'exact'|'regex', 'value'}) covers request host h (the
+    condition _host_cond writes, in Python). A pattern Python cannot read counts as covering it."""
+    host = host or {}
+    mode, v = host.get('mode', 'any'), (host.get('value') or '').strip().lower()
+    h = (h or '').strip().lower()
+    if mode == 'any' or not mode:
+        return True
+    if mode == 'exact':
+        pat = re.escape(v).replace('\\*', '[^.]+') if v.startswith('*.') else re.escape(v)
+        return re.fullmatch(pat + r'\.?(?::[0-9]*)?', h) is not None
+    try:
+        return re.search(v, h) is not None
+    except re.error:
+        return True
+
+
+def _never_in(text):
+    m = re.search(r'REMOTE_ADDR "!@ipMatch ([^"]*)"', text or '')
+    return set(m.group(1).split(',')) if m else set()
+
+
+def country_modify_direction(old, new, old_text=None, new_text=None):
+    """A changed country limit tightens only when it covers the same site the same way and refuses at least
+    what it refused before: fewer allowed countries, or more blocked ones, and no address added to the ones it
+    never refuses (the rule text is rebuilt with today's internal networks, scanners, proxies and protected
+    list). Anything else loosens."""
+    if old_text is not None and new_text is not None and not _never_in(new_text) <= _never_in(old_text):
+        return 'loosen'
+
+    def site(s):
+        h = s.get('host') or {}
+        return (h.get('mode') or 'any', (h.get('value') or '').strip().lower())
+    if not old or not new or site(old) != site(new) or old.get('mode') != new.get('mode'):
+        return 'loosen'
+    a, b = set(old.get('countries') or []), set(new.get('countries') or [])
+    if new.get('mode') == 'allow':
+        return 'tighten' if b and b <= a else 'loosen'
+    if new.get('mode') == 'deny':
+        return 'tighten' if b >= a else 'loosen'
+    return 'loosen'
 
 
 def direction(op, kind, text=''):

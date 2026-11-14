@@ -335,6 +335,10 @@ curl -sS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -
 証拠チェックはアクセスログからこのルールがブロックしたはずの量（`requests`、`refused`、`refused_sources`、`refused_success`、
 `countries`）を数えます。参考情報であり、変更を失敗させることはありません。国別ブロックは自動では適用されません。
 `GET /countries`（ログイン中の利用者。トークンのスコープはなし）で、一覧のある国と使用中の一覧を返します。
+`GET /countries/sites`（スコープ `rules:read`）は、nginx のサイトごとに国別ルール、処理中の国別変更、WAF が動いて
+いるか、直近 7 日のブロック数を返します。ルールのサイトは Host ヘッダー（末尾のドットやポート付きも）で判定します。
+リクエスト行の完全な URL は nginx が振り分けに使いますが ModSecurity からは見えないため、国別制限をそれにも効かせる
+場合は nginx 側のチェックも残してください。
 
 **種類 `redaction` と `plugin`**：`redaction` は `fields`（検査しない引数名、最大 30 個。検査しないので監査記録にも
 コピーされません）と任意の `host`・`path`、`plugin` は `plugin`（CRS プラグイン名）と必須の `host` で、1 つのサイトで
@@ -409,7 +413,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://waf.example.com/api/v1/change
 - **`GET /rules/{id}/hits`**：日ごとのヒット数。`days` は 1〜365（デフォルト 30）：
   `{"items": [{"day": "2026-11-12", "blocked": 3, "logged": 0}]}`。
 - **`GET /rules/removals`**：`SecRuleRemoveById` などで除去されたルール。
-- **`GET /vhosts`**：nginx のサイトとその WAF 設定。
+- **`GET /vhosts`**：nginx のサイトとその WAF 設定。`countries` はサイトごとの国別ルール（モード、国、ルール ID、有効かどうか）、
+  `country_changes` は処理中の国別変更です。
 - **`GET /crs`**：CRS のバージョン、パラノイアレベル、しきい値、エンジンモード、プラグイン。
 - **`GET /crs/updates`**：jt-waf-mgr が CRS を更新しているか、ホスト上のバージョン、最新のリリース。
 - **`GET /waf/model`**：各サイトでリクエストがどう判定されるか（エンジン、スコア、しきい値、除外）。

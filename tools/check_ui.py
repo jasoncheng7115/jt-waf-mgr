@@ -4,7 +4,8 @@
 - every button (and every link styled as a button) carries an <Icon>;
 - no browser-native <select>: the site's SelectBox only; no native date / time inputs: DatePicker;
 - list tables go through DataTable (sort, filter, columns, pages); the few tables that are not lists
-  are named in TABLE_EXEMPT with the reason.
+  are named in TABLE_EXEMPT with the reason;
+- no leading space inside an inline element to separate it from what comes before (the compiler drops it).
 """
 import os
 import re
@@ -57,6 +58,12 @@ def main():
                 if '<Icon' not in m.group(2):
                     line = tpl[:m.start()].count('\n') + 1
                     problems.append('%s (template line %d): card title without <Icon>: %s' % (rel, line, ' '.join(m.group(0).split())[:100]))
+            # a leading space inside an inline element is dropped by the template compiler, so the text runs into what
+            # comes before it ("4.30.0/etc/nginx/..."): space it with the gapl class or put it on its own line
+            for m in re.finditer(r'<(span|b|small|em|code)\b[^>]*> +\{\{', tpl):
+                line = tpl[:m.start()].count('\n') + 1
+                problems.append('%s (template line %d): leading space inside <%s> is dropped; use class "gapl" or a new line'
+                                % (rel, line, m.group(1)))
             if name not in SELECT_EXEMPT and re.search(r'<select\b', tpl):
                 problems.append('%s: native <select>; use SelectBox' % rel)
             if re.search(r'<input\b[^>]*type="(date|datetime-local|time|month|week)"', tpl):

@@ -423,18 +423,35 @@ http {
         if not any(v is not None for v in want.values()):
             return cases
         from .countries import Lookup
+        from .rulegen import never_list
+        never = never_list(self.cfg)
+
+        def usable(ip):
+            # an address the country rules never refuse (internal, scanner, proxy, protected) would pass every
+            # country rule and every block limited to outside sources: it proves nothing
+            try:
+                a = ipaddress.ip_address(ip)
+            except ValueError:
+                return False
+            return not any(a in n for n in never if n.version == a.version)
         lk = Lookup(self.cfg['countries']['dir'], need) if need else None
-        pref_cc = lk.country(prefer) if (lk and prefer) else None
+        pref_cc = lk.country(prefer) if (lk and prefer and usable(prefer)) else None
         addr = {}
         for h, ccs in want.items():
             if ccs is None:
                 continue
-            addr[h] = ''                            # closed to every outside address
+            if not ccs:
+                addr[h] = ''                        # closed to every outside address: the rules refuse them all
+                continue
             for cc in ([pref_cc] if pref_cc in ccs else []) + [x for x in ('TW', 'JP', 'US', 'DE') if x in ccs] + ccs:
                 ip = prefer if cc == pref_cc else lk.sample(cc)
-                if ip:
+                if ip and usable(ip):
                     addr[h] = ip
                     break
+            else:
+                # a site some countries may reach, but no address of them to send from (lists missing, IPv6 only):
+                # dropping its samples would hide a regression, so the check fails instead
+                raise SandboxError('no address of %s in the staged country lists for %s' % (', '.join(ccs[:10]), h))
         out = []
         for c in cases:
             h = c.get('host') or ''
@@ -459,7 +476,10 @@ http {
                             'message': 'rule %s: no external test expecting 403 that it matches' % b.get('rule_id')}
         if adds and not any(t.get('expect') == 403 for t in user_tests):
             return {'ok': False, 'error': 'test_required', 'message': 'a confident block needs at least one test case expecting 403'}
-        cases = self.cases_for(r, user_tests, samples or [], items)
+        try:
+            cases = self.cases_for(r, user_tests, samples or [], items)
+        except SandboxError as e:
+            return {'ok': False, 'error': 'sandbox_failed', 'message': _clean(str(e))[-2000:]}
         if not cases:
             cases = [{'host': 'sandbox.invalid', 'path': '/', 'source': 'external', 'expect': 'not403', 'origin': 'smoke'}]
         try:
@@ -522,20 +542,8 @@ http {
 
 
 def _host_match(host, h):
-    """Whether a rule's host scope ({'mode': 'any'|'exact'|'regex', 'value'}) covers request host h (rulegen's
-    condition in Python). A pattern Python cannot read counts as covering it."""
-    host = host or {}
-    mode, v = host.get('mode', 'any'), (host.get('value') or '').strip().lower()
-    h = (h or '').strip().lower()
-    if mode == 'any' or not mode:
-        return True
-    if mode == 'exact':
-        pat = re.escape(v).replace('\\*', '[^.]+') if v.startswith('*.') else re.escape(v)
-        return re.fullmatch(pat + r'(?::[0-9]+)?', h) is not None
-    try:
-        return re.search(v, h) is not None
-    except re.error:
-        return True
+    from .rulegen import host_matches
+    return host_matches(host, h)
 
 
 def _test_hits(spec, t):
