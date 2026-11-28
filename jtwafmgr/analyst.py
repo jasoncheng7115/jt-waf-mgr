@@ -117,8 +117,9 @@ def _clean(s, n):
 
 
 def llm_configured(c):
-    """The LLM server URL and model are set (the key is optional for the client, strata needs one)."""
-    if not c.base or not c.model:
+    """The LLM server URL is set (the key is optional for the client, strata needs one; an empty model is the server's
+    default, resolved by the client at the first question)."""
+    if not c.base:
         return False
     try:
         c._check()
@@ -944,6 +945,11 @@ def run(app, force=False, log=print, trigger=None):
     client = llm.Client(cfg)
     client.use = llm_ready(cfg) is None         # without it: the program rules only
     over = over_budget(cfg, db) if client.use else None
+    if client.use and not over and not client.model:
+        try:
+            client.resolve_model()              # 0.5.54: the server's default, named in the run record
+        except llm.LLMError as e:
+            log('analyst: default model not resolved: %s' % e.code)   # the first question fails and records why
     if over:
         client.use = False                      # the token limit is used up: the program rules only, until it resets
         log('analyst: LLM token limit reached (%s): program rules only' % over)

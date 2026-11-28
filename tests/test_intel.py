@@ -335,6 +335,36 @@ class TestRun(Base):
         self.assertIsNotNone(intel.run_job(self.app, log=lambda m: None))         # asked
         self.assertFalse(os.path.exists(intel.request_file(self.app.cfg)))
 
+    def test_empty_model_is_the_server_default(self):
+        # 0.5.54: "default" in Settings (an empty model) with the second tier's own server left the search never
+        # running (llm_not_configured) while the connection test passed with the server's first model
+        intel._RESOLVED.clear()
+        self.app.cfg.data['intel'].update(enabled=True, provider='openai', url=self.url + '/v1', model='', api_key='k2')
+        self.assertIsNone(intel.readiness(self.app.cfg))
+        Fake.seen.clear()
+        Fake.script = [openai_reply(content=json.dumps({'notes': '', 'threats': []}))]
+        rid = intel.run(self.app, 'manual', log=lambda m: None)
+        r = self.app.db.one('SELECT * FROM intel_runs WHERE id=?', (rid,))
+        self.assertIsNone(r['error'])
+        self.assertEqual(r['model'], 'm')                                          # the first model the server lists
+        posts = [b for p, h, b in Fake.seen if b is not None and p.endswith('/chat/completions')]
+        self.assertTrue(posts and all(b['model'] == 'm' for b in posts))
+        # OpenAI itself has no default in its list: a model stays required there
+        self.app.cfg.data['intel'].update(url=intel.OPENAI_URL)
+        self.assertEqual(intel.readiness(self.app.cfg), 'llm_not_configured')
+
+    def test_first_tier_empty_model_is_the_server_default(self):
+        from jtwafmgr import analyst, llm
+        self.app.cfg.data['llm'].update(enabled=True, url=self.url + '/v1', model='', api_key='')
+        self.assertIsNone(analyst.llm_ready(self.app.cfg))
+        c = llm.Client(self.app.cfg)
+        Fake.seen.clear()
+        Fake.script = [openai_reply(content='OK')]
+        c.chat([{'role': 'user', 'content': 'x'}], max_tokens=10)
+        self.assertEqual(c.model, 'm')
+        posts = [b for p, h, b in Fake.seen if b is not None]
+        self.assertEqual(posts[-1]['model'], 'm')
+
     def test_anthropic_loop(self):
         c = self.app.cfg.data['intel']
         c.update(provider='anthropic', url=self.url, model='')

@@ -227,7 +227,7 @@ class TestRules(AnalystBase):
 
     def test_without_an_llm(self):
         self.adopt()
-        self.app.cfg.data['llm']['model'] = ''
+        self.app.cfg.data['llm']['url'] = ''        # 0.5.54: an empty model is the server's default
         self.probes('/.aws/credentials', 4)
         self.probes('/phpinfo.php', 4)
         out = self.run_analyst()
@@ -443,7 +443,7 @@ class TestRuns(AnalystBase):
         self.assertEqual(analyst.run(self.app, force=True, log=self.logs.append)['reason'], 'analyst_disabled')
         self.assertFalse(os.path.exists(req))          # removed even when disabled (the path unit would loop)
         self.app.cfg['analyst']['enabled'] = True
-        self.app.cfg['llm']['model'] = ''
+        self.app.cfg['llm']['url'] = ''
         # without an LLM the run still happens, with the program rules only, and asks no server
         seen = len(self.srv.seen)
         r = analyst.run(self.app, force=True, log=self.logs.append)

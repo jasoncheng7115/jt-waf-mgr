@@ -106,6 +106,15 @@ class Client:
             return d
         return json.loads(json.dumps(d, ensure_ascii=False).replace(self.key, '[key]'))
 
+    def resolve_model(self):
+        """An empty model ("server default" in Settings) becomes the server's first listed model, the one the connection
+        test shows. 0.5.54: the event analysis treated it as not configured and ran on the program rules only."""
+        models = self.models()
+        if not models:
+            raise LLMError('not_configured', 'the server lists no model: pick one in Settings')
+        self.model = models[0]
+        return self.model
+
     def models(self):
         d = self._call('GET', '/models', timeout=15)
         return [m.get('id') for m in (d.get('data') or []) if isinstance(m, dict) and m.get('id')]
@@ -113,6 +122,8 @@ class Client:
     def chat(self, messages, max_tokens=4096, temperature=0.1, json_mode=False, schema=None):
         """Returns (text, usage, seconds). schema: a JSON schema the server constrains the answer to (llama.cpp, vLLM
         and others accept it as response_format json_schema); a server that refuses it gets plain JSON mode."""
+        if not self.model:
+            self.resolve_model()
         body = {'model': self.model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': temperature,
                 'stream': False}
         if schema:

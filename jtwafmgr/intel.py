@@ -524,10 +524,30 @@ def openai_target(cfg):
     return (l1.get('url') or '').rstrip('/'), c['model'] or l1.get('model') or '', l1.get('api_key') or ''
 
 
+_RESOLVED = {}
+
+
+def openai_run_target(cfg):
+    """openai_target for a request: an empty model ("default" in Settings) becomes the server's first listed model, the
+    one the connection test answers with. 0.5.54: the scheduled search treated an empty model as not configured and
+    never ran, while the connection test passed."""
+    base, model, key = openai_target(cfg)
+    if base and not model and cfg['intel']['provider'] == 'openai':
+        k = (base, key)
+        if k not in _RESOLVED:
+            d = _get_json(base + '/models', {'Authorization': 'Bearer ' + key} if key else {}, 30)
+            models = [m.get('id') for m in (d.get('data') or []) if isinstance(m, dict) and m.get('id')]
+            if not models:
+                raise IntelError('not_configured', 'the server lists no model: pick one in Settings')
+            _RESOLVED[k] = models[0]
+        model = _RESOLVED[k]
+    return base, model, key
+
+
 def ask_openai(cfg, session, system, user):
     """OpenAI-compatible chat completions with our tools. Returns (answer dict, tokens in, tokens out)."""
     c = cfg['intel']
-    base, model, key = openai_target(cfg)
+    base, model, key = openai_run_target(cfg)
     if not base:
         raise IntelError('not_configured', 'set the second-tier LLM URL')
     c = dict(c, model=model)
@@ -720,7 +740,7 @@ def ask_json(cfg, system, user, schema, name='answer'):
         u = d.get('usage') or {}
         text = ''.join(b.get('text', '') for b in d.get('content') or [] if isinstance(b, dict) and b.get('type') == 'text')
         return _parse_answer(text), int(u.get('input_tokens') or 0), int(u.get('output_tokens') or 0)
-    base, model, key = openai_target(cfg)
+    base, model, key = openai_run_target(cfg)
     headers = {'Authorization': 'Bearer ' + key} if key else {}
     d = _json_call(base + '/chat/completions', {
         'model': model, 'temperature': 0, 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],
@@ -1360,8 +1380,11 @@ def readiness(cfg):
     c = cfg['intel']
     if not c['enabled']:
         return 'disabled'
-    if c['provider'] == 'openai' and not all(openai_target(cfg)[:2]):
-        return 'llm_not_configured'
+    if c['provider'] == 'openai':
+        base, model = openai_target(cfg)[:2]
+        # an empty model is the server's default (openai_run_target), except at OpenAI itself, whose list has no default
+        if not base or (not model and base.startswith(OPENAI_URL)):
+            return 'llm_not_configured'
     if c['provider'] == 'anthropic' and not c['api_key']:
         return 'llm_not_configured'
     if c['provider'] == 'gemini' and not (c['api_key'] and c['model']):
@@ -2150,6 +2173,11 @@ def run(app, trigger='schedule', now=None, log=print, ask=None, patch_ask=None, 
     c = cfg['intel']
     provider = c['provider']
     model = (c['model'] or ANTHROPIC_MODEL) if provider == 'anthropic' else openai_target(cfg)[1]
+    if provider == 'openai' and not model:
+        try:
+            model = openai_run_target(cfg)[1]
+        except Exception as e:      # noqa: BLE001 -- the first question fails the same way and records why
+            log('intel: default model not resolved: %s' % type(e).__name__)
     session = Session(cfg, budget=_budget_left(cfg, db), seconds=RUN_SECONDS)
     rid = db.x("INSERT INTO intel_runs(node_id, started_at, trigger, provider, model) VALUES (?,?,?,?,?)",
                (cfg['node']['id'], now, trigger, provider, model)).lastrowid

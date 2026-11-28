@@ -3046,7 +3046,7 @@
  "protset.w.librenms.api-external": "從外部封鎖 LibreNMS API (/api/v0、/api/v1)。整合程式通常從內部呼叫；LibreNMS 手機 App 也用 API，如果有人在外面用 App，不要勾選。",
  "protset.w.librenms.api-token-param": "封鎖在網址、表單或 JSON 參數裡帶 api_token 的請求。LibreNMS 26.7.0 以前收到數字或只有一個項目的陣列時會當成有效權杖，任何人不用登入就能使用 API。LibreNMS 的用戶端都把權杖放在 X-Auth-Token 或 Authorization 標頭，這條規則不看標頭。內部來源也封鎖。",
  "protset.w.librenms.basic-auth-external": "從外部送 Authorization: Basic 標頭的請求一律封鎖。使用 LDAP 或 Active Directory 授權時，LibreNMS 26.9.0 以前會把這個標頭的使用者名稱直接放進 LDAP 查詢，名稱填 * 之類就能以管理者身分登入。LibreNMS 的登入頁不會用到這個標頭。如果有人從外部使用 HTTP 驗證 (auth_mechanism http-auth)，不要勾選。",
- "protset.w.librenms.graph-param-injection": "graph_title、title、legend、from、to、type 在網址參數或路徑式網址 (/graph/type=.../) 裡帶雙引號、反引號、反斜線、$( 或換行時封鎖。這些值會交給 rrdtool，LibreNMS 在這裡有過指令與參數注入 (CVE-2019-10669、CVE-2020-15874，以及 26.7.0 以前的 CVE-2026-86427)。正常的值是圖表名稱、end-24h 或 1795850000 這類時間，以及不含引號的標題。內部來源也封鎖。",
+ "protset.w.librenms.graph-param-injection": "graph_title、title、legend、from、to、type 在網址參數或路徑式網址 (/graph/type=.../) 裡帶雙引號、反引號、反斜線、$( 或換行時封鎖。這些值會交給 rrdtool，LibreNMS 在這裡有過指令與參數注入 (CVE-2019-10669、CVE-2020-15874，以及 26.7.0 以前的 CVE-2026-86427)。正常的值是圖表名稱、end-24h 或以秒計的 Unix 時間，以及不含引號的標題。內部來源也封鎖。",
  "protset.w.librenms.hostname-shell": "hostname 或 new_hostname (表單或 JSON) 帶 $、反引號、分號、|、&、引號、括號、反斜線或換行時封鎖。LibreNMS 會把主機名稱交給 snmpget、fping 等指令，24.9.1 以前新增這種名稱的設備就能在伺服器上執行指令。主機名稱與 IP 位址不會有這些字元。內部來源也封鎖。",
  "protset.w.librenms.nfsen-traversal": "nfsen 或 channel 的值帶 .. (原樣或編碼) 時封鎖，網址參數與路徑式網址都檢查。26.9.0 以前 NfSen 圖表與設備的 netflow 頁籤用它們組檔案路徑 (CVE-2026-109354、CVE-2026-30480)，可以讀取 NfSen 目錄以外的檔案。正常的值是通道名稱。內部來源也封鎖。",
  "protset.w.librenms.notification-id": "notification_id (含 notification_id[]) 帶空白、引號、括號或運算符號時封鎖。LibreNMS 26.8.2 以前把通知標為已讀時，會把這個值直接放進 SQL，任何登入的使用者都能利用。正常的值只有數字。內部來源也封鎖。",

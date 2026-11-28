@@ -2,6 +2,10 @@
 
 **English** · [繁體中文](CHANGELOG_zh-TW.md) · [日本語](CHANGELOG_ja.md)
 
+## 0.5.54 (2026-11-29)
+
+- With the model set to "default" in Settings, the second-tier threat intelligence stopped running (the system check said the LLM was not configured) while its connection test passed: the test used the first model the server lists, the scheduled run treated the empty model as not configured. The first-tier event analysis, the single-event AI analysis and the threat intelligence now all do what the test does and use the server's first listed model, and the run record names the model used. At OpenAI itself a model is still required.
+
 ## 0.5.53 (2026-11-28)
 
 - While an LLM connection test runs, the page now shows a spinner and how long it has waited; after 20 seconds it explains that the first time, the server may first load the model into memory (Ollama took about 3 minutes for a 28 GB model, which looked like a hang). The same for both tiers and the search tool test.

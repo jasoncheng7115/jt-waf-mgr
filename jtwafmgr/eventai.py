@@ -213,6 +213,11 @@ def run_pending(app, log=print):
     from .analyst import llm_ready, over_budget
     client = llm.Client(cfg)
     why = llm_ready(cfg) or over_budget(cfg, db)     # over the token limit: refused, with the reason
+    if not why and not client.model:
+        try:
+            client.resolve_model()      # 0.5.54: "server default" is the server's first listed model
+        except llm.LLMError:
+            pass                        # the question fails the same way and records why
     done = 0
     for r in rows:
         db.x('UPDATE event_analyses SET started_at=?, model=? WHERE id=?', (util.now(), client.model, r['id']))
